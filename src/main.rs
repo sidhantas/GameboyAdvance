@@ -2,9 +2,12 @@ mod memory;
 mod types;
 mod arm7tdmi;
 mod utils;
+use arm7tdmi::decoder::InstructionDecoder;
+
 use crate::memory::{Memory, AccessFlags};
-use crate::arm7tdmi::decoder::decode_arm_instruction;
+use crate::arm7tdmi::decoder::ARMINSTRUCTION;
 
 fn main() {
-    dbg!(decode_arm_instruction(0xEA000018));
+    let instruction: ARMINSTRUCTION = 0xEA000018;
+    instruction.decode_instruction();
 }

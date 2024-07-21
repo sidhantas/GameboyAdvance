@@ -1,10 +1,25 @@
 use crate::types::*;
 
-fn get_condition_bits(instruction: WORD) -> WORD {
-    return (instruction & 0xF0000000) >> 28; 
+pub type ARMINSTRUCTION = WORD;
+type THUMBINSTRUCTION = HWORD;
+
+pub trait InstructionDecoder {
+    fn condition_passed(&self, condition_flags: BYTE) -> bool;
+    fn decode_instruction(&self);
 }
 
-pub fn decode_arm_instruction(instruction: WORD) -> String {
-    println!("{:#x}", get_condition_bits(0xEA000018));
-}
 
+
+impl InstructionDecoder for ARMINSTRUCTION {
+    fn decode_instruction(&self) {
+        println!("{}", self.condition_passed(0x11));
+    }
+
+    fn condition_passed(&self, condition_flags: BYTE) -> bool {
+         let condition = (self & 0xF0000000) >> 28;
+         match condition {
+             0b1110 => true,
+             _ => panic!("Not implemented")
+         }
+    }
+}
