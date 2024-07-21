@@ -1,10 +1,12 @@
-use std::env;
 pub mod memory;
-mod hardware;
 use memory::Memory;
 
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let memory = Memory::initialize();
+    let mut memory = Memory::initialize();
+    memory.write(0x00, 15).expect("Write Error");
+    let written_val = memory.read(0x00).expect("Read Error");
+    dbg!(written_val);
+    memory.write(0x05000000, 15).expect("Write Error");
+    
 }
