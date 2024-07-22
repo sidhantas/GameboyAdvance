@@ -1,10 +1,10 @@
 use crate::types::WORD;
 
 pub trait Bits {
-    fn and_mask(&self, high_bit: u8, low_bit: u8) -> Self;
+    fn bit_is_set(&self, bit: u8) -> bool;
 } 
 impl Bits for WORD {
-    fn and_mask(&self, high_bit: u8, low_bit: u8) -> Self {
-        self.clone()
+    fn bit_is_set(&self, bit: u8) -> bool {
+        return self >> bit & 0x01 != 0;
     }
 }
