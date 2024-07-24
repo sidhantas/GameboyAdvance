@@ -1,9 +1,7 @@
-[ackage]
+[package]
 name = "gameboy_advance"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 
-[lib]
-crate_type = ["proc_macro"]

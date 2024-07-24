@@ -7,6 +7,6 @@ impl ARMBITS for WORD {}
 impl ARMBITS for HWORD {}
 impl ARMBITS for BYTE {}
 
-pub type ARMInstruction = WORD;
+pub type ARMByteCode = WORD;
 pub type THUMBInstruction = HWORD;
-pub type ARMExecutable = fn(ARMInstruction) -> ();
+pub type ARMExecutable = fn(ARMByteCode) -> ();
