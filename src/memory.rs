@@ -1,3 +1,5 @@
+use std::{fs::File, io::{Read, Seek, SeekFrom}};
+
 use crate::types::*;
 struct MemorySegments;
 
@@ -36,7 +38,7 @@ pub struct Memory {
 
 
 impl Memory {
-    pub fn initialize(bios: String) -> Result<Memory, std::io::Error> {
+    pub fn initialize() -> Result<Memory, std::io::Error> {
         let mem = Memory {
             bios: vec![0; MemorySegments::BIOS.len()],
             board_wram: vec![0; MemorySegments::BOARD_WRAM.len()],
@@ -52,6 +54,15 @@ impl Memory {
         };
 
         Ok(mem)
+    }
+
+    pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error>{
+        let mut bios_file = File::options().read(true).open(filename)?;
+
+        bios_file.seek(SeekFrom::Start(0))?;
+        bios_file.read_exact(&mut self.bios)?;
+        Ok(())
+
     }
 
     pub fn read(&self, address: usize, access_flags: AccessFlags) -> Result<BYTE, String> {
