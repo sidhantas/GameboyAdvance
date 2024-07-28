@@ -3,7 +3,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::{
-    io::{self, Stdout}, rc::Rc, sync::Arc, thread, time::Duration
+    io::{self, Stdout}, sync::{Arc, Mutex}, thread, time::Duration
 };
 use tui::{
     backend::CrosstermBackend,
@@ -14,7 +14,7 @@ use tui::{
 
 use crate::arm7tdmi::cpu::CPU;
 
-pub fn start_debugger(cpu: Arc<CPU>) -> Result<(), std::io::Error> {
+pub fn start_debugger(cpu: Arc<Mutex<CPU>>) -> Result<(), std::io::Error> {
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     enable_raw_mode()?;
@@ -47,7 +47,7 @@ pub fn start_debugger(cpu: Arc<CPU>) -> Result<(), std::io::Error> {
                 .constraints([Constraint::Percentage(10), Constraint::Percentage(50)].as_ref())
                 .split(vertical_chunks[0]);
 
-            draw_cpu(f, &horizontal_chunks, &cpu).unwrap();
+            draw_cpu(f, &horizontal_chunks, &cpu.lock().unwrap()).unwrap();
         })?;
         thread::sleep(Duration::from_millis(100));
     }
@@ -85,8 +85,12 @@ fn draw_cpu(
     let sp = Paragraph::new(format!("SP: {:#04x}", cpu.get_sp()))
         .alignment(tui::layout::Alignment::Center);
 
+    let instruction = Paragraph::new(format!("inst: {:#08x}", cpu.fetched_instruction))
+        .alignment(tui::layout::Alignment::Center);
+
     f.render_widget(block, chunks[0]);
     f.render_widget(pc, sections[1]);
     f.render_widget(sp, sections[2]);
+    f.render_widget(instruction, sections[3]);
     Ok(())
 }

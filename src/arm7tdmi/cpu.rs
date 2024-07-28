@@ -1,4 +1,14 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::{
+    sync::{
+        mpsc::{
+            Receiver,
+            TryRecvError::{Disconnected, Empty},
+        },
+        Arc, Mutex
+    },
+    thread,
+    time::Duration,
+};
 
 use crate::memory::{AccessFlags, Memory};
 
@@ -6,14 +16,32 @@ const PC_REGISTER: usize = 15;
 
 pub struct CPU {
     registers: [u32; 31],
-    fetched_instruction: u32,
+    pub fetched_instruction: u32,
 }
 
-pub fn start_cpu(cpu: Arc<CPU>) -> Result<(), std::io::Error> {
-    let mut memory = Memory::initialize().unwrap();
-    memory.initialize_bios(String::from("gba_bios.bin"))?;
-    
-    Ok(())
+pub fn start_cpu(cpu: Arc<Mutex<CPU>>, rx: Receiver<bool>) {
+    let mut memory = Memory::initialize().expect("Unable to initialize memory for CPU");
+    memory
+        .initialize_bios(String::from("gba_bios.bin"))
+        .expect("Unable to initialize bios for CPU");
+
+    loop {
+        match rx.try_recv() {
+            Ok(data) => {
+                if data == true {
+                    break;
+                }
+            }
+            Err(Disconnected) => break,
+            Err(Empty) => {}
+        }
+        {
+            let mut cpu = cpu.lock().unwrap();
+            cpu.fetch_instruction(&memory);
+            cpu.increment_pc();
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
 }
 
 impl CPU {

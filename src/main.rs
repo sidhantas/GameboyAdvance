@@ -1,8 +1,7 @@
-use std::{sync::{Arc, Mutex}, thread};
+use std::{sync::{mpsc, Arc, Mutex}, thread};
 
 use arm7tdmi::cpu::{start_cpu, CPU};
 use debugger::debugger::start_debugger;
-use memory::Memory;
 
 mod arm7tdmi;
 mod debugger;
@@ -11,13 +10,16 @@ mod types;
 mod utils;
 
 fn main() -> Result<(), std::io::Error> {
-    let mut cpu = CPU::initialize();
+
+    let cpu = Arc::new(Mutex::new(CPU::initialize()));
+    let (tx, rx) = mpsc::channel();
+
+    ctrlc::set_handler(move || tx.send(true).unwrap()).unwrap();
 
     thread::scope(|scope| {
-        let arc_cpu = Arc::new(cpu);
-        let debug_cpu = Arc::clone(&arc_cpu);
-        scope.spawn(|| start_cpu(arc_cpu));
-        scope.spawn(|| start_debugger(debug_cpu));
+        let debug_cpu = Arc::clone(&cpu);
+        scope.spawn(move || start_cpu(cpu, rx));
+        scope.spawn(move || start_debugger(debug_cpu));
     });
 
     Ok(())
