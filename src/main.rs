@@ -1,25 +1,24 @@
-use std::thread;
+use std::{sync::{Arc, Mutex}, thread};
 
-use arm7tdmi::cpu::CPU;
+use arm7tdmi::cpu::{start_cpu, CPU};
 use debugger::debugger::start_debugger;
 use memory::Memory;
 
+mod arm7tdmi;
+mod debugger;
 mod memory;
 mod types;
-mod arm7tdmi;
 mod utils;
-mod debugger;
 
 fn main() -> Result<(), std::io::Error> {
-    let mut memory = Memory::initialize().unwrap();
-    let cpu = CPU::initialize();
-    memory.initialize_bios(String::from("gba_bios.bin"))?;
+    let mut cpu = CPU::initialize();
 
-    let debugger = thread::spawn(|| {
-        start_debugger(cpu)
+    thread::scope(|scope| {
+        let arc_cpu = Arc::new(cpu);
+        let debug_cpu = Arc::clone(&arc_cpu);
+        scope.spawn(|| start_cpu(arc_cpu));
+        scope.spawn(|| start_debugger(debug_cpu));
     });
-
-    let _ = debugger.join().unwrap();
 
     Ok(())
 }

@@ -3,9 +3,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::{
-    io::{self, Stdout},
-    thread,
-    time::Duration,
+    io::{self, Stdout}, rc::Rc, sync::Arc, thread, time::Duration
 };
 use tui::{
     backend::CrosstermBackend,
@@ -16,7 +14,7 @@ use tui::{
 
 use crate::arm7tdmi::cpu::CPU;
 
-pub fn start_debugger(cpu: CPU) -> Result<(), std::io::Error> {
+pub fn start_debugger(cpu: Arc<CPU>) -> Result<(), std::io::Error> {
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     enable_raw_mode()?;
@@ -26,24 +24,21 @@ pub fn start_debugger(cpu: CPU) -> Result<(), std::io::Error> {
     while !end_debugger {
         if event::poll(Duration::from_millis(100))? {
             match read()? {
-                Event::FocusGained => println!("FocusGained"),
-                Event::FocusLost => println!("FocusLost"),
                 Event::Key(event) => {
                     if event.modifiers == KeyModifiers::CONTROL && event.code == KeyCode::Char('c')
                     {
                         end_debugger = true;
                     }
                 }
-                Event::Mouse(event) => println!("{:?}", event),
-                Event::Resize(width, height) => println!("New size {}x{}", width, height),
                 _ => {}
             }
         }
+
         terminal.draw(|f| {
             let vertical_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                .constraints([Constraint::Length(10), Constraint::Percentage(50)].as_ref())
                 .split(f.size());
 
             let horizontal_chunks = Layout::default()
@@ -87,7 +82,7 @@ fn draw_cpu(
     let pc = Paragraph::new(format!("PC: {:#04x}", cpu.get_pc()))
         .alignment(tui::layout::Alignment::Center);
 
-    let sp = Paragraph::new(format!("SP: {:#04x}", cpu.get_pc()))
+    let sp = Paragraph::new(format!("SP: {:#04x}", cpu.get_sp()))
         .alignment(tui::layout::Alignment::Center);
 
     f.render_widget(block, chunks[0]);

@@ -72,6 +72,14 @@ impl Memory {
         }
     }
 
+    pub fn readu32(&self, address: usize, access_flags: AccessFlags) -> Result<WORD, String> {
+        assert!(address % 4 == 0);
+        match address {
+            address if MemorySegments::BIOS.contains(&address) => Ok(u32::from_le_bytes(self.bios[address..address + 4].try_into().unwrap())),
+            _ => return Err(String::from("Not Implemeneted"))
+        }
+    }
+
     pub fn write(&mut self, address: usize, value: BYTE) -> Result<(), String> {
         match address {
             address if MemorySegments::BIOS.contains(&address) => self.bios[address] = value,
