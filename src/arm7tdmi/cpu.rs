@@ -8,20 +8,29 @@ use std::{
     }, thread, time::Duration
 };
 
-use crate::{debugger::debugger::DebugCommands, memory::{AccessFlags, Memory}, types::ARMByteCode};
+use crate::{debugger::debugger::DebugCommands, memory::{AccessFlags, Memory}, types::{ARMByteCode, WORD}};
 
 use super::instructions::ARMDecodedInstruction;
 
 const PC_REGISTER: usize = 15;
 
-pub enum CPUMode {
+pub enum InstructionMode {
     ARM,
     THUMB
 }
 
+pub enum CPUMode {
+    USER,
+    FIQ, // Fast Interrupt
+    SVC, // Supervisor
+    ABT, // Abort
+    UND // Undefined
+}
+
 pub struct CPU {
     registers: [u32; 31],
-    pub mode: CPUMode,
+    pub inst_mode: InstructionMode,
+    pub cpu_mode: CPUMode,
     memory: Arc<Mutex<Memory>>,
     pub decoded_instruction: ARMDecodedInstruction,
     pub fetched_instruction: ARMByteCode,
@@ -29,7 +38,6 @@ pub struct CPU {
 }
 
 pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
-
     let mut instructions_left = 0; 
     loop {
         match rx.try_recv() {
@@ -52,7 +60,6 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
             cpu.execute_cpu_cycle();
             instructions_left -= 1;
         }
-        thread::sleep(Duration::from_millis(100));
     }
 }
 
@@ -68,7 +75,8 @@ impl CPU {
     pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
         CPU {
             registers: [0; 31],
-            mode: CPUMode::ARM,
+            inst_mode: InstructionMode::ARM,
+            cpu_mode: CPUMode::USER,
             fetched_instruction: 0,
             decoded_instruction: ARMDecodedInstruction {
                 instruction: 0,
@@ -79,9 +87,22 @@ impl CPU {
         }
     }
 
+    pub fn flush_pipeline(&mut self) {
+        self.decoded_instruction = ARMDecodedInstruction {
+            instruction: 0,
+            executable: CPU::arm_nop
+        };
+        self.fetched_instruction = 0;
+    }
+
     #[inline(always)]
     pub fn get_pc(&self) -> u32 {
         self.registers[PC_REGISTER]
+    }
+
+    #[inline(always)]
+    pub fn set_pc(&mut self, address: WORD) {
+        self.registers[PC_REGISTER] = address;
     }
 
     #[inline(always)]

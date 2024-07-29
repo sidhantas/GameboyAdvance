@@ -1,6 +1,6 @@
 use sub_decoders::{decode_branch_instruction, decode_data_processing_with_immediate_instruction, decode_load_or_store_register_unsigned};
 
-use super::{cpu::{CPUMode, CPU}, instructions::ARMDecodedInstruction};
+use super::{cpu::{InstructionMode, CPU}, instructions::ARMDecodedInstruction};
 use crate::types::*;
 
 #[allow(dead_code)]
@@ -12,9 +12,9 @@ pub enum Instruction {
 
 impl CPU {
     pub fn decode_instruction(&mut self, instruction: ARMByteCode) {
-        self.decoded_instruction = match self.mode{
-            CPUMode::ARM => self.decode_arm_instruction(instruction),
-            CPUMode::THUMB => self.decode_thumb_instruction(instruction)
+        self.decoded_instruction = match self.inst_mode{
+            InstructionMode::ARM => self.decode_arm_instruction(instruction),
+            InstructionMode::THUMB => self.decode_thumb_instruction(instruction)
         };
     }
 
@@ -22,7 +22,6 @@ impl CPU {
         let condition = (instruction & 0xF0000000) >> 28;
         match condition {
             0b1110 => true,
-
             _ => true,
         }
     }
@@ -255,19 +254,32 @@ mod arm_decoders_tests {
 
 #[cfg(test)]
 mod sub_decoder_tests {
-    use crate::arm7tdmi::decoder::*;
+    use std::sync::{Arc, Mutex};
+
+    use crate::{arm7tdmi::decoder::*, memory::Memory};
 
     #[test]
     fn it_returns_a_multiply_instruction() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
         let instruction: ARMByteCode = 0xE0230192;
-        assert!(instruction.decode_instruction().executable == CPU::arm_multiply_accumulate);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_multiply_accumulate);
         let instruction: ARMByteCode = 0xE0050091;
-        assert!(instruction.decode_instruction().executable == CPU::arm_multiply);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_multiply);
     }
 
         #[test]
         fn it_returns_a_branch_instruction() {
+            let memory = Memory::new().unwrap();
+            let memory = Arc::new(Mutex::new(memory));
+            let mut cpu = CPU::new(memory);
+
             let instruction: ARMByteCode = 0xea000005;
-            assert!(instruction.decode_instruction().executable == CPU::arm_branch);
+            cpu.decode_instruction(instruction);
+            assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
         }
 }
