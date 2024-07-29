@@ -5,50 +5,77 @@ use std::{
             TryRecvError::{Disconnected, Empty},
         },
         Arc, Mutex
-    },
-    thread,
-    time::Duration,
+    }, thread, time::Duration
 };
 
-use crate::memory::{AccessFlags, Memory};
+use crate::{debugger::debugger::DebugCommands, memory::{AccessFlags, Memory}, types::ARMByteCode};
+
+use super::instructions::ARMDecodedInstruction;
 
 const PC_REGISTER: usize = 15;
 
-pub struct CPU {
-    registers: [u32; 31],
-    pub fetched_instruction: u32,
+pub enum CPUMode {
+    ARM,
+    THUMB
 }
 
-pub fn start_cpu(cpu: Arc<Mutex<CPU>>, rx: Receiver<bool>) {
-    let mut memory = Memory::initialize().expect("Unable to initialize memory for CPU");
-    memory
-        .initialize_bios(String::from("gba_bios.bin"))
-        .expect("Unable to initialize bios for CPU");
+pub struct CPU {
+    registers: [u32; 31],
+    pub mode: CPUMode,
+    memory: Arc<Mutex<Memory>>,
+    pub decoded_instruction: ARMDecodedInstruction,
+    pub fetched_instruction: ARMByteCode,
+    pub executed_instruction: String,
+}
 
+pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
+
+    let mut instructions_left = 0; 
     loop {
         match rx.try_recv() {
             Ok(data) => {
-                if data == true {
-                    break;
+                match data {
+                    DebugCommands::End => {
+                        break;
+                    }
+                    DebugCommands::Continue => {
+                        instructions_left += 1;
+                    }
+
                 }
             }
             Err(Disconnected) => break,
             Err(Empty) => {}
         }
-        {
+        if instructions_left > 0 {
             let mut cpu = cpu.lock().unwrap();
-            cpu.fetch_instruction(&memory);
-            cpu.increment_pc();
+            cpu.execute_cpu_cycle();
+            instructions_left -= 1;
         }
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(100));
     }
 }
 
 impl CPU {
-    pub fn initialize() -> CPU {
+    pub fn execute_cpu_cycle(&mut self) {
+            let executable = self.decoded_instruction.executable;
+            let instruction = self.decoded_instruction.instruction;
+            executable(self, instruction);
+            self.decode_instruction(self.fetched_instruction);
+            self.fetch_instruction();
+    }
+
+    pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
         CPU {
             registers: [0; 31],
+            mode: CPUMode::ARM,
             fetched_instruction: 0,
+            decoded_instruction: ARMDecodedInstruction {
+                instruction: 0,
+                executable: CPU::arm_nop
+            },
+            memory,
+            executed_instruction: String::from("")
         }
     }
 
@@ -67,9 +94,10 @@ impl CPU {
         self.registers[PC_REGISTER] += 4;
     }
 
-    fn fetch_instruction(&mut self, memory: &Memory) {
-        self.fetched_instruction = memory
+    fn fetch_instruction(&mut self) {
+        self.fetched_instruction = self.memory.lock().unwrap()
             .readu32(self.get_pc() as usize, AccessFlags::User)
             .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc()));
+        self.increment_pc();
     }
 }

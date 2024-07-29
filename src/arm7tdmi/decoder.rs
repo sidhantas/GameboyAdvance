@@ -1,13 +1,7 @@
-use sub_decoders::decode_data_processing_with_immediate_instruction;
+use sub_decoders::{decode_branch_instruction, decode_data_processing_with_immediate_instruction, decode_load_or_store_register_unsigned};
 
-use super::instructions::*;
+use super::{cpu::{CPUMode, CPU}, instructions::ARMDecodedInstruction};
 use crate::types::*;
-
-pub trait InstructionDecoder {
-    fn condition_passed(&self, condition_flags: BYTE) -> bool;
-    fn get_instruction_bits(&self) -> BYTE;
-    fn decode_instruction(&self) -> fn(Self) -> ();
-}
 
 #[allow(dead_code)]
 pub enum Instruction {
@@ -16,42 +10,53 @@ pub enum Instruction {
     NOP,
 }
 
-impl InstructionDecoder for ARMByteCode {
-    fn get_instruction_bits(&self) -> BYTE {
-        ((self & 0x0E00_0000) >> 25) as BYTE
+impl CPU {
+    pub fn decode_instruction(&mut self, instruction: ARMByteCode) {
+        self.decoded_instruction = match self.mode{
+            CPUMode::ARM => self.decode_arm_instruction(instruction),
+            CPUMode::THUMB => self.decode_thumb_instruction(instruction)
+        };
     }
 
-    fn decode_instruction(&self) -> fn(Self) -> () {
-        if !(self.condition_passed(0x00)) {
-            return super::instructions::nop;
+    fn condition_passed(instruction: ARMByteCode, condition_flags: BYTE) -> bool {
+        let condition = (instruction & 0xF0000000) >> 28;
+        match condition {
+            0b1110 => true,
+
+            _ => true,
+        }
+    }
+
+    fn decode_arm_instruction(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
+        if !(Self::condition_passed(instruction, 0x00)) {
+            return ARMDecodedInstruction {
+                executable: CPU::arm_nop,
+                instruction
+            };
         }
 
-        let instruction = *self;
         match instruction {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
                 sub_decoders::decode_multiply(instruction)
             }
-            _ if arm_decoders::is_multiply_long_instruction(instruction) => multiply_long,
-            _ if arm_decoders::is_branch_and_exchange_instruction(instruction) => todo!(),
-            _ if arm_decoders::is_single_data_swap(instruction) => todo!(),
-            _ if arm_decoders::is_halfword_data_transfer_register_offset(instruction) => todo!(),
-            _ if arm_decoders::is_halfword_data_transfer_immediate_offset(instruction) => todo!(),
-            _ if arm_decoders::is_single_data_transfer(instruction) => todo!(),
+            _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction{
+                executable: CPU::arm_multiply_long,
+                instruction
+            },
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => decode_data_processing_with_immediate_instruction(instruction),
-            _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => todo!(),
-            _ if arm_decoders::is_undefined(instruction) => todo!(),
-            _ if arm_decoders::is_block_data_transfer(instruction) => todo!(),
-            _ if arm_decoders::is_branch_instruction(instruction) => branch,
-            _ if arm_decoders::is_software_interrupt(instruction) => todo!(),
-            _ => panic!("Unimplemented Decode: {:#X}", instruction),
+            _ if arm_decoders::is_branch_instruction(instruction) => decode_branch_instruction(instruction),
+            _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => decode_load_or_store_register_unsigned(instruction),
+            _ => ARMDecodedInstruction {
+                executable: CPU::arm_not_implemented,
+                instruction
+            },
         }
     }
 
-    fn condition_passed(&self, condition_flags: BYTE) -> bool {
-        let condition = (self & 0xF0000000) >> 28;
-        match condition {
-            0b1110 => true,
-            _ => panic!("Not implemented"),
+    fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
+        ARMDecodedInstruction {
+            instruction,
+            executable: CPU::arm_not_implemented
         }
     }
 }
@@ -124,16 +129,42 @@ mod sub_decoders {
 
     pub fn decode_data_processing_with_immediate_instruction(
         instruction: ARMByteCode,
-    ) -> ARMExecutable {
+    ) -> ARMDecodedInstruction {
         let opcode = instruction & 0x01E0_0000;
         todo!()
     }
 
-    pub fn decode_multiply(instruction: ARMByteCode) -> ARMExecutable {
+    pub fn decode_multiply(instruction: ARMByteCode) -> ARMDecodedInstruction {
         if instruction.bit_is_set(21) {
-            return multiply_accumulate;
+            return ARMDecodedInstruction {
+                executable: CPU::arm_multiply_accumulate,
+                instruction
+            };
         }
-        multiply
+        return ARMDecodedInstruction {
+            executable: CPU::arm_multiply,
+            instruction
+        };
+    }
+
+    pub fn decode_branch_instruction(instruction: ARMByteCode) -> ARMDecodedInstruction {
+        if instruction.bit_is_set(24) {
+            return ARMDecodedInstruction {
+                executable: CPU::arm_branch_with_link,
+                instruction
+            }
+        }
+        return ARMDecodedInstruction {
+            executable: CPU::arm_branch,
+            instruction
+        }
+    }
+
+    pub fn decode_load_or_store_register_unsigned(instruction: ARMByteCode) -> ARMDecodedInstruction {
+        return ARMDecodedInstruction {
+            executable: CPU::arm_not_implemented,
+            instruction
+        }
     }
 }
 
@@ -229,14 +260,14 @@ mod sub_decoder_tests {
     #[test]
     fn it_returns_a_multiply_instruction() {
         let instruction: ARMByteCode = 0xE0230192;
-        assert!(instruction.decode_instruction() == multiply_accumulate);
+        assert!(instruction.decode_instruction().executable == CPU::arm_multiply_accumulate);
         let instruction: ARMByteCode = 0xE0050091;
-        assert!(instruction.decode_instruction() == multiply);
+        assert!(instruction.decode_instruction().executable == CPU::arm_multiply);
     }
 
-    //    #[test]
-    //    fn it_returns_a_branch_instruction() {
-    //        let instruction: ARMByteCode = 0xea000005;
-    //        assert!(instruction.decode_instruction() == branch);
-    //    }
+        #[test]
+        fn it_returns_a_branch_instruction() {
+            let instruction: ARMByteCode = 0xea000005;
+            assert!(instruction.decode_instruction().executable == CPU::arm_branch);
+        }
 }

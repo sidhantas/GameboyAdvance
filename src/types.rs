@@ -9,4 +9,3 @@ impl ARMBITS for BYTE {}
 
 pub type ARMByteCode = WORD;
 pub type THUMBInstruction = HWORD;
-pub type ARMExecutable = fn(ARMByteCode) -> ();

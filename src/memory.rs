@@ -38,7 +38,7 @@ pub struct Memory {
 
 
 impl Memory {
-    pub fn initialize() -> Result<Memory, std::io::Error> {
+    pub fn new() -> Result<Memory, std::io::Error> {
         let mem = Memory {
             bios: vec![0; MemorySegments::BIOS.len()],
             board_wram: vec![0; MemorySegments::BOARD_WRAM.len()],
