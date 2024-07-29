@@ -129,8 +129,31 @@ mod sub_decoders {
     pub fn decode_data_processing_with_immediate_instruction(
         instruction: ARMByteCode,
     ) -> ARMDecodedInstruction {
-        let opcode = instruction & 0x01E0_0000;
-        todo!()
+        let opcode = (instruction & 0x01E0_0000) >> 21;
+        let executable = match opcode {
+            0x0 => CPU::arm_and,
+            0x1 => CPU::arm_eor,
+            0x2 => CPU::arm_sub,
+            0x3 => CPU::arm_rsb,
+            0x4 => CPU::arm_add,
+            0x5 => CPU::arm_adc,
+            0x6 => CPU::arm_sbc,
+            0x7 => CPU::arm_rsc,
+            0x8 => CPU::arm_tst,
+            0x9 => CPU::arm_teq,
+            0xa => CPU::arm_cmp,
+            0xb => CPU::arm_cmn,
+            0xc => CPU::arm_orr,
+            0xd => CPU::arm_mov,
+            0xe => CPU::arm_bic,
+            0xf => CPU::arm_mvn,
+            _ => panic!("Impossible to decode opcode")
+        };
+
+        ARMDecodedInstruction {
+            executable,
+            instruction
+        }
     }
 
     pub fn decode_multiply(instruction: ARMByteCode) -> ARMDecodedInstruction {
@@ -281,5 +304,16 @@ mod sub_decoder_tests {
             let instruction: ARMByteCode = 0xea000005;
             cpu.decode_instruction(instruction);
             assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
+        }
+
+        #[test]
+        fn it_returns_a_cmp_instruction() {
+            let memory = Memory::new().unwrap();
+            let memory = Arc::new(Mutex::new(memory));
+            let mut cpu = CPU::new(memory);
+
+            let instruction: ARMByteCode = 0xe35e0000;
+            cpu.decode_instruction(instruction);
+            assert!(cpu.decoded_instruction.executable == CPU::arm_cmp);
         }
 }

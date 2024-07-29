@@ -38,7 +38,37 @@ impl CPU {
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode)  {}
 
-    pub fn arm_add(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_and(&mut self, instruction: ARMByteCode)  {}
+
+    pub fn arm_eor(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_sub(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_rsb(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_add(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_adc(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_sbc(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_rsc(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_tst(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_teq(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_cmp(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_cmn(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_orr(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_mov(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_bic(&mut self, instruction: ARMByteCode) {}
+
+    pub fn arm_mvn(&mut self, instruction: ARMByteCode) {}
 
     pub fn arm_not_implemented(&mut self, instruction: ARMByteCode)  {
         self.set_executed_instruction("NOT IMPLEMENTED".into());
