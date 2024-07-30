@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::types::ARMByteCode;
+use crate::{arm7tdmi::cpu::LINK_REGISTER, types::ARMByteCode, utils::bits::{sign_extend, Bits}};
 
 use super::cpu::CPU;
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> ();
@@ -16,13 +16,16 @@ impl CPU {
     }
     pub fn arm_branch(&mut self, instruction: ARMByteCode)  {
         self.flush_pipeline();
+        if (instruction.bit_is_set(24)) {
+            self.set_register(LINK_REGISTER, self.get_pc() - 4);
+        }
         let offset = instruction & 0x00FF_FFFF;
-        let destination = (offset << 2) + self.get_pc();
-        self.set_pc(destination);
+        let offset: i32 = sign_extend(offset << 2, 25) as i32;
+        println!("Offset: {}", offset);
+        let destination = offset as i64 + self.get_pc() as i64;
+        self.set_pc(destination as u32);
         self.set_executed_instruction(format!("B {:#010x}", destination));
     }
-
-    pub fn arm_branch_with_link(&mut self, instruction: ARMByteCode) {}
 
     pub fn arm_nop(&mut self, instruction: ARMByteCode)  {
         self.set_executed_instruction("NOP".into());
@@ -79,7 +82,7 @@ impl CPU {
 mod instruction_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::cpu::CPU, memory::Memory};
+    use crate::{arm7tdmi::cpu::{CPU, LINK_REGISTER}, memory::Memory};
 
     use super::ARMDecodedInstruction;
 
@@ -98,6 +101,43 @@ mod instruction_tests {
         cpu.execute_cpu_cycle();
         
         assert!(cpu.get_pc() == expected_destination);
+    }
+
+    #[test]
+    fn branch_can_go_backwards() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        cpu.fetched_instruction = 0xeafffff4;
+        cpu.set_pc(0x34);
+
+        let expected_destination = 12;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        
+        println!("PC: {:#x}", cpu.get_pc());
+        assert!(cpu.get_pc() == expected_destination);
+    }
+
+    #[test]
+    fn branch_with_link_stores_the_instruction_correctly() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        cpu.fetched_instruction = 0xeb000005;
+        cpu.set_pc(4);
+
+        let expected_destination = 0x14 + cpu.get_pc() + 8;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        
+        assert!(cpu.get_pc() == expected_destination);
+        println!("LR: {:#x}", cpu.get_register(LINK_REGISTER));
+        assert!(cpu.get_register(LINK_REGISTER) == 4);
     }
 
 }

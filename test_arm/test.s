@@ -1,9 +1,12 @@
 .global _main
 _main:
-ldr r1, _branch_addr;
-str r1, _branch_addr;
-sub r1, #1
-BX r1;
+add r1, r1, #1;
+add r2, r1, #2;
+_branch_addr:
+add r0, r1, r2;
+add r0, r1, r2;
+add r0, r1, r2;
+add r0, r1, r2;
 nop;
 nop;
 nop;
@@ -11,5 +14,6 @@ nop;
 nop;
 nop;
 
-_branch_addr:
-    nop;
+BL _branch_addr;
+nop;
+nop;

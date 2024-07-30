@@ -170,13 +170,7 @@ mod sub_decoders {
     }
 
     pub fn decode_branch_instruction(instruction: ARMByteCode) -> ARMDecodedInstruction {
-        if instruction.bit_is_set(24) {
-            return ARMDecodedInstruction {
-                executable: CPU::arm_branch_with_link,
-                instruction
-            }
-        }
-        return ARMDecodedInstruction {
+        ARMDecodedInstruction {
             executable: CPU::arm_branch,
             instruction
         }

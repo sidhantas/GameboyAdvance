@@ -13,6 +13,7 @@ use crate::{debugger::debugger::DebugCommands, memory::{AccessFlags, Memory}, ty
 use super::instructions::ARMDecodedInstruction;
 
 const PC_REGISTER: usize = 15;
+pub const LINK_REGISTER: usize = 14;
 
 pub enum InstructionMode {
     ARM,
@@ -113,6 +114,16 @@ impl CPU {
     #[inline(always)]
     pub fn increment_pc(&mut self) {
         self.registers[PC_REGISTER] += 4;
+    }
+
+    pub fn get_register(&self, register_num: usize) -> WORD {
+        assert!(register_num < 16);
+        self.registers[register_num]
+    }
+
+    pub fn set_register(&mut self, register_num: usize, value: WORD) {
+        assert!(register_num < 16);
+        self.registers[register_num] = value;
     }
 
     fn fetch_instruction(&mut self) {
