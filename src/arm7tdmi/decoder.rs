@@ -6,7 +6,7 @@ use super::{
     cpu::{InstructionMode, CPU},
     instructions::ARMDecodedInstruction,
 };
-use crate::types::*;
+use crate::{types::*, utils::bits::Bits};
 
 #[allow(dead_code)]
 pub enum Instruction {
@@ -36,12 +36,13 @@ impl CPU {
             return ARMDecodedInstruction {
                 executable: CPU::arm_nop,
                 instruction,
+                ..Default::default()
             };
         }
 
         match instruction {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
-                sub_decoders::decode_multiply(instruction)
+                self.decode_multiply(instruction)
             }
             _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_multiply_long,
@@ -60,6 +61,7 @@ impl CPU {
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
                 instruction,
+                ..Default::default()
             },
         }
     }
@@ -68,6 +70,7 @@ impl CPU {
         ARMDecodedInstruction {
             instruction,
             executable: CPU::arm_not_implemented,
+            ..Default::default()
         }
     }
 }
@@ -135,59 +138,120 @@ mod arm_decoders {
 }
 
 mod sub_decoders {
-    use super::*;
-    use crate::utils::bits::Bits;
+    use crate::{arm7tdmi::{cpu::CPU, instructions::ARMDecodedInstruction}, utils::bits::Bits};
 
-    pub fn decode_data_processing_with_immediate_instruction(
-        instruction: ARMByteCode,
-    ) -> ARMDecodedInstruction {
-        let opcode = (instruction & 0x01E0_0000) >> 21;
-        let executable = match opcode {
-            0x0 => CPU::arm_and,
-            0x1 => CPU::arm_eor,
-            0x2 => CPU::arm_sub,
-            0x3 => CPU::arm_rsb,
-            0x4 => CPU::arm_add,
-            0x5 => CPU::arm_adc,
-            0x6 => CPU::arm_sbc,
-            0x7 => CPU::arm_rsc,
-            0x8 => CPU::arm_tst,
-            0x9 => CPU::arm_teq,
-            0xa => CPU::arm_cmp,
-            0xb => CPU::arm_cmn,
-            0xc => CPU::arm_orr,
-            0xd => CPU::arm_mov,
-            0xe => CPU::arm_bic,
-            0xf => CPU::arm_mvn,
-            _ => panic!("Impossible to decode opcode"),
-        };
+    use super::{ARMByteCode, REGISTER, WORD};
 
-        ARMDecodedInstruction {
-            executable,
-            instruction,
-        }
-    }
+    impl CPU {
+        pub fn decode_data_processing_with_immediate_instruction(
+            &self,
+            instruction: ARMByteCode,
+        ) -> ARMDecodedInstruction {
+            let opcode = (instruction & 0x01E0_0000) >> 21;
+            let executable = match opcode {
+                0x0 => CPU::arm_and,
+                0x1 => CPU::arm_eor,
+                0x2 => CPU::arm_sub,
+                0x3 => CPU::arm_rsb,
+                0x4 => CPU::arm_add,
+                0x5 => CPU::arm_adc,
+                0x6 => CPU::arm_sbc,
+                0x7 => CPU::arm_rsc,
+                0x8 => CPU::arm_tst,
+                0x9 => CPU::arm_teq,
+                0xa => CPU::arm_cmp,
+                0xb => CPU::arm_cmn,
+                0xc => CPU::arm_orr,
+                0xd => CPU::arm_mov,
+                0xe => CPU::arm_bic,
+                0xf => CPU::arm_mvn,
+                _ => panic!("Impossible to decode opcode"),
+            };
 
-    pub fn decode_multiply(instruction: ARMByteCode) -> ARMDecodedInstruction {
-        if instruction.bit_is_set(21) {
-            return ARMDecodedInstruction {
-                executable: CPU::arm_multiply_accumulate,
+            let mut operand2: WORD = 0;
+            let rn = ((0x000F_0000 & instruction) >> 16) as usize;
+            let rd = ((0x0000_F000 & instruction) >> 12) as usize;
+            let get_shift_amount = move || -> u32 {
+
+                // shift from register
+                if instruction.bit_is_set(4) {
+                    let shift_register = (instruction & 0xF00) >> 8;
+                    return self.get_register(shift_register as usize);
+                }
+
+                // shift from immediate
+                return (instruction & 0xF80) >> 7;
+
+            };
+
+            let shift_register = |register: u32, shift_type, shift_amount| -> u32 {
+                match shift_type {
+                    0x00 => operand2,
+                    0x01 => register >> shift_amount,
+                    0x02 => (register as i32 >> shift_amount) as u32,
+                    0x03 => register.rotate_right(shift_amount),
+                    _ => panic!("Invalid Shift Type")
+                }
+            };
+
+            if instruction.bit_is_set(25) {
+                let rotate_amount = (instruction & 0xF00) >> 8;
+                let immediate = instruction & 0xFF;
+                operand2 = immediate.rotate_right(rotate_amount * 2);
+            } else {
+                let shift_amount = get_shift_amount();
+                let shift_type = instruction & 0x30 >> 4;
+                let register = self.get_register((instruction & 0xF) as REGISTER);
+                operand2 = shift_register(register, shift_type, shift_amount);
+            }
+
+            ARMDecodedInstruction {
+                executable,
                 instruction,
+                rn,
+                rd,
+                operand2,
+                ..Default::default()
+            }
+        }
+
+        pub fn decode_multiply(
+            &self,
+            instruction: ARMByteCode) -> ARMDecodedInstruction {
+            if instruction.bit_is_set(21) {
+                return ARMDecodedInstruction {
+                    executable: CPU::arm_multiply_accumulate,
+                    instruction,
+                    ..Default::default()
+                };
+            }
+            return ARMDecodedInstruction {
+                executable: CPU::arm_multiply,
+                instruction,
+                ..Default::default()
             };
         }
-        return ARMDecodedInstruction {
-            executable: CPU::arm_multiply,
-            instruction,
-        };
-    }
 
-    pub fn decode_load_or_store_register_unsigned(
-        instruction: ARMByteCode,
-    ) -> ARMDecodedInstruction {
-        return ARMDecodedInstruction {
-            executable: CPU::arm_not_implemented,
-            instruction,
-        };
+        pub fn decode_branch_instruction(
+            &self,
+            instruction: ARMByteCode) -> ARMDecodedInstruction {
+            ARMDecodedInstruction {
+                executable: CPU::arm_branch,
+                instruction,
+                ..Default::default()
+            }
+        }
+
+        pub fn decode_load_or_store_register_unsigned(
+            &self,
+            instruction: ARMByteCode,
+        ) -> ARMDecodedInstruction {
+            return ARMDecodedInstruction {
+                executable: CPU::arm_not_implemented,
+                instruction,
+                ..Default::default()
+            };
+        }
     }
 }
 
@@ -316,5 +380,19 @@ mod sub_decoder_tests {
         let instruction: ARMByteCode = 0xe35e0000;
         cpu.decode_instruction(instruction);
         assert!(cpu.decoded_instruction.executable == CPU::arm_cmp);
+    }
+
+    #[test]
+    fn it_returns_an_add_instruction() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe2811a01;
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.operand2 == 4096);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rd == 0x1);
     }
 }

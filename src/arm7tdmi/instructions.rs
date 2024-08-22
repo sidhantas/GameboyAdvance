@@ -1,13 +1,29 @@
 #![allow(unused)]
 
-use crate::{arm7tdmi::cpu::LINK_REGISTER, types::ARMByteCode, utils::bits::{sign_extend, Bits}};
+use crate::{arm7tdmi::cpu::LINK_REGISTER, types::{ARMByteCode, REGISTER, WORD}, utils::bits::{sign_extend, Bits}};
 
 use super::cpu::CPU;
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> ();
 
+#[derive(Clone)]
 pub struct ARMDecodedInstruction {
     pub executable: ARMExecutable,
-    pub instruction: ARMByteCode
+    pub instruction: ARMByteCode,
+    pub rd: REGISTER,
+    pub rn: REGISTER,
+    pub operand2: WORD
+}
+
+impl Default for ARMDecodedInstruction {
+    fn default() -> Self {
+        ARMDecodedInstruction {
+            executable: CPU::arm_nop,
+            instruction: 0,
+            rd: 0,
+            rn: 0,
+            operand2: 0
+        }
+    }
 }
 
 impl CPU {
@@ -56,7 +72,12 @@ impl CPU {
         self.set_executed_instruction(format!("RSB"))
     }
 
-    pub fn arm_add(&mut self, instruction: ARMByteCode) {}
+    pub fn arm_add(&mut self, instruction: ARMByteCode) {
+        let decoded_inst = self.decoded_instruction.clone();
+        let result = self.get_register(decoded_inst.rn) + decoded_inst.operand2;
+        self.set_register(decoded_inst.rd, result);
+        self.set_executed_instruction(format!("ADD {:#x} {:#x} {:#x}", decoded_inst.rd, decoded_inst.rn, decoded_inst.operand2));
+    }
 
     pub fn arm_adc(&mut self, instruction: ARMByteCode) {}
 

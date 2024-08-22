@@ -1,7 +1,10 @@
 use crossterm::{
     event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, EnableLineWrap, EnterAlternateScreen,
+        LeaveAlternateScreen,
+    },
 };
 use std::{
     io::{self, Stdout},
@@ -62,7 +65,14 @@ pub fn start_debugger(
             let horizontal_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
-                .constraints([Constraint::Length(20), Constraint::Percentage(50)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(20),
+                        Constraint::Length(20),
+                        Constraint::Length(20),
+                    ]
+                    .as_ref(),
+                )
                 .split(vertical_chunks[0]);
 
             draw_cpu(f, &horizontal_chunks, &cpu.lock().unwrap()).unwrap();
@@ -106,22 +116,27 @@ fn draw_cpu(
         .split(chunks[0]);
 
     let pc = Paragraph::new(format!("PC: {:#04x}", cpu.get_pc()))
-        .alignment(tui::layout::Alignment::Center).wrap(Wrap {trim: true});
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
 
     let sp = Paragraph::new(format!("SP: {:#04x}", cpu.get_sp()))
-        .alignment(tui::layout::Alignment::Center).wrap(Wrap {trim: true});
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
 
     let instruction = Paragraph::new(format!("fetched inst:\n{:#08x}", cpu.fetched_instruction))
-        .alignment(tui::layout::Alignment::Center).wrap(Wrap {trim: true});
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
     let decoded_instruction = Paragraph::new(format!(
         "decoded inst:\n{:#08x}",
         cpu.decoded_instruction.instruction
     ))
-    .alignment(tui::layout::Alignment::Center).wrap(Wrap {trim: true});
+    .alignment(tui::layout::Alignment::Center)
+    .wrap(Wrap { trim: true });
 
     let executed_instruction =
         Paragraph::new(format!("executed inst:\n{}", cpu.executed_instruction))
-            .alignment(tui::layout::Alignment::Center).wrap(Wrap {trim: true});
+            .alignment(tui::layout::Alignment::Center)
+            .wrap(Wrap { trim: true });
 
     f.render_widget(block, chunks[0]);
     f.render_widget(pc, sections[1]);
@@ -129,5 +144,66 @@ fn draw_cpu(
     f.render_widget(instruction, sections[3]);
     f.render_widget(decoded_instruction, sections[4]);
     f.render_widget(executed_instruction, sections[5]);
+
+    let register_sections = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(chunks[1]);
+
+    let block2 = Block::default()
+        .title("Registers")
+        .title_alignment(tui::layout::Alignment::Center)
+        .borders(Borders::ALL);
+
+    let register_names = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(register_sections[0]);
+
+    let register_values = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(register_sections[1]);
+
+    for i in 0..register_names.len() {
+        let register_name = Paragraph::new(format!("{}", i))
+            .alignment(tui::layout::Alignment::Center)
+            .wrap(Wrap { trim: true });
+        f.render_widget(register_name, register_names[i]);
+    }
+
+    for i in 0..register_names.len() {
+        let register_value = Paragraph::new(format!("{}", cpu.get_register(i)))
+            .alignment(tui::layout::Alignment::Center)
+            .wrap(Wrap { trim: true });
+        f.render_widget(register_value, register_values[i]);
+    }
+    f.render_widget(block2, chunks[1]);
     Ok(())
 }

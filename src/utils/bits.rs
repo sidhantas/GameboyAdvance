@@ -2,12 +2,24 @@ use crate::types::WORD;
 
 pub trait Bits {
     fn bit_is_set(&self, bit: u8) -> bool;
+    fn set_bit(&mut self, bit: u8);
+    fn reset_bit(&mut self, bit: u8);
 } 
 
 impl Bits for WORD {
     fn bit_is_set(&self, bit: u8) -> bool {
         assert!(bit < 32);
         return self >> bit & 0x01 != 0;
+    }
+
+    fn set_bit(&mut self, bit: u8) {
+        assert!(bit < 32);
+        *self |= 1 << bit;
+    }
+
+    fn reset_bit(&mut self, bit: u8) {
+        assert!(bit < 32);
+        *self &= !(1 << bit);
     }
 }
 

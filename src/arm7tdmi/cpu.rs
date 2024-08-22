@@ -4,11 +4,17 @@ use std::{
             Receiver,
             TryRecvError::{Disconnected, Empty},
         },
-        Arc, Mutex
-    }, thread, time::Duration
+        Arc, Mutex,
+    },
+    thread,
+    time::Duration,
 };
 
-use crate::{debugger::debugger::DebugCommands, memory::{AccessFlags, Memory}, types::{ARMByteCode, WORD}};
+use crate::{
+    debugger::debugger::DebugCommands,
+    memory::{AccessFlags, Memory},
+    types::{ARMByteCode, REGISTER, WORD}, utils::bits::Bits,
+};
 
 use super::instructions::ARMDecodedInstruction;
 
@@ -17,7 +23,7 @@ pub const LINK_REGISTER: usize = 14;
 
 pub enum InstructionMode {
     ARM,
-    THUMB
+    THUMB,
 }
 
 pub enum CPUMode {
@@ -25,34 +31,41 @@ pub enum CPUMode {
     FIQ, // Fast Interrupt
     SVC, // Supervisor
     ABT, // Abort
-    UND // Undefined
+    UND, // Undefined
+}
+
+#[repr(u8)]
+pub enum FlagsRegister {
+    C = 31,
+    N = 30,
+    Z = 29,
+    V = 28,
 }
 
 pub struct CPU {
-    registers: [u32; 31],
+    registers: [WORD; 31],
     pub inst_mode: InstructionMode,
     pub cpu_mode: CPUMode,
     memory: Arc<Mutex<Memory>>,
     pub decoded_instruction: ARMDecodedInstruction,
     pub fetched_instruction: ARMByteCode,
     pub executed_instruction: String,
+    pub cpsr: WORD,
+    pub spsr: [WORD; 5],
 }
 
 pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
-    let mut instructions_left = 0; 
+    let mut instructions_left = 0;
     loop {
         match rx.try_recv() {
-            Ok(data) => {
-                match data {
-                    DebugCommands::End => {
-                        break;
-                    }
-                    DebugCommands::Continue => {
-                        instructions_left += 1;
-                    }
-
+            Ok(data) => match data {
+                DebugCommands::End => {
+                    break;
                 }
-            }
+                DebugCommands::Continue => {
+                    instructions_left += 1;
+                }
+            },
             Err(Disconnected) => break,
             Err(Empty) => {}
         }
@@ -66,11 +79,11 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
 
 impl CPU {
     pub fn execute_cpu_cycle(&mut self) {
-            let executable = self.decoded_instruction.executable;
-            let instruction = self.decoded_instruction.instruction;
-            executable(self, instruction);
-            self.decode_instruction(self.fetched_instruction);
-            self.fetch_instruction();
+        let executable = self.decoded_instruction.executable;
+        let instruction = self.decoded_instruction.instruction;
+        executable(self, instruction);
+        self.decode_instruction(self.fetched_instruction);
+        self.fetch_instruction();
     }
 
     pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
@@ -80,56 +93,94 @@ impl CPU {
             cpu_mode: CPUMode::USER,
             fetched_instruction: 0,
             decoded_instruction: ARMDecodedInstruction {
-                instruction: 0,
-                executable: CPU::arm_nop
+                ..Default::default()
             },
             memory,
-            executed_instruction: String::from("")
+            executed_instruction: String::from(""),
+            cpsr: 0,
+            spsr: [0; 5],
         }
     }
 
     pub fn flush_pipeline(&mut self) {
         self.decoded_instruction = ARMDecodedInstruction {
-            instruction: 0,
-            executable: CPU::arm_nop
+            ..Default::default()
         };
         self.fetched_instruction = 0;
     }
 
-    #[inline(always)]
     pub fn get_pc(&self) -> u32 {
         self.registers[PC_REGISTER]
     }
 
-    #[inline(always)]
     pub fn set_pc(&mut self, address: WORD) {
         self.registers[PC_REGISTER] = address;
     }
 
-    #[inline(always)]
     pub fn get_sp(&self) -> u32 {
         self.registers[13]
     }
 
-    #[inline(always)]
     pub fn increment_pc(&mut self) {
         self.registers[PC_REGISTER] += 4;
     }
 
-    pub fn get_register(&self, register_num: usize) -> WORD {
+    pub fn get_register(&self, register_num: REGISTER) -> WORD {
         assert!(register_num < 16);
         self.registers[register_num]
     }
 
-    pub fn set_register(&mut self, register_num: usize, value: WORD) {
+    pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
         assert!(register_num < 16);
         self.registers[register_num] = value;
     }
 
+    pub fn set_flag(&mut self, flag: FlagsRegister) {
+        self.cpsr.set_bit(flag as u8);
+    }
+
+    pub fn reset_flag(&mut self, flag: FlagsRegister) {
+        self.cpsr.reset_bit(flag as u8);
+    }
+
     fn fetch_instruction(&mut self) {
-        self.fetched_instruction = self.memory.lock().unwrap()
+        self.fetched_instruction = self
+            .memory
+            .lock()
+            .unwrap()
             .readu32(self.get_pc() as usize, AccessFlags::User)
             .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc()));
         self.increment_pc();
+    }
+}
+
+#[cfg(test)]
+mod cpu_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{memory::Memory, utils::bits::Bits};
+
+    use super::CPU;
+
+    #[test]
+    fn it_sets_and_resets_the_corrects_flags() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        cpu.set_flag(super::FlagsRegister::C);
+        cpu.set_flag(super::FlagsRegister::N);
+        cpu.set_flag(super::FlagsRegister::Z);
+        cpu.reset_flag(super::FlagsRegister::Z);
+
+        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::C as u8));
+        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::N as u8));
+        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::Z as u8) == false);
+        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::V as u8) == false);
+
+        cpu.reset_flag(super::FlagsRegister::C);
+        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::C as u8) == false);
+        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::N as u8));
+
     }
 }
