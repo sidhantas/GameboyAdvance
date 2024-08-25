@@ -21,7 +21,6 @@ impl CPU {
         }
         let offset = instruction & 0x00FF_FFFF;
         let offset: i32 = sign_extend(offset << 2, 25) as i32;
-        println!("Offset: {}", offset);
         let destination = offset as i64 + self.get_pc() as i64;
         self.set_pc(destination as u32);
         self.set_executed_instruction(format!("B {:#010x}", destination));
@@ -41,13 +40,21 @@ impl CPU {
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode)  {}
 
-    pub fn arm_and(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_and(&mut self, instruction: ARMByteCode)  {
+        self.set_executed_instruction(format!("AND"))
+    }
 
-    pub fn arm_eor(&mut self, instruction: ARMByteCode) {}
+    pub fn arm_eor(&mut self, instruction: ARMByteCode) {
+        self.set_executed_instruction(format!("EOR"))
+    }
 
-    pub fn arm_sub(&mut self, instruction: ARMByteCode) {}
+    pub fn arm_sub(&mut self, instruction: ARMByteCode) {
+        self.set_executed_instruction(format!("SUB"))
+    }
 
-    pub fn arm_rsb(&mut self, instruction: ARMByteCode) {}
+    pub fn arm_rsb(&mut self, instruction: ARMByteCode) {
+        self.set_executed_instruction(format!("RSB"))
+    }
 
     pub fn arm_add(&mut self, instruction: ARMByteCode) {}
 

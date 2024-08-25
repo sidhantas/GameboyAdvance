@@ -16,7 +16,6 @@ pub fn sign_extend(word: WORD, sign_bit: u8) -> u32 {
     if word.bit_is_set(sign_bit) {
         let mut mask: u32 = u32::MAX;
         mask = mask << (sign_bit + 1);
-        println!("Mask: {:#x}", mask);
         return word | mask;
     }
     word

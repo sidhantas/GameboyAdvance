@@ -1,6 +1,11 @@
-use sub_decoders::{decode_branch_instruction, decode_data_processing_with_immediate_instruction, decode_load_or_store_register_unsigned};
+use sub_decoders::{ decode_data_processing_with_immediate_instruction,
+    decode_load_or_store_register_unsigned,
+};
 
-use super::{cpu::{InstructionMode, CPU}, instructions::ARMDecodedInstruction};
+use super::{
+    cpu::{InstructionMode, CPU},
+    instructions::ARMDecodedInstruction,
+};
 use crate::types::*;
 
 #[allow(dead_code)]
@@ -12,9 +17,9 @@ pub enum Instruction {
 
 impl CPU {
     pub fn decode_instruction(&mut self, instruction: ARMByteCode) {
-        self.decoded_instruction = match self.inst_mode{
+        self.decoded_instruction = match self.inst_mode {
             InstructionMode::ARM => self.decode_arm_instruction(instruction),
-            InstructionMode::THUMB => self.decode_thumb_instruction(instruction)
+            InstructionMode::THUMB => self.decode_thumb_instruction(instruction),
         };
     }
 
@@ -30,7 +35,7 @@ impl CPU {
         if !(Self::condition_passed(instruction, 0x00)) {
             return ARMDecodedInstruction {
                 executable: CPU::arm_nop,
-                instruction
+                instruction,
             };
         }
 
@@ -38,16 +43,23 @@ impl CPU {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
                 sub_decoders::decode_multiply(instruction)
             }
-            _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction{
+            _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_multiply_long,
-                instruction
+                instruction,
             },
-            _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => decode_data_processing_with_immediate_instruction(instruction),
-            _ if arm_decoders::is_branch_instruction(instruction) => decode_branch_instruction(instruction),
-            _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => decode_load_or_store_register_unsigned(instruction),
+            _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
+                decode_data_processing_with_immediate_instruction(instruction)
+            }
+            _ if arm_decoders::is_branch_instruction(instruction) => ARMDecodedInstruction {
+                executable: CPU::arm_branch,
+                instruction,
+            },
+            _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
+                decode_load_or_store_register_unsigned(instruction)
+            }
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
-                instruction
+                instruction,
             },
         }
     }
@@ -55,7 +67,7 @@ impl CPU {
     fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
         ARMDecodedInstruction {
             instruction,
-            executable: CPU::arm_not_implemented
+            executable: CPU::arm_not_implemented,
         }
     }
 }
@@ -147,12 +159,12 @@ mod sub_decoders {
             0xd => CPU::arm_mov,
             0xe => CPU::arm_bic,
             0xf => CPU::arm_mvn,
-            _ => panic!("Impossible to decode opcode")
+            _ => panic!("Impossible to decode opcode"),
         };
 
         ARMDecodedInstruction {
             executable,
-            instruction
+            instruction,
         }
     }
 
@@ -160,27 +172,22 @@ mod sub_decoders {
         if instruction.bit_is_set(21) {
             return ARMDecodedInstruction {
                 executable: CPU::arm_multiply_accumulate,
-                instruction
+                instruction,
             };
         }
         return ARMDecodedInstruction {
             executable: CPU::arm_multiply,
-            instruction
+            instruction,
         };
     }
 
-    pub fn decode_branch_instruction(instruction: ARMByteCode) -> ARMDecodedInstruction {
-        ARMDecodedInstruction {
-            executable: CPU::arm_branch,
-            instruction
-        }
-    }
-
-    pub fn decode_load_or_store_register_unsigned(instruction: ARMByteCode) -> ARMDecodedInstruction {
+    pub fn decode_load_or_store_register_unsigned(
+        instruction: ARMByteCode,
+    ) -> ARMDecodedInstruction {
         return ARMDecodedInstruction {
             executable: CPU::arm_not_implemented,
-            instruction
-        }
+            instruction,
+        };
     }
 }
 
@@ -289,25 +296,25 @@ mod sub_decoder_tests {
         assert!(cpu.decoded_instruction.executable == CPU::arm_multiply);
     }
 
-        #[test]
-        fn it_returns_a_branch_instruction() {
-            let memory = Memory::new().unwrap();
-            let memory = Arc::new(Mutex::new(memory));
-            let mut cpu = CPU::new(memory);
+    #[test]
+    fn it_returns_a_branch_instruction() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
 
-            let instruction: ARMByteCode = 0xea000005;
-            cpu.decode_instruction(instruction);
-            assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
-        }
+        let instruction: ARMByteCode = 0xea000005;
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
+    }
 
-        #[test]
-        fn it_returns_a_cmp_instruction() {
-            let memory = Memory::new().unwrap();
-            let memory = Arc::new(Mutex::new(memory));
-            let mut cpu = CPU::new(memory);
+    #[test]
+    fn it_returns_a_cmp_instruction() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
 
-            let instruction: ARMByteCode = 0xe35e0000;
-            cpu.decode_instruction(instruction);
-            assert!(cpu.decoded_instruction.executable == CPU::arm_cmp);
-        }
+        let instruction: ARMByteCode = 0xe35e0000;
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_cmp);
+    }
 }

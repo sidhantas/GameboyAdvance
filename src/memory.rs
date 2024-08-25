@@ -59,8 +59,8 @@ impl Memory {
     pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error>{
         let mut bios_file = File::options().read(true).open(filename)?;
 
-        bios_file.seek(SeekFrom::Start(0))?;
-        bios_file.read_exact(&mut self.bios)?;
+        bios_file.rewind()?;
+        bios_file.read(&mut self.bios)?;
         Ok(())
 
     }
