@@ -417,7 +417,7 @@ mod sub_decoder_tests {
     }
 
     #[test]
-    fn it_returns_an_add_instruction() {
+    fn it_returns_an_add_instruction_with_an_imm_op2() {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
@@ -445,6 +445,52 @@ mod sub_decoder_tests {
         assert!(cpu.decoded_instruction.operand2 == (1 << 2));
     }
 
+
+    #[test]
+    fn it_returns_an_add_instruction_with_ror_10() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe0831562; // add r1, r3, r2 ROR#10
+        cpu.set_register(2, 5);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rn == 0x3);
+        assert!(cpu.decoded_instruction.operand2 == (5 as u32).rotate_right(10));
+    }
+
+    #[test]
+    fn it_returns_an_add_instruction_with_asr_10() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe0831542; // add r1, r3, r2 ASR#10
+        cpu.set_register(2, 0xB000_0000);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rn == 0x3);
+        assert!(cpu.decoded_instruction.operand2 == 0xFFEC0000);
+    }
+
+    #[test]
+    fn it_returns_an_add_instruction_with_lsr_10() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe0831522; // add r1, r3, r2 LSR#10
+        cpu.set_register(2, 0xB000_0000);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rn == 0x3);
+        assert!(cpu.decoded_instruction.operand2 == 0xB000_0000 >> 10);
+    }
+
     #[test]
     fn it_returns_an_add_instruction_with_lsr_32() {
         let memory = Memory::new().unwrap();
@@ -460,4 +506,53 @@ mod sub_decoder_tests {
         assert!(cpu.decoded_instruction.operand2 == 0);
         assert!(cpu.get_flag(FlagsRegister::C) == 1);
     }
+
+    #[test]
+    fn it_returns_an_add_instruction_with_an_asr_32_negative() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe0831042; // add r1, r3, r2 ASR#32
+        cpu.set_register(2, 0xF000_1000);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rn == 0x3);
+        assert!(cpu.decoded_instruction.operand2 == u32::MAX);
+        assert!(cpu.get_flag(FlagsRegister::C) == 1);
+    }
+
+    #[test]
+    fn it_returns_an_add_instruction_with_an_asr_32_positive() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe0831042; // add r1, r3, r2 ASR#32
+        cpu.set_register(2, 0x0000_1000);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rn == 0x3);
+        assert!(cpu.decoded_instruction.operand2 == 0);
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+    }
+
+    #[test]
+    fn it_returns_an_add_instruction_with_op2_shifted_by_register() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        let instruction: ARMByteCode = 0xe0831412; // add r1, r3, r2 LSL r4
+        cpu.set_register(2, 0x0000_1000);
+        cpu.set_register(4, 5);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.executable == CPU::arm_add);
+        assert!(cpu.decoded_instruction.rd == 0x1);
+        assert!(cpu.decoded_instruction.rn == 0x3);
+        assert!(cpu.decoded_instruction.operand2 == 0x0002_0000);
+    }
+
 }
