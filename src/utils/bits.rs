@@ -1,10 +1,11 @@
-use crate::types::WORD;
+use crate::types::{BYTE, WORD};
 
 pub trait Bits {
     fn bit_is_set(&self, bit: u8) -> bool;
     fn set_bit(&mut self, bit: u8);
     fn reset_bit(&mut self, bit: u8);
-} 
+    fn get_bit(self, bit: u8) -> WORD;
+}
 
 impl Bits for WORD {
     fn bit_is_set(&self, bit: u8) -> bool {
@@ -21,8 +22,12 @@ impl Bits for WORD {
         assert!(bit < 32);
         *self &= !(1 << bit);
     }
-}
 
+    fn get_bit(self, bit: u8) -> WORD {
+        assert!(bit < 32);
+        return (self >> bit & 0x01) as WORD;
+    }
+}
 
 pub fn sign_extend(word: WORD, sign_bit: u8) -> u32 {
     if word.bit_is_set(sign_bit) {

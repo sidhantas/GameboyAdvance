@@ -1,6 +1,10 @@
 #![allow(unused)]
 
-use crate::{arm7tdmi::cpu::LINK_REGISTER, types::{ARMByteCode, REGISTER, WORD}, utils::bits::{sign_extend, Bits}};
+use crate::{
+    arm7tdmi::cpu::LINK_REGISTER,
+    types::{ARMByteCode, REGISTER, WORD},
+    utils::bits::{sign_extend, Bits},
+};
 
 use super::cpu::CPU;
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> ();
@@ -11,7 +15,7 @@ pub struct ARMDecodedInstruction {
     pub instruction: ARMByteCode,
     pub rd: REGISTER,
     pub rn: REGISTER,
-    pub operand2: WORD
+    pub operand2: WORD,
 }
 
 impl Default for ARMDecodedInstruction {
@@ -21,7 +25,7 @@ impl Default for ARMDecodedInstruction {
             instruction: 0,
             rd: 0,
             rn: 0,
-            operand2: 0
+            operand2: 0,
         }
     }
 }
@@ -30,7 +34,7 @@ impl CPU {
     fn set_executed_instruction(&mut self, name: String) {
         self.executed_instruction = name;
     }
-    pub fn arm_branch(&mut self, instruction: ARMByteCode)  {
+    pub fn arm_branch(&mut self, instruction: ARMByteCode) {
         self.flush_pipeline();
         if (instruction.bit_is_set(24)) {
             self.set_register(LINK_REGISTER, self.get_pc() - 4);
@@ -42,21 +46,21 @@ impl CPU {
         self.set_executed_instruction(format!("B {:#010x}", destination));
     }
 
-    pub fn arm_nop(&mut self, instruction: ARMByteCode)  {
+    pub fn arm_nop(&mut self, instruction: ARMByteCode) {
         self.set_executed_instruction("NOP".into());
     }
 
-    pub fn arm_multiply(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_multiply(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_single_data_swap(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_single_data_swap(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode)  {}
+    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_and(&mut self, instruction: ARMByteCode)  {
+    pub fn arm_and(&mut self, instruction: ARMByteCode) {
         self.set_executed_instruction(format!("AND"))
     }
 
@@ -76,7 +80,10 @@ impl CPU {
         let decoded_inst = self.decoded_instruction.clone();
         let result = self.get_register(decoded_inst.rn) + decoded_inst.operand2;
         self.set_register(decoded_inst.rd, result);
-        self.set_executed_instruction(format!("ADD {:#x} {:#x} {:#x}", decoded_inst.rd, decoded_inst.rn, decoded_inst.operand2));
+        self.set_executed_instruction(format!(
+            "ADD {:#x} {:#x} {:#x}",
+            decoded_inst.rd, decoded_inst.rn, decoded_inst.operand2
+        ));
     }
 
     pub fn arm_adc(&mut self, instruction: ARMByteCode) {}
@@ -101,7 +108,7 @@ impl CPU {
 
     pub fn arm_mvn(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode)  {
+    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) {
         self.set_executed_instruction("NOT IMPLEMENTED".into());
     }
 }
@@ -110,7 +117,10 @@ impl CPU {
 mod instruction_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::cpu::{CPU, LINK_REGISTER}, memory::Memory};
+    use crate::{
+        arm7tdmi::cpu::{CPU, LINK_REGISTER},
+        memory::Memory,
+    };
 
     use super::ARMDecodedInstruction;
 
@@ -127,7 +137,7 @@ mod instruction_tests {
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        
+
         assert!(cpu.get_pc() == expected_destination);
     }
 
@@ -144,7 +154,7 @@ mod instruction_tests {
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        
+
         println!("PC: {:#x}", cpu.get_pc());
         assert!(cpu.get_pc() == expected_destination);
     }
@@ -162,10 +172,9 @@ mod instruction_tests {
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        
+
         assert!(cpu.get_pc() == expected_destination);
         println!("LR: {:#x}", cpu.get_register(LINK_REGISTER));
         assert!(cpu.get_register(LINK_REGISTER) == 4);
     }
-
 }

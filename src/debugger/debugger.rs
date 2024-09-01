@@ -199,7 +199,7 @@ fn draw_cpu(
     }
 
     for i in 0..register_names.len() {
-        let register_value = Paragraph::new(format!("{}", cpu.get_register(i)))
+        let register_value = Paragraph::new(format!("{}", cpu.get_register(i as u32)))
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
         f.render_widget(register_value, register_values[i]);

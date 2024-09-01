@@ -13,13 +13,14 @@ use std::{
 use crate::{
     debugger::debugger::DebugCommands,
     memory::{AccessFlags, Memory},
-    types::{ARMByteCode, REGISTER, WORD}, utils::bits::Bits,
+    types::{ARMByteCode, BYTE, REGISTER, WORD},
+    utils::bits::Bits,
 };
 
 use super::instructions::ARMDecodedInstruction;
 
 const PC_REGISTER: usize = 15;
-pub const LINK_REGISTER: usize = 14;
+pub const LINK_REGISTER: u32 = 14;
 
 pub enum InstructionMode {
     ARM,
@@ -127,20 +128,36 @@ impl CPU {
 
     pub fn get_register(&self, register_num: REGISTER) -> WORD {
         assert!(register_num < 16);
-        self.registers[register_num]
+        self.registers[register_num as usize]
     }
 
     pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
         assert!(register_num < 16);
-        self.registers[register_num] = value;
+        self.registers[register_num as usize] = value;
     }
 
+    #[inline(always)]
     pub fn set_flag(&mut self, flag: FlagsRegister) {
         self.cpsr.set_bit(flag as u8);
     }
 
+    #[inline(always)]
     pub fn reset_flag(&mut self, flag: FlagsRegister) {
         self.cpsr.reset_bit(flag as u8);
+    }
+
+    #[inline(always)]
+    pub fn get_flag(&mut self, flag: FlagsRegister) -> WORD {
+        self.cpsr.get_bit(flag as u8)
+    }
+
+    pub fn set_flag_from_bit(&mut self, flag: FlagsRegister, bit: u8) {
+        assert!(bit == 0 || bit == 1);
+        if bit == 0 {
+            self.reset_flag(flag);
+            return;
+        }
+        self.set_flag(flag);
     }
 
     fn fetch_instruction(&mut self) {
@@ -181,6 +198,5 @@ mod cpu_tests {
         cpu.reset_flag(super::FlagsRegister::C);
         assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::C as u8) == false);
         assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::N as u8));
-
     }
 }
