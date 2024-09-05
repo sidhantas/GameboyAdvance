@@ -1,25 +1,21 @@
-use std::{
-    sync::{
-        mpsc::{
-            Receiver,
-            TryRecvError::{Disconnected, Empty},
-        },
-        Arc, Mutex,
+use std::sync::{
+    mpsc::{
+        Receiver,
+        TryRecvError::{Disconnected, Empty},
     },
-    thread,
-    time::Duration,
+    Arc, Mutex,
 };
 
 use crate::{
     debugger::debugger::DebugCommands,
     memory::{AccessFlags, Memory},
-    types::{ARMByteCode, BYTE, REGISTER, WORD},
+    types::{ARMByteCode, REGISTER, WORD},
     utils::bits::Bits,
 };
 
-use super::instructions::ARMDecodedInstruction;
+use super::{alu::ALUInstruction, instructions::{ARMDecodedInstruction, ARMExecutable}};
 
-const PC_REGISTER: usize = 15;
+pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
 
 pub enum InstructionMode {
@@ -43,6 +39,7 @@ pub enum FlagsRegister {
     V = 28,
 }
 
+
 pub struct CPU {
     registers: [WORD; 31],
     pub inst_mode: InstructionMode,
@@ -51,6 +48,7 @@ pub struct CPU {
     pub decoded_instruction: ARMDecodedInstruction,
     pub fetched_instruction: ARMByteCode,
     pub executed_instruction: String,
+    pub alu_executable: ALUInstruction, 
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
 }
@@ -100,6 +98,9 @@ impl CPU {
             executed_instruction: String::from(""),
             cpsr: 0,
             spsr: [0; 5],
+            alu_executable: ALUInstruction {
+                ..Default::default()
+            }
         }
     }
 

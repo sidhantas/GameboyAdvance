@@ -1,21 +1,18 @@
 #![allow(unused)]
-
 use crate::{
     arm7tdmi::cpu::LINK_REGISTER,
     types::{ARMByteCode, REGISTER, WORD},
     utils::bits::{sign_extend, Bits},
 };
 
-use super::cpu::CPU;
+use super::{alu::ALUInstruction, cpu::{FlagsRegister, CPU}};
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> ();
+pub type ALUExecutable = fn(&mut CPU, ALUInstruction) -> ();
 
 #[derive(Clone)]
 pub struct ARMDecodedInstruction {
     pub executable: ARMExecutable,
     pub instruction: ARMByteCode,
-    pub rd: REGISTER,
-    pub rn: REGISTER,
-    pub operand2: WORD,
 }
 
 impl Default for ARMDecodedInstruction {
@@ -23,15 +20,12 @@ impl Default for ARMDecodedInstruction {
         ARMDecodedInstruction {
             executable: CPU::arm_nop,
             instruction: 0,
-            rd: 0,
-            rn: 0,
-            operand2: 0,
         }
     }
 }
 
 impl CPU {
-    fn set_executed_instruction(&mut self, name: String) {
+    pub fn set_executed_instruction(&mut self, name: String) {
         self.executed_instruction = name;
     }
     pub fn arm_branch(&mut self, instruction: ARMByteCode) {
@@ -60,53 +54,6 @@ impl CPU {
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) {}
 
-    pub fn arm_and(&mut self, instruction: ARMByteCode) {
-        self.set_executed_instruction(format!("AND"))
-    }
-
-    pub fn arm_eor(&mut self, instruction: ARMByteCode) {
-        self.set_executed_instruction(format!("EOR"))
-    }
-
-    pub fn arm_sub(&mut self, instruction: ARMByteCode) {
-        self.set_executed_instruction(format!("SUB"))
-    }
-
-    pub fn arm_rsb(&mut self, instruction: ARMByteCode) {
-        self.set_executed_instruction(format!("RSB"))
-    }
-
-    pub fn arm_add(&mut self, instruction: ARMByteCode) {
-        let decoded_inst = self.decoded_instruction.clone();
-        let result = self.get_register(decoded_inst.rn) + decoded_inst.operand2;
-        self.set_register(decoded_inst.rd, result);
-        self.set_executed_instruction(format!(
-            "ADD {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.rn, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_adc(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_sbc(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_rsc(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_tst(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_teq(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_cmp(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_cmn(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_orr(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_mov(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_bic(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_mvn(&mut self, instruction: ARMByteCode) {}
 
     pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) {
         self.set_executed_instruction("NOT IMPLEMENTED".into());
@@ -118,7 +65,7 @@ mod instruction_tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        arm7tdmi::cpu::{CPU, LINK_REGISTER},
+        arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER},
         memory::Memory,
     };
 
