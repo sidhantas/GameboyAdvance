@@ -146,9 +146,9 @@ mod arm_decoders {
 mod sub_decoders {
     use crate::{
         arm7tdmi::{
-            alu::{self, ALUInstruction},
+            alu::{ALUInstruction},
             cpu::{FlagsRegister, CPU, PC_REGISTER},
-            instructions::{ALUExecutable, ARMDecodedInstruction, ARMExecutable},
+            instructions::{ALUExecutable, ARMDecodedInstruction},
         },
         utils::bits::Bits,
     };
@@ -196,7 +196,7 @@ mod sub_decoders {
             self.alu_executable = alu_instruction;
 
             if !instruction.bit_is_set(4) {
-                (self.alu_executable.executable)(self, instruction);
+                (self.alu_executable.executable)(self);
             }
         }
 

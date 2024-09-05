@@ -1,6 +1,12 @@
-use crate::{types::{ARMByteCode, REGISTER, WORD}, utils::bits::Bits};
+use crate::{
+    types::{REGISTER, WORD},
+    utils::bits::Bits,
+};
 
-use super::{cpu::{FlagsRegister, CPU}, instructions::{ALUExecutable, ARMExecutable}};
+use super::{
+    cpu::{FlagsRegister, CPU},
+    instructions::ALUExecutable,
+};
 
 #[derive(Clone)]
 pub struct ALUInstruction {
@@ -18,10 +24,9 @@ impl Default for ALUInstruction {
             rd: 0,
             operand1: 0,
             operand2: 0,
-            set_flags: false
+            set_flags: false,
         }
     }
-
 }
 
 impl CPU {
@@ -136,7 +141,7 @@ impl CPU {
         let decoded_inst = self.alu_executable.clone();
         let operand1 = self.alu_executable.operand1;
         let operand2 = self.alu_executable.operand2;
-        let result = operand1 | operand2; 
+        let result = operand1 | operand2;
 
         self.set_logical_flags(result, self.alu_executable.set_flags);
         self.set_register(decoded_inst.rd, result as u32);
@@ -146,8 +151,7 @@ impl CPU {
         ));
     }
 
-    pub fn arm_mov(&mut self) {
-    }
+    pub fn arm_mov(&mut self) {}
 
     pub fn arm_bic(&mut self) {
         let decoded_inst = self.alu_executable.clone();
@@ -174,8 +178,7 @@ impl CPU {
                 self.reset_flag(FlagsRegister::Z);
             }
         }
-
-    }    
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -305,7 +308,7 @@ mod tests {
         assert!(cpu.get_flag(FlagsRegister::V) == 0);
         assert!(cpu.get_register(1) == 0x0000_0000);
     }
-    
+
     #[test]
     fn orr_instruction_should_set_z_flag() {
         let memory = Memory::new().unwrap();
@@ -443,26 +446,25 @@ mod tests {
         assert!(cpu.get_register(1) == 0x00);
     }
 
-//    #[test]
-//    fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
-//        let memory = Memory::new().unwrap();
-//        let memory = Arc::new(Mutex::new(memory));
-//        let mut cpu = CPU::new(memory);
-//
-//        cpu.fetched_instruction = 0xe094131f; // adds r1, r3, r15, LSL r3; pc = 0
-//
-//        cpu.set_register(3, 0x01);
-//        let test_pc = 4; // points at next instruction
-//        cpu.set_pc(test_pc);
-//
-//        cpu.execute_cpu_cycle();
-//        cpu.execute_cpu_cycle();
-//        assert!(cpu.get_register(1) == (test_pc + 8) << 1);
-//        dbg!(cpu.get_register(1));
-//        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-
+    //    #[test]
+    //    fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
+    //        let memory = Memory::new().unwrap();
+    //        let memory = Arc::new(Mutex::new(memory));
+    //        let mut cpu = CPU::new(memory);
+    //
+    //        cpu.fetched_instruction = 0xe094131f; // adds r1, r3, r15, LSL r3; pc = 0
+    //
+    //        cpu.set_register(3, 0x01);
+    //        let test_pc = 4; // points at next instruction
+    //        cpu.set_pc(test_pc);
+    //
+    //        cpu.execute_cpu_cycle();
+    //        cpu.execute_cpu_cycle();
+    //        assert!(cpu.get_register(1) == (test_pc + 8) << 1);
+    //        dbg!(cpu.get_register(1));
+    //        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+    //        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+    //        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+    //        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+    //    }
 }

@@ -1,7 +1,5 @@
 .global _main
 _main:
 adds r3, r1, #1
-adds r1, r15, r4, LSL r3; 
-mov r1, r2;
-
+adds r2, r3, r1
 

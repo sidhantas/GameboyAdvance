@@ -13,7 +13,7 @@ use crate::{
     utils::bits::Bits,
 };
 
-use super::{alu::ALUInstruction, instructions::{ARMDecodedInstruction, ARMExecutable}};
+use super::{alu::ALUInstruction, instructions::{ARMDecodedInstruction}};
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;

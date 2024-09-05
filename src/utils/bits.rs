@@ -1,4 +1,4 @@
-use crate::types::{BYTE, WORD};
+use crate::types::{WORD};
 
 pub trait Bits {
     fn bit_is_set(&self, bit: u8) -> bool;
