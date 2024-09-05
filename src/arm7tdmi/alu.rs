@@ -446,25 +446,26 @@ mod tests {
         assert!(cpu.get_register(1) == 0x00);
     }
 
-    //    #[test]
-    //    fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
-    //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
-    //        let mut cpu = CPU::new(memory);
-    //
-    //        cpu.fetched_instruction = 0xe094131f; // adds r1, r3, r15, LSL r3; pc = 0
-    //
-    //        cpu.set_register(3, 0x01);
-    //        let test_pc = 4; // points at next instruction
-    //        cpu.set_pc(test_pc);
-    //
-    //        cpu.execute_cpu_cycle();
-    //        cpu.execute_cpu_cycle();
-    //        assert!(cpu.get_register(1) == (test_pc + 8) << 1);
-    //        dbg!(cpu.get_register(1));
-    //        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-    //        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-    //        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-    //        assert!(cpu.get_flag(FlagsRegister::V) == 0);
-    //    }
+    #[test]
+    fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        cpu.fetched_instruction = 0xe094131f; // adds r1, r3, r15, LSL r3; pc = 0
+
+        cpu.set_register(3, 0x01);
+        let test_pc = 4; // points at next instruction
+        cpu.set_pc(test_pc);
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_register(1) == (test_pc + 8) << 1);
+        dbg!(cpu.get_register(1));
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+    }
 }

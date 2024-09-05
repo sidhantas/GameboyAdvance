@@ -197,6 +197,8 @@ mod sub_decoders {
 
             if !instruction.bit_is_set(4) {
                 (self.alu_executable.executable)(self);
+            } else {
+                self.alu_stalled = true;
             }
         }
 

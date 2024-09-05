@@ -51,6 +51,7 @@ pub struct CPU {
     pub alu_executable: ALUInstruction, 
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
+    pub alu_stalled: bool,
 }
 
 pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
@@ -78,6 +79,10 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
 
 impl CPU {
     pub fn execute_cpu_cycle(&mut self) {
+        if self.alu_stalled {
+            (self.alu_executable.executable)(self);
+            self.alu_stalled = false;
+        }
         let executable = self.decoded_instruction.executable;
         let instruction = self.decoded_instruction.instruction;
         executable(self, instruction);
@@ -100,7 +105,8 @@ impl CPU {
             spsr: [0; 5],
             alu_executable: ALUInstruction {
                 ..Default::default()
-            }
+            },
+            alu_stalled: false
         }
     }
 
