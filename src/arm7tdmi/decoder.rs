@@ -158,7 +158,7 @@ mod sub_decoders {
     impl CPU {
         pub fn decode_data_processing_instruction(&mut self, instruction: ARMByteCode) {
             let opcode = (instruction & 0x01E0_0000) >> 21;
-            let executable: ARMExecutable = match opcode {
+            let executable: ALUExecutable = match opcode {
                 0x0 => CPU::arm_and,
                 0x1 => CPU::arm_eor,
                 0x2 => CPU::arm_sub,
