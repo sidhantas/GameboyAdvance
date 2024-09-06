@@ -12,7 +12,7 @@ use super::{
 pub struct ALUInstruction {
     pub executable: ALUExecutable,
     pub rd: REGISTER,
-    pub operand1: u32,
+    pub rn: REGISTER,
     pub operand2: u32,
     pub set_flags: bool,
 }
@@ -22,7 +22,7 @@ impl Default for ALUInstruction {
         Self {
             executable: CPU::arm_add,
             rd: 0,
-            operand1: 0,
+            rn: 0,
             operand2: 0,
             set_flags: false,
         }
@@ -32,7 +32,7 @@ impl Default for ALUInstruction {
 impl CPU {
     pub fn arm_add(&mut self) {
         let alu_executable = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1 = self.get_register(alu_executable.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 + operand2;
 
@@ -59,13 +59,13 @@ impl CPU {
         self.set_register(alu_executable.rd, result as u32);
         self.set_executed_instruction(format!(
             "ADD {:#x} {:#x} {:#x}",
-            alu_executable.rd, alu_executable.operand1, alu_executable.operand2
+            alu_executable.rd, operand1, operand2
         ));
     }
 
     pub fn arm_and(&mut self) {
         let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1 = self.get_register(decoded_inst.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 & operand2;
 
@@ -73,13 +73,13 @@ impl CPU {
         self.set_register(decoded_inst.rd, result as u32);
         self.set_executed_instruction(format!(
             "AND {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.operand1, decoded_inst.operand2
+            decoded_inst.rd, operand1, decoded_inst.operand2
         ));
     }
 
     pub fn arm_eor(&mut self) {
         let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1= self.get_register(decoded_inst.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 ^ operand2;
 
@@ -87,13 +87,11 @@ impl CPU {
         self.set_register(decoded_inst.rd, result as u32);
         self.set_executed_instruction(format!(
             "EOR {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.operand1, decoded_inst.operand2
+            decoded_inst.rd, operand1, decoded_inst.operand2
         ));
     }
 
     pub fn arm_sub(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let result = self.get_register(decoded_inst.operand1) - decoded_inst.operand2;
         self.set_executed_instruction(format!("SUB"))
     }
 
@@ -109,27 +107,27 @@ impl CPU {
 
     pub fn arm_tst(&mut self) {
         let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1 = self.get_register(decoded_inst.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 & operand2;
 
         self.set_logical_flags(result, true);
         self.set_executed_instruction(format!(
             "TST {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.operand1, decoded_inst.operand2
+            decoded_inst.rd, operand1, decoded_inst.operand2
         ));
     }
 
     pub fn arm_teq(&mut self) {
         let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1= self.get_register(decoded_inst.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 ^ operand2;
 
         self.set_logical_flags(result, true);
         self.set_executed_instruction(format!(
             "TEQ {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.operand1, decoded_inst.operand2
+            decoded_inst.rd, operand1, decoded_inst.operand2
         ));
     }
 
@@ -139,7 +137,7 @@ impl CPU {
 
     pub fn arm_orr(&mut self) {
         let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1= self.get_register(decoded_inst.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 | operand2;
 
@@ -147,7 +145,7 @@ impl CPU {
         self.set_register(decoded_inst.rd, result as u32);
         self.set_executed_instruction(format!(
             "ORR {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.operand1, decoded_inst.operand2
+            decoded_inst.rd, operand1, decoded_inst.operand2
         ));
     }
 
@@ -155,7 +153,7 @@ impl CPU {
 
     pub fn arm_bic(&mut self) {
         let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.alu_executable.operand1;
+        let operand1= self.get_register(decoded_inst.rn);
         let operand2 = self.alu_executable.operand2;
         let result = operand1 & !operand2;
 
@@ -163,7 +161,7 @@ impl CPU {
         self.set_register(decoded_inst.rd, result as u32);
         self.set_executed_instruction(format!(
             "BIC {:#x} {:#x} {:#x}",
-            decoded_inst.rd, decoded_inst.operand1, decoded_inst.operand2
+            decoded_inst.rd, operand1, decoded_inst.operand2
         ));
     }
 
@@ -463,6 +461,30 @@ mod tests {
         cpu.execute_cpu_cycle();
         assert!(cpu.get_register(1) == (test_pc + 8) << 1);
         dbg!(cpu.get_register(1));
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn data_processing_with_pc_as_operand1_and_register_shift_delays_pc() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+
+        cpu.fetched_instruction = 0xe09f1314; //  adds r1, pc, r4, lsl r3; pc = 0
+
+        cpu.set_register(3, 0x01);
+        cpu.set_register(4, 0);
+        let test_pc = 4; // points at next instruction
+        cpu.set_pc(test_pc);
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        dbg!(cpu.get_register(1));
+        assert!(cpu.get_register(1) == test_pc + 8);
         assert!(cpu.get_flag(FlagsRegister::C) == 0);
         assert!(cpu.get_flag(FlagsRegister::N) == 0);
         assert!(cpu.get_flag(FlagsRegister::Z) == 0);

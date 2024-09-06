@@ -182,13 +182,12 @@ mod sub_decoders {
             let rd = (0x0000_F000 & instruction) >> 12;
             let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
 
-            let operand1 = self.get_register(rn);
             let operand2 = self.decode_operand2(instruction, set_flags);
 
             let alu_instruction = ALUInstruction {
                 executable,
                 rd,
-                operand1,
+                rn,
                 operand2,
                 set_flags,
             };
