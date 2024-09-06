@@ -7,7 +7,7 @@ use crate::{
 
 use super::{alu::ALUInstruction, cpu::{FlagsRegister, CPU}};
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> ();
-pub type ALUExecutable = fn(&mut CPU) -> ();
+pub type ALUOperation = fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
 
 #[derive(Clone)]
 pub struct ARMDecodedInstruction {

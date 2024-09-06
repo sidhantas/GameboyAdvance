@@ -124,4 +124,17 @@ impl Memory {
 
         Ok(())
     }
+
+    pub fn writeu32(&mut self, address: usize, value: WORD) -> Result<(), String> {
+        assert!(address % 4 == 0);
+        match address {
+            address if MemorySegments::BIOS.contains(&address) => {
+                self.bios[address..][..4].copy_from_slice(&value.to_le_bytes())
+            },
+            _ => return Err(String::from("Not Implemeneted")),
+        };
+
+        Ok(())
+
+    }
 }

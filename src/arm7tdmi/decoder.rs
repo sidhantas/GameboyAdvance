@@ -148,7 +148,7 @@ mod sub_decoders {
         arm7tdmi::{
             alu::{ALUInstruction},
             cpu::{FlagsRegister, CPU, PC_REGISTER},
-            instructions::{ALUExecutable, ARMDecodedInstruction},
+            instructions::{ALUOperation, ARMDecodedInstruction},
         },
         utils::bits::Bits,
     };
@@ -158,7 +158,7 @@ mod sub_decoders {
     impl CPU {
         pub fn decode_data_processing_instruction(&mut self, instruction: ARMByteCode) {
             let opcode = (instruction & 0x01E0_0000) >> 21;
-            let executable: ALUExecutable = match opcode {
+            let operation: ALUOperation = match opcode {
                 0x0 => CPU::arm_and,
                 0x1 => CPU::arm_eor,
                 0x2 => CPU::arm_sub,
@@ -182,124 +182,24 @@ mod sub_decoders {
             let rd = (0x0000_F000 & instruction) >> 12;
             let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
 
-            let operand2 = self.decode_operand2(instruction, set_flags);
 
             let alu_instruction = ALUInstruction {
-                executable,
+                operation,
                 rd,
                 rn,
-                operand2,
+                instruction,
                 set_flags,
             };
 
             self.alu_executable = alu_instruction;
 
-            if !instruction.bit_is_set(4) {
-                (self.alu_executable.executable)(self);
-            } else {
-                self.alu_stalled = true;
-            }
+            if instruction.bit_is_set(25) || !instruction.bit_is_set(4) {
+                // Can immediately execute if shifting from immediate
+                // or operand2 is an immediate
+                self.execute_alu_operation();
+            }  
         }
 
-        fn decode_operand2(&mut self, instruction: ARMByteCode, set_flags: bool) -> u32 {
-            let shift_amount;
-            if instruction.bit_is_set(25) {
-                // operand 2 is immediate
-                shift_amount = ((instruction & 0x0000_0F00) >> 8) * 2;
-                let immediate = instruction & 0x0000_00FF;
-
-                return immediate.rotate_right(shift_amount);
-            }
-            let shift_type = (instruction & 0x0000_0060) >> 5;
-            let operand_register = instruction & 0x0000_000F;
-            let mut operand_register_value = self.get_register(operand_register);
-
-            if instruction.bit_is_set(4) {
-                // shift by register
-                let shift_register = (instruction & 0x0000_0F00) >> 8;
-                shift_amount = self.get_register(shift_register);
-                if operand_register == 15 {
-                    operand_register_value += 4;
-                }
-            } else {
-                shift_amount = (instruction & 0x0000_0F80) >> 7;
-                if shift_amount == 0 {
-                    // special case for shifting
-                    return match shift_type {
-                        // no change
-                        0x00 => operand_register_value,
-                        // LSR#32
-                        0x01 => {
-                            if set_flags {
-                                self.set_flag_from_bit(
-                                    FlagsRegister::C,
-                                    operand_register_value.get_bit(31) as u8,
-                                );
-                            }
-                            0
-                        }
-                        // ASR#32
-                        0x02 => {
-                            if operand_register_value.bit_is_set(31) {
-                                if set_flags {
-                                    self.set_flag(FlagsRegister::C);
-                                }
-                                return u32::MAX;
-                            }
-                            if set_flags {
-                                self.reset_flag(FlagsRegister::C);
-                            }
-                            0
-                        }
-                        // RRX#1
-                        0x03 => operand_register_value >> 1 | self.get_flag(FlagsRegister::C) << 31,
-                        _ => panic!("Invalid Shift Type"),
-                    };
-                }
-            }
-
-            match shift_type {
-                // Logical shift left
-                0x00 => {
-                    if operand_register_value.bit_is_set((32 - shift_amount) as u8) {
-                        self.set_flag(FlagsRegister::C);
-                    } else {
-                        self.reset_flag(FlagsRegister::C);
-                    }
-                    operand_register_value << shift_amount
-                }
-                // Logical shift right
-                0x01 => {
-                    if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
-                        self.set_flag(FlagsRegister::C);
-                    } else {
-                        self.reset_flag(FlagsRegister::C);
-                    }
-                    operand_register_value >> shift_amount
-                }
-                // Arithmetic shift right
-                0x02 => {
-                    if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
-                        self.set_flag(FlagsRegister::C);
-                    } else {
-                        self.reset_flag(FlagsRegister::C);
-                    }
-                    (operand_register_value as i32 >> shift_amount) as u32
-                }
-                // Rotate Right
-                0x03 => {
-                    if set_flags {
-                        if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
-                            self.set_flag(FlagsRegister::C);
-                        } else {
-                            self.reset_flag(FlagsRegister::C);
-                        }
-                    }
-                    operand_register_value.rotate_right(shift_amount)
-                }
-                _ => panic!("Invalid Shift Type"),
-            }
-        }
 
         pub fn decode_multiply(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
             if instruction.bit_is_set(21) {
@@ -462,10 +362,14 @@ mod sub_decoder_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        let instruction: ARMByteCode = 0xe35e0000;
-        cpu.decode_instruction(instruction);
+        let instruction: ARMByteCode = 0xe1530312; //  cmp r3, r2, lsl r3
+                                                   //  shift by register in
+                                                   // order to stall the alu by
+                                                   // one clock cycle
+        cpu.fetched_instruction = instruction;
         cpu.execute_cpu_cycle();
-        assert!(cpu.alu_executable.executable == CPU::arm_cmp);
+        cpu.execute_cpu_cycle();
+        assert!(cpu.alu_executable.operation == CPU::arm_cmp);
     }
 
     //    #[test]

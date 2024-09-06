@@ -5,38 +5,177 @@ use crate::{
 
 use super::{
     cpu::{FlagsRegister, CPU},
-    instructions::ALUExecutable,
+    instructions::ALUOperation,
 };
 
 #[derive(Clone)]
 pub struct ALUInstruction {
-    pub executable: ALUExecutable,
+    pub instruction: u32,
+    pub operation: ALUOperation,
     pub rd: REGISTER,
     pub rn: REGISTER,
-    pub operand2: u32,
     pub set_flags: bool,
 }
 
 impl Default for ALUInstruction {
     fn default() -> Self {
         Self {
-            executable: CPU::arm_add,
+            instruction: 0,
+            operation: CPU::arm_add,
             rd: 0,
             rn: 0,
-            operand2: 0,
             set_flags: false,
         }
     }
 }
 
 impl CPU {
-    pub fn arm_add(&mut self) {
-        let alu_executable = self.alu_executable.clone();
-        let operand1 = self.get_register(alu_executable.rn);
-        let operand2 = self.alu_executable.operand2;
+    pub fn arm_add(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 + operand2;
+        self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!("ADD {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
 
-        if self.alu_executable.set_flags == true {
+    pub fn arm_and(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 & operand2;
+
+        self.set_logical_flags(result, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!("AND {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
+
+    pub fn arm_eor(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 ^ operand2;
+
+        self.set_logical_flags(result, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!("EOR {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
+
+    pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let operand2 = !operand2 + 1;
+        let result = operand1 + operand2; // use two's complement to make setting flags easier
+        
+        self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
+        self.set_register(rd, result);
+
+        self.set_executed_instruction(format!("SUB"))
+    }
+
+    pub fn arm_rsb(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let operand1 = !operand1 + 1;
+        let result = operand1 + operand2; // use two's complement to make setting flags easier
+        
+        self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
+        self.set_register(rd, result);
+
+        self.set_executed_instruction(format!("RSB"))
+    }
+
+    pub fn arm_adc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let carry = self.get_flag(FlagsRegister::C);
+        let result = operand1 + operand2 + carry;
+
+        self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!(
+            "ADC {:#x} {:#x} {:#x} {:#x}",
+            rd, operand1, operand2, carry
+        ));
+    }
+
+    pub fn arm_sbc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let carry = self.get_flag(FlagsRegister::C);
+        let operand2 = !operand2 + 1;
+        let carry = !carry + 1;
+        let result = operand1 + operand2 + carry;
+
+        self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!(
+            "SBC {:#x} {:#x} {:#x} {:#x}",
+            rd, operand1, operand2, carry
+        ));
+
+    }
+
+    pub fn arm_rsc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let carry = self.get_flag(FlagsRegister::C);
+        let operand1 = !operand1 + 1;
+        let carry = !carry + 1;
+        let result = operand1 + operand2 + carry;
+
+        self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!(
+            "RSC {:#x} {:#x} {:#x} {:#x}",
+            rd, operand1, operand2, carry
+        ));
+    }
+
+    pub fn arm_tst(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 & operand2;
+
+        self.set_logical_flags(result, true);
+        self.set_executed_instruction(format!("TST {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
+
+    pub fn arm_teq(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 ^ operand2;
+
+        self.set_logical_flags(result, true);
+        self.set_executed_instruction(format!("TEQ {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
+
+    pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {}
+
+    pub fn arm_cmn(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {}
+
+    pub fn arm_orr(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 | operand2;
+
+        self.set_logical_flags(result, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!("ORR {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
+
+    #[allow(unused)]
+    pub fn arm_mov(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        self.set_register(rd, operand2);
+        self.set_logical_flags(operand2, set_flags);
+        self.set_executed_instruction(format!("MOV {:#x} {:#x}", rd, operand2));
+    }
+
+    pub fn arm_bic(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 & !operand2;
+
+        self.set_logical_flags(result, set_flags);
+        self.set_register(rd, result);
+        self.set_executed_instruction(format!("BIC {:#x} {:#x} {:#x}", rd, operand1, operand2));
+    }
+
+    #[allow(unused)]
+    pub fn arm_mvn(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = !operand2;
+        self.set_register(rd, result);
+        self.set_logical_flags(result, set_flags);
+        self.set_executed_instruction(format!("MVN {:#x} {:#x}", rd, operand2));
+    }
+
+    fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
+        if set_flags == true {
+            self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
+        }
+    }
+
+    fn set_arithmetic_flags(&mut self, result: WORD, operand1: u32, operand2: u32, carry: u32, set_flags: bool) {
+        if set_flags == true {
             self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
             if result == 0 {
                 self.set_flag(FlagsRegister::Z);
@@ -50,133 +189,14 @@ impl CPU {
             } else {
                 self.reset_flag(FlagsRegister::V);
             }
-            if result < operand1 || result < operand2 {
+            if result < operand1 || result < operand2 || result < carry {
                 self.set_flag(FlagsRegister::C);
             } else {
                 self.reset_flag(FlagsRegister::C);
             }
         }
-        self.set_register(alu_executable.rd, result as u32);
-        self.set_executed_instruction(format!(
-            "ADD {:#x} {:#x} {:#x}",
-            alu_executable.rd, operand1, operand2
-        ));
     }
 
-    pub fn arm_and(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.get_register(decoded_inst.rn);
-        let operand2 = self.alu_executable.operand2;
-        let result = operand1 & operand2;
-
-        self.set_logical_flags(result, self.alu_executable.set_flags);
-        self.set_register(decoded_inst.rd, result as u32);
-        self.set_executed_instruction(format!(
-            "AND {:#x} {:#x} {:#x}",
-            decoded_inst.rd, operand1, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_eor(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let operand1= self.get_register(decoded_inst.rn);
-        let operand2 = self.alu_executable.operand2;
-        let result = operand1 ^ operand2;
-
-        self.set_logical_flags(result, self.alu_executable.set_flags);
-        self.set_register(decoded_inst.rd, result as u32);
-        self.set_executed_instruction(format!(
-            "EOR {:#x} {:#x} {:#x}",
-            decoded_inst.rd, operand1, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_sub(&mut self) {
-        self.set_executed_instruction(format!("SUB"))
-    }
-
-    pub fn arm_rsb(&mut self) {
-        self.set_executed_instruction(format!("RSB"))
-    }
-
-    pub fn arm_adc(&mut self) {}
-
-    pub fn arm_sbc(&mut self) {}
-
-    pub fn arm_rsc(&mut self) {}
-
-    pub fn arm_tst(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let operand1 = self.get_register(decoded_inst.rn);
-        let operand2 = self.alu_executable.operand2;
-        let result = operand1 & operand2;
-
-        self.set_logical_flags(result, true);
-        self.set_executed_instruction(format!(
-            "TST {:#x} {:#x} {:#x}",
-            decoded_inst.rd, operand1, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_teq(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let operand1= self.get_register(decoded_inst.rn);
-        let operand2 = self.alu_executable.operand2;
-        let result = operand1 ^ operand2;
-
-        self.set_logical_flags(result, true);
-        self.set_executed_instruction(format!(
-            "TEQ {:#x} {:#x} {:#x}",
-            decoded_inst.rd, operand1, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_cmp(&mut self) {}
-
-    pub fn arm_cmn(&mut self) {}
-
-    pub fn arm_orr(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let operand1= self.get_register(decoded_inst.rn);
-        let operand2 = self.alu_executable.operand2;
-        let result = operand1 | operand2;
-
-        self.set_logical_flags(result, self.alu_executable.set_flags);
-        self.set_register(decoded_inst.rd, result as u32);
-        self.set_executed_instruction(format!(
-            "ORR {:#x} {:#x} {:#x}",
-            decoded_inst.rd, operand1, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_mov(&mut self) {}
-
-    pub fn arm_bic(&mut self) {
-        let decoded_inst = self.alu_executable.clone();
-        let operand1= self.get_register(decoded_inst.rn);
-        let operand2 = self.alu_executable.operand2;
-        let result = operand1 & !operand2;
-
-        self.set_logical_flags(result, self.alu_executable.set_flags);
-        self.set_register(decoded_inst.rd, result as u32);
-        self.set_executed_instruction(format!(
-            "BIC {:#x} {:#x} {:#x}",
-            decoded_inst.rd, operand1, decoded_inst.operand2
-        ));
-    }
-
-    pub fn arm_mvn(&mut self) {}
-
-    fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
-        if set_flags == true {
-            self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
-            if result == 0 {
-                self.set_flag(FlagsRegister::Z);
-            } else {
-                self.reset_flag(FlagsRegister::Z);
-            }
-        }
-    }
 }
 #[cfg(test)]
 mod tests {
@@ -456,11 +476,10 @@ mod tests {
         let test_pc = 4; // points at next instruction
         cpu.set_pc(test_pc);
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle(); // pc == 8
+        cpu.execute_cpu_cycle(); // pc == 12
+        cpu.execute_cpu_cycle(); // pc == 16
         assert!(cpu.get_register(1) == (test_pc + 8) << 1);
-        dbg!(cpu.get_register(1));
         assert!(cpu.get_flag(FlagsRegister::C) == 0);
         assert!(cpu.get_flag(FlagsRegister::N) == 0);
         assert!(cpu.get_flag(FlagsRegister::Z) == 0);
@@ -483,9 +502,197 @@ mod tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        dbg!(cpu.get_register(1));
         assert!(cpu.get_register(1) == test_pc + 8);
         assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn data_processing_with_pc_as_destination_should_start_from_result() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let _res = mem.lock().unwrap().writeu32(0x0, 0xe2931002);
+        let _res = mem.lock().unwrap().writeu32(0x4, 0xe2931002);
+        let _res = mem.lock().unwrap().writeu32(0x8, 0xe1a00000); // nop
+        let _res = mem.lock().unwrap().writeu32(0xC, 0xe1a00000); // nop
+        let _res = mem.lock().unwrap().writeu32(0x10, 0xe1a00000); // nop
+        let _res = mem.lock().unwrap().writeu32(0x14, 0xe091f001);
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.fetched_instruction == 0xe2931002);
+    }
+
+    #[test]
+    fn mov_instruction_should_set_n_flag() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(3, 0x8001_0002);
+
+        cpu.fetched_instruction = 0xe1b04003; // mov r4, r3;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(cpu.get_register(4) == cpu.get_register(3));
+        assert!(cpu.get_register(4) == 0x8001_0002);
+    }
+
+    #[test]
+    fn mvn_instruction_should_set_z_flag() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        let input = 0xFFFF_FFFF;
+        cpu.set_register(4, input);
+
+        cpu.fetched_instruction = 0xe1f05004; // mvn r5, r4;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(cpu.get_register(5) == !cpu.get_register(4));
+        assert!(cpu.get_register(5) == !input);
+    }
+
+    #[test]
+    fn adc_instruction_should_add_2_registers_and_carry() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(1, 25);
+        cpu.set_register(2, 32);
+        cpu.set_flag(FlagsRegister::C);
+
+        cpu.fetched_instruction = 0xe0b14002; // adcs r4, r2, r1;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(cpu.get_register(4) == 58);
+    }
+
+    #[test]
+    fn adc_instruction_should_set_carry_register() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(1, 0xFFFF_FFFF);
+        cpu.set_register(2, 0x0);
+        cpu.set_flag(FlagsRegister::C);
+
+        cpu.fetched_instruction = 0xe0b14002; // adcs r4, r2, r1;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(cpu.get_register(4) == 0x0000_0000);
+    }
+
+    #[test]
+    fn adc_instruction_should_set_v_register() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(1, 0x8000_0000);
+        cpu.set_register(2, 0x8FFF_FFFF);
+        cpu.set_flag(FlagsRegister::C);
+
+        cpu.fetched_instruction = 0xe0b14002; // adcs r4, r2, r1;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 1);
+        assert!(cpu.get_register(4) == 0x1000_0000);
+    }
+
+    #[test]
+    fn sub_instruction_should_set_v_flag() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(1, 0x7FFF_FFFF);
+        cpu.set_register(2, 0xFFFF_FFFF); // twos complement of -1
+
+        cpu.fetched_instruction = 0xe0514002; // subs r4, r1, r2;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 1);
+        assert!(cpu.get_register(4) == 0x8000_0000);
+    }
+
+    #[test]
+    fn sub_instruction_should_reset_c_flag() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(1, 5);
+        cpu.set_register(2, 10);
+
+        cpu.fetched_instruction = 0xe0514002; // subs r4, r1, r2;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_register(4) == 0xFFFF_FFFB);
+        assert!(cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn sub_instruction_should_set_c_flag() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_register(1, 10);
+        cpu.set_register(2, 5);
+
+        cpu.fetched_instruction = 0xe0514002; // subs r4, r1, r2;
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+        assert!(cpu.get_register(4) == 0x5);
+        assert!(cpu.get_flag(FlagsRegister::C) == 1);
         assert!(cpu.get_flag(FlagsRegister::N) == 0);
         assert!(cpu.get_flag(FlagsRegister::Z) == 0);
         assert!(cpu.get_flag(FlagsRegister::V) == 0);
