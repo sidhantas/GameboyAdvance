@@ -1,35 +1,84 @@
 use crate::{
-    types::{REGISTER, WORD},
+    types::{ARMByteCode, REGISTER, WORD},
     utils::bits::Bits,
 };
 
 use super::{
-    cpu::{FlagsRegister, CPU},
+    cpu::{FlagsRegister, CPU, PC_REGISTER},
     instructions::ALUOperation,
 };
 
 #[derive(Clone)]
-pub struct ALUInstruction {
+pub struct ExecutingInstructionOperands {
     pub instruction: u32,
-    pub operation: ALUOperation,
-    pub rd: REGISTER,
-    pub rn: REGISTER,
-    pub set_flags: bool,
+    pub passed_value: u32,
 }
 
-impl Default for ALUInstruction {
+impl Default for ExecutingInstructionOperands {
     fn default() -> Self {
         Self {
             instruction: 0,
-            operation: CPU::arm_add,
-            rd: 0,
-            rn: 0,
-            set_flags: false,
+            passed_value: 0,
         }
     }
 }
 
 impl CPU {
+    #[allow(unused)]
+    pub fn remaining_cycle_data_processing_instruction(&mut self, instruction: ARMByteCode) {
+        let instruction = self.stalled_instruction_operands.instruction;
+        let opcode = (instruction & 0x01E0_0000) >> 21;
+        let operation: ALUOperation = match opcode {
+            0x0 => CPU::arm_and,
+            0x1 => CPU::arm_eor,
+            0x2 => CPU::arm_sub,
+            0x3 => CPU::arm_rsb,
+            0x4 => CPU::arm_add,
+            0x5 => CPU::arm_adc,
+            0x6 => CPU::arm_sbc,
+            0x7 => CPU::arm_rsc,
+            0x8 => CPU::arm_tst,
+            0x9 => CPU::arm_teq,
+            0xa => CPU::arm_cmp,
+            0xb => CPU::arm_cmn,
+            0xc => CPU::arm_orr,
+            0xd => CPU::arm_mov,
+            0xe => CPU::arm_bic,
+            0xf => CPU::arm_mvn,
+            _ => panic!("Impossible to decode opcode"),
+        };
+
+        let rn = (0x000F_0000 & instruction) >> 16;
+        let rd = (0x0000_F000 & instruction) >> 12;
+
+        let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
+        if rd == 15 && set_flags {
+            todo!("SPSR corresponding to current mode should be placed in CPSR");
+        }
+        let operand2 =
+            self.decode_operand2(instruction, set_flags, self.stalled_instruction_operands.passed_value);
+        operation(self, rd, self.get_register(rn), operand2, set_flags);
+        self.stalled_instruction_operands = Default::default();
+        if rd == 15 {
+            self.flush_pipeline();
+        }
+    }
+
+    fn decode_operand2(
+        &mut self,
+        instruction: ARMByteCode,
+        set_flags: bool,
+        shift_amount: u32,
+    ) -> u32 {
+        if instruction.bit_is_set(25) {
+            // operand 2 is immediate
+            let immediate = instruction & 0x0000_00FF;
+
+            return immediate.rotate_right(shift_amount);
+        }
+        return self.decode_shifted_register(instruction, shift_amount, set_flags);
+    }
+
     pub fn arm_add(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 + operand2;
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
@@ -54,9 +103,9 @@ impl CPU {
     }
 
     pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let operand2 = !operand2 + 1;
+        let operand2 = operand2.twos_complement();
         let result = operand1 + operand2; // use two's complement to make setting flags easier
-        
+
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
 
@@ -64,9 +113,9 @@ impl CPU {
     }
 
     pub fn arm_rsb(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let operand1 = !operand1 + 1;
+        let operand1 = operand2.twos_complement();
         let result = operand1 + operand2; // use two's complement to make setting flags easier
-        
+
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
 
@@ -87,8 +136,8 @@ impl CPU {
 
     pub fn arm_sbc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let carry = self.get_flag(FlagsRegister::C);
-        let operand2 = !operand2 + 1;
-        let carry = !carry + 1;
+        let operand2 = operand2.twos_complement();
+        let carry = carry.twos_complement();
         let result = operand1 + operand2 + carry;
 
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
@@ -97,13 +146,12 @@ impl CPU {
             "SBC {:#x} {:#x} {:#x} {:#x}",
             rd, operand1, operand2, carry
         ));
-
     }
 
     pub fn arm_rsc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let carry = self.get_flag(FlagsRegister::C);
-        let operand1 = !operand1 + 1;
-        let carry = !carry + 1;
+        let operand1 = operand2.twos_complement();
+        let carry = carry.twos_complement();
         let result = operand1 + operand2 + carry;
 
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
@@ -114,6 +162,7 @@ impl CPU {
         ));
     }
 
+    #[allow(unused)]
     pub fn arm_tst(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 & operand2;
 
@@ -121,6 +170,7 @@ impl CPU {
         self.set_executed_instruction(format!("TST {:#x} {:#x} {:#x}", rd, operand1, operand2));
     }
 
+    #[allow(unused)]
     pub fn arm_teq(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 ^ operand2;
 
@@ -128,9 +178,21 @@ impl CPU {
         self.set_executed_instruction(format!("TEQ {:#x} {:#x} {:#x}", rd, operand1, operand2));
     }
 
-    pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {}
+    #[allow(unused)]
+    pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let operand2 = !operand2 + 1;
+        let result = operand1 + operand2; // use two's complement to make setting flags easier
 
-    pub fn arm_cmn(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {}
+        self.set_arithmetic_flags(result, operand1, operand2, 0, true);
+        self.set_executed_instruction(format!("CMP {:#x} {:#x}", operand1, operand2));
+    }
+
+    #[allow(unused)]
+    pub fn arm_cmn(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 + operand2;
+        self.set_arithmetic_flags(result, operand1, operand2, 0, true);
+        self.set_executed_instruction(format!("CMN {:#x} {:#x}", operand1, operand2));
+    }
 
     pub fn arm_orr(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 | operand2;
@@ -174,7 +236,14 @@ impl CPU {
         }
     }
 
-    fn set_arithmetic_flags(&mut self, result: WORD, operand1: u32, operand2: u32, carry: u32, set_flags: bool) {
+    fn set_arithmetic_flags(
+        &mut self,
+        result: WORD,
+        operand1: u32,
+        operand2: u32,
+        carry: u32,
+        set_flags: bool,
+    ) {
         if set_flags == true {
             self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
             if result == 0 {
@@ -196,7 +265,6 @@ impl CPU {
             }
         }
     }
-
 }
 #[cfg(test)]
 mod tests {

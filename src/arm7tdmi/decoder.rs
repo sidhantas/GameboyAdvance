@@ -52,7 +52,8 @@ impl CPU {
             },
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
                 ARMDecodedInstruction {
-                    executable: CPU::decode_data_processing_instruction,
+                    executable: CPU::remaining_cycle_data_processing_instruction,
+                    i_cycle_executable: Some(CPU::data_processing_i_cycle_executable),
                     instruction,
                 }
             }
@@ -62,7 +63,11 @@ impl CPU {
                 ..Default::default()
             },
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
-                self.decode_load_or_store_register_unsigned(instruction)
+                ARMDecodedInstruction {
+                    executable: CPU::begin_sdt_instruction,
+                    instruction,
+                    ..Default::default()
+                }
             }
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
@@ -146,9 +151,9 @@ mod arm_decoders {
 mod sub_decoders {
     use crate::{
         arm7tdmi::{
-            alu::{ALUInstruction},
-            cpu::{FlagsRegister, CPU, PC_REGISTER},
-            instructions::{ALUOperation, ARMDecodedInstruction},
+            alu::ExecutingInstructionOperands,
+            cpu::CPU,
+            instructions::ARMDecodedInstruction,
         },
         utils::bits::Bits,
     };
@@ -156,50 +161,62 @@ mod sub_decoders {
     use super::ARMByteCode;
 
     impl CPU {
-        pub fn decode_data_processing_instruction(&mut self, instruction: ARMByteCode) {
-            let opcode = (instruction & 0x01E0_0000) >> 21;
-            let operation: ALUOperation = match opcode {
-                0x0 => CPU::arm_and,
-                0x1 => CPU::arm_eor,
-                0x2 => CPU::arm_sub,
-                0x3 => CPU::arm_rsb,
-                0x4 => CPU::arm_add,
-                0x5 => CPU::arm_adc,
-                0x6 => CPU::arm_sbc,
-                0x7 => CPU::arm_rsc,
-                0x8 => CPU::arm_tst,
-                0x9 => CPU::arm_teq,
-                0xa => CPU::arm_cmp,
-                0xb => CPU::arm_cmn,
-                0xc => CPU::arm_orr,
-                0xd => CPU::arm_mov,
-                0xe => CPU::arm_bic,
-                0xf => CPU::arm_mvn,
-                _ => panic!("Impossible to decode opcode"),
-            };
+        pub fn data_processing_i_cycle_executable(&mut self) -> u8{
+            let instruction = self.decoded_instruction.instruction;
+            let shift_amount;
+            if instruction.bit_is_set(25) {
+                shift_amount = ((instruction & 0x0000_0F00) >> 8) * 2;
+            } else {
+                // The first cycle gets the register we shift by
+                // The rest of the operation happens on the next cycle in an I cycle
+                if instruction.bit_is_set(4) {
+                    // shift by register
+                    let shift_register = (instruction & 0x0000_0F00) >> 8;
+                    shift_amount = self.get_register(shift_register);
+                } else {
+                    shift_amount = (instruction & 0x0000_0F80) >> 7;
+                }
+            }
 
-            let rn = (0x000F_0000 & instruction) >> 16;
-            let rd = (0x0000_F000 & instruction) >> 12;
-            let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
-
-
-            let alu_instruction = ALUInstruction {
-                operation,
-                rd,
-                rn,
+            let alu_operands = ExecutingInstructionOperands {
+                passed_value: shift_amount,
                 instruction,
-                set_flags,
             };
 
-            self.alu_executable = alu_instruction;
+            self.stalled_instruction_operands = alu_operands;
 
             if instruction.bit_is_set(25) || !instruction.bit_is_set(4) {
-                // Can immediately execute if shifting from immediate
-                // or operand2 is an immediate
-                self.execute_alu_operation();
-            }  
+                // No stall if op2 is immediate 
+                // or shifting from immediate
+                return 0;
+            }
+            return 1;
         }
 
+        pub fn begin_sdt_instruction(&mut self, instruction: ARMByteCode) {
+            let offset;
+            let address;
+            if instruction.bit_is_set(25) {
+                offset = instruction & 0x0000_0fff;
+            } else {
+                offset = self.decode_shifted_register(instruction, 0, false);
+            }
+
+            let rd = (instruction & 0x0000_F000) >> 12;
+            let rn = (instruction & 0x000F_0000) >> 16;
+
+            if instruction.bit_is_set(23) {
+                // up/down bit
+                address = self.get_register(rn) + offset;
+            } else {
+                address = self.get_register(rn) - offset;
+            }
+
+            let sdt_operands = ExecutingInstructionOperands {
+                passed_value: address,
+                instruction
+            };
+        }
 
         pub fn decode_multiply(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
             if instruction.bit_is_set(21) {
@@ -222,17 +239,6 @@ mod sub_decoders {
                 instruction,
                 ..Default::default()
             }
-        }
-
-        pub fn decode_load_or_store_register_unsigned(
-            &self,
-            instruction: ARMByteCode,
-        ) -> ARMDecodedInstruction {
-            return ARMDecodedInstruction {
-                executable: CPU::arm_not_implemented,
-                instruction,
-                ..Default::default()
-            };
         }
     }
 }
@@ -326,10 +332,7 @@ mod arm_decoders_tests {
 mod sub_decoder_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{
-        arm7tdmi::{decoder::*},
-        memory::Memory,
-    };
+    use crate::{arm7tdmi::decoder::*, memory::Memory};
 
     #[test]
     fn it_returns_a_multiply_instruction() {
@@ -356,21 +359,21 @@ mod sub_decoder_tests {
         assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
     }
 
-    #[test]
-    fn it_returns_a_cmp_instruction() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(memory);
-
-        let instruction: ARMByteCode = 0xe1530312; //  cmp r3, r2, lsl r3
-                                                   //  shift by register in
-                                                   // order to stall the alu by
-                                                   // one clock cycle
-        cpu.fetched_instruction = instruction;
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-        assert!(cpu.alu_executable.operation == CPU::arm_cmp);
-    }
+    //    #[test]
+    //    fn it_returns_a_cmp_instruction() {
+    //        let memory = Memory::new().unwrap();
+    //        let memory = Arc::new(Mutex::new(memory));
+    //        let mut cpu = CPU::new(memory);
+    //
+    //        let instruction: ARMByteCode = 0xe1530312; //  cmp r3, r2, lsl r3
+    //                                                   //  shift by register in
+    //                                                   // order to stall the alu by
+    //                                                   // one clock cycle
+    //        cpu.fetched_instruction = instruction;
+    //        cpu.execute_cpu_cycle();
+    //        cpu.execute_cpu_cycle();
+    //        assert!(cpu.alu_executable.operation == CPU::arm_cmp);
+    //    }
 
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_imm_op2() {

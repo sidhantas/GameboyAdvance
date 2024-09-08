@@ -1,6 +1,7 @@
 use crate::types::{WORD};
 
 pub trait Bits {
+    fn twos_complement(self) -> WORD;
     fn bit_is_set(&self, bit: u8) -> bool;
     fn set_bit(&mut self, bit: u8);
     fn reset_bit(&mut self, bit: u8);
@@ -26,6 +27,10 @@ impl Bits for WORD {
     fn get_bit(self, bit: u8) -> WORD {
         assert!(bit < 32);
         return (self >> bit & 0x01) as WORD;
+    }
+    
+    fn twos_complement(self) -> WORD {
+        return !self + 1
     }
 }
 

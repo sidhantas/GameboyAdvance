@@ -147,7 +147,7 @@ fn draw_cpu(
 
     let register_sections = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
         .split(chunks[1]);
 
     let block2 = Block::default()
@@ -199,7 +199,7 @@ fn draw_cpu(
     }
 
     for i in 0..register_names.len() {
-        let register_value = Paragraph::new(format!("{}", cpu.get_register(i as u32)))
+        let register_value = Paragraph::new(format!("{:#x}", cpu.get_register(i as u32)))
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
         f.render_widget(register_value, register_values[i]);
