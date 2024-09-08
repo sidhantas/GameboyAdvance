@@ -1,23 +1,19 @@
 #![allow(unused)]
 use crate::{
     arm7tdmi::cpu::LINK_REGISTER,
-    types::{ARMByteCode, REGISTER, WORD},
+    types::{ARMByteCode, CYCLES, REGISTER, WORD},
     utils::bits::{sign_extend, Bits},
 };
 
-use super::{
-    alu::ExecutingInstructionOperands,
-    cpu::{FlagsRegister, CPU},
-};
-pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> ();
+use super::cpu::{FlagsRegister, CPU};
+pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
 pub type ExecutingInstruction = fn(&mut CPU) -> ();
-pub type InternalOperation = fn(&mut CPU) -> u8;
+pub type InternalOperation = fn(&mut CPU) -> CYCLES;
 pub type ALUOperation =
     fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
 
 #[derive(Clone, Copy)]
 pub struct ARMDecodedInstruction {
-    pub i_cycle_executable: Option<InternalOperation>,
     pub executable: ARMExecutable,
     pub instruction: ARMByteCode,
 }
@@ -25,7 +21,6 @@ pub struct ARMDecodedInstruction {
 impl Default for ARMDecodedInstruction {
     fn default() -> Self {
         ARMDecodedInstruction {
-            i_cycle_executable: None,
             executable: CPU::arm_nop,
             instruction: 0,
         }
@@ -36,7 +31,7 @@ impl CPU {
     pub fn set_executed_instruction(&mut self, name: String) {
         self.executed_instruction = name;
     }
-    pub fn arm_branch(&mut self, instruction: ARMByteCode) {
+    pub fn arm_branch(&mut self, instruction: ARMByteCode) -> CYCLES {
         self.flush_pipeline();
         if (instruction.bit_is_set(24)) {
             self.set_register(LINK_REGISTER, self.get_pc() - 4);
@@ -46,27 +41,40 @@ impl CPU {
         let destination = offset as i64 + self.get_pc() as i64;
         self.set_pc(destination as u32);
         self.set_executed_instruction(format!("B {:#010x}", destination));
+        return 1;
     }
 
-    pub fn arm_nop(&mut self, instruction: ARMByteCode) {
+    pub fn arm_nop(&mut self, instruction: ARMByteCode) -> CYCLES {
         self.set_executed_instruction("NOP".into());
+        return 1;
     }
 
-    pub fn arm_multiply(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_single_data_swap(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) {}
-
-    pub fn arm_load_store_instruction(&mut self, instruction: ARMByteCode) {
-        
+    pub fn arm_multiply(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
     }
 
-    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) {
+    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
+    }
+
+    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
+    }
+
+    pub fn arm_single_data_swap(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
+    }
+
+    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
+    }
+
+    pub fn arm_load_store_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
+    }
+
+    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) -> CYCLES {
+        return 0;
         self.set_executed_instruction("NOT IMPLEMENTED".into());
     }
 }

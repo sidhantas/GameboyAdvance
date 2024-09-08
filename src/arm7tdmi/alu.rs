@@ -1,5 +1,5 @@
 use crate::{
-    types::{ARMByteCode, REGISTER, WORD},
+    types::{ARMByteCode, CYCLES, REGISTER, WORD},
     utils::bits::Bits,
 };
 
@@ -8,25 +8,28 @@ use super::{
     instructions::ALUOperation,
 };
 
-#[derive(Clone)]
-pub struct ExecutingInstructionOperands {
-    pub instruction: u32,
-    pub passed_value: u32,
-}
-
-impl Default for ExecutingInstructionOperands {
-    fn default() -> Self {
-        Self {
-            instruction: 0,
-            passed_value: 0,
-        }
-    }
-}
 
 impl CPU {
+
     #[allow(unused)]
-    pub fn remaining_cycle_data_processing_instruction(&mut self, instruction: ARMByteCode) {
-        let instruction = self.stalled_instruction_operands.instruction;
+    pub fn remaining_cycle_data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
+        let shift_amount;
+        let mut cycles = 1;
+        if instruction.bit_is_set(25) {
+            shift_amount = ((instruction & 0x0000_0F00) >> 8) * 2;
+        } else {
+            // The first cycle gets the register we shift by
+            // The rest of the operation happens on the next cycle in an I cycle
+            if instruction.bit_is_set(4) {
+                // shift by register
+                self.advance_pipeline();
+                cycles += 1;
+                let shift_register = (instruction & 0x0000_0F00) >> 8;
+                shift_amount = self.get_register(shift_register);
+            } else {
+                shift_amount = (instruction & 0x0000_0F80) >> 7;
+            }
+        }
         let opcode = (instruction & 0x01E0_0000) >> 21;
         let operation: ALUOperation = match opcode {
             0x0 => CPU::arm_and,
@@ -55,13 +58,16 @@ impl CPU {
         if rd == 15 && set_flags {
             todo!("SPSR corresponding to current mode should be placed in CPSR");
         }
-        let operand2 =
-            self.decode_operand2(instruction, set_flags, self.stalled_instruction_operands.passed_value);
+        let operand2 = self.decode_operand2(
+            instruction,
+            set_flags,
+            shift_amount
+        );
         operation(self, rd, self.get_register(rn), operand2, set_flags);
-        self.stalled_instruction_operands = Default::default();
         if rd == 15 {
             self.flush_pipeline();
         }
+        return cycles;
     }
 
     fn decode_operand2(

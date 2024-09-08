@@ -19,7 +19,7 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::arm7tdmi::cpu::CPU;
+use crate::arm7tdmi::{cpu::CPU, instructions::ARMDecodedInstruction};
 
 pub enum DebugCommands {
     Continue,
@@ -128,7 +128,11 @@ fn draw_cpu(
         .wrap(Wrap { trim: true });
     let decoded_instruction = Paragraph::new(format!(
         "decoded inst:\n{:#08x}",
-        cpu.decoded_instruction.instruction
+        cpu.decoded_instruction.unwrap_or(
+            ARMDecodedInstruction {
+                ..Default::default()
+            }
+            ).instruction
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });

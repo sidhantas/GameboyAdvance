@@ -13,10 +13,7 @@ use crate::{
     utils::bits::Bits,
 };
 
-use super::{
-    alu::ExecutingInstructionOperands,
-    instructions::{ALUOperation, ARMDecodedInstruction, ExecutingInstruction},
-};
+use super::instructions::ARMDecodedInstruction;
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -46,12 +43,10 @@ pub struct CPU {
     registers: [WORD; 31],
     pub inst_mode: InstructionMode,
     pub cpu_mode: CPUMode,
-    memory: Arc<Mutex<Memory>>,
-    pub stalled_instruction: Option<ARMDecodedInstruction>,
-    pub decoded_instruction: ARMDecodedInstruction,
+    pub memory: Arc<Mutex<Memory>>,
+    pub decoded_instruction: Option<ARMDecodedInstruction>,
     pub fetched_instruction: ARMByteCode,
     pub executed_instruction: String,
-    pub stalled_instruction_operands: ExecutingInstructionOperands,
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
 }
@@ -81,39 +76,21 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
 
 impl CPU {
     pub fn execute_cpu_cycle(&mut self) {
-        // if there is an operation that is mid execution
-        //  finish execution
-        //  add additional clock cycles
-        //
-        let i_cycles_taken;
-
-        match &self.stalled_instruction {
-            Some(stalled_instruction) => {
-                (stalled_instruction.executable)(self, stalled_instruction.instruction);
-                self.stalled_instruction = None;
-            },
-            None => {},
-        }
-
-        match self.decoded_instruction.i_cycle_executable {
-            Some(exec) => {
-                i_cycles_taken = exec(self);
-                self.decoded_instruction.i_cycle_executable = None;
-                if i_cycles_taken < 1 {
-                    (self.decoded_instruction.executable)(self, self.decoded_instruction.instruction);
-                } else {
-                    self.stalled_instruction = Some(self.decoded_instruction);
-                }
-            },
-            None => {
-                let executable = self.decoded_instruction.executable;
-                let instruction = self.decoded_instruction.instruction;
-                executable(self, instruction);
+        match self.decoded_instruction {
+            Some(decoded_instruction) => {
+                self.decoded_instruction = None;
+                (decoded_instruction.executable)(self, decoded_instruction.instruction);
             }
+            _ => {}
         }
 
-        self.decode_instruction(self.fetched_instruction);
-        self.fetch_instruction();
+        match self.decoded_instruction {
+            // refill pipeline if decoded instruction doesn't advance the pipeline
+            None => {
+                self.advance_pipeline();
+            }
+            _ => {}
+        }
     }
 
     pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
@@ -122,25 +99,22 @@ impl CPU {
             inst_mode: InstructionMode::ARM,
             cpu_mode: CPUMode::USER,
             fetched_instruction: 0,
-            decoded_instruction: ARMDecodedInstruction {
-                ..Default::default()
-            },
+            decoded_instruction: None,
             memory,
             executed_instruction: String::from(""),
             cpsr: 0,
             spsr: [0; 5],
-            stalled_instruction_operands: ExecutingInstructionOperands {
-                ..Default::default()
-            },
-            stalled_instruction: None,
         }
     }
 
     pub fn flush_pipeline(&mut self) {
-        self.decoded_instruction = ARMDecodedInstruction {
-            ..Default::default()
-        };
+        self.decoded_instruction = None;
         self.fetched_instruction = 0;
+    }
+
+    pub fn advance_pipeline(&mut self) {
+        self.decode_instruction(self.fetched_instruction);
+        self.fetch_instruction();
     }
 
     pub fn get_pc(&self) -> u32 {
@@ -203,7 +177,12 @@ impl CPU {
         self.increment_pc();
     }
 
-    pub fn decode_shifted_register(&mut self, instruction: ARMByteCode, shift_amount: u32, set_flags: bool) -> u32 {
+    pub fn decode_shifted_register(
+        &mut self,
+        instruction: ARMByteCode,
+        shift_amount: u32,
+        set_flags: bool,
+    ) -> u32 {
         let shift_type = (instruction & 0x0000_0060) >> 5;
         let operand_register = instruction & 0x0000_000F;
         let operand_register_value = self.get_register(operand_register);
