@@ -280,7 +280,7 @@ mod tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, CPU},
-        memory::Memory,
+        memory::{AccessFlags, Memory},
     };
 
     #[test]
@@ -592,12 +592,12 @@ mod tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let _res = mem.lock().unwrap().writeu32(0x0, 0xe2931002);
-        let _res = mem.lock().unwrap().writeu32(0x4, 0xe2931002);
-        let _res = mem.lock().unwrap().writeu32(0x8, 0xe1a00000); // nop
-        let _res = mem.lock().unwrap().writeu32(0xC, 0xe1a00000); // nop
-        let _res = mem.lock().unwrap().writeu32(0x10, 0xe1a00000); // nop
-        let _res = mem.lock().unwrap().writeu32(0x14, 0xe091f001);
+        let _res = mem.lock().unwrap().writeu32(0x0, 0xe2931002, AccessFlags::User);
+        let _res = mem.lock().unwrap().writeu32(0x4, 0xe2931002, AccessFlags::User);
+        let _res = mem.lock().unwrap().writeu32(0x8, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem.lock().unwrap().writeu32(0xC, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem.lock().unwrap().writeu32(0x10, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem.lock().unwrap().writeu32(0x14, 0xe091f001, AccessFlags::User);
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

@@ -31,6 +31,7 @@ impl CPU {
     pub fn set_executed_instruction(&mut self, name: String) {
         self.executed_instruction = name;
     }
+
     pub fn arm_branch(&mut self, instruction: ARMByteCode) -> CYCLES {
         let mut cycles = 1;
         if (instruction.bit_is_set(24)) {

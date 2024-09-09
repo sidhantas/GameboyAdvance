@@ -117,7 +117,7 @@ impl Memory {
         }
     }
 
-    pub fn write(&mut self, address: usize, value: BYTE) -> Result<(), String> {
+    pub fn write(&mut self, address: usize, value: BYTE, access_flags: AccessFlags) -> Result<(), String> {
         match address {
             address if MemorySegments::BIOS.contains(&address) => self.bios[address] = value,
             _ => return Err(String::from("Not Implemeneted")),
@@ -126,7 +126,7 @@ impl Memory {
         Ok(())
     }
 
-    pub fn writeu32(&mut self, address: usize, value: WORD) -> Result<(), String> {
+    pub fn writeu32(&mut self, address: usize, value: WORD, access_flags: AccessFlags) -> Result<(), String> {
         assert!(address % 4 == 0);
         match address {
             address if MemorySegments::BIOS.contains(&address) => {

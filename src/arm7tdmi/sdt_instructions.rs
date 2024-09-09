@@ -1,4 +1,8 @@
-use crate::{memory::AccessFlags, types::{CYCLES, REGISTER, WORD}, utils::bits::Bits};
+use crate::{
+    memory::AccessFlags,
+    types::{CYCLES, REGISTER, WORD},
+    utils::bits::Bits,
+};
 
 use super::cpu::{CPU, PC_REGISTER};
 
@@ -55,8 +59,12 @@ impl CPU {
         };
 
         cycles += match instruction.bit_is_set(20) {
-            true => self.ldr_instruction_execution(rd, access_address, is_byte_transfer, access_mode),
-            _ => panic!(),
+            true => {
+                self.ldr_instruction_execution(rd, access_address, is_byte_transfer, access_mode)
+            }
+            false => {
+                self.str_instruction_execution(rd, access_address, is_byte_transfer, access_mode)
+            }
         };
 
         if write_back_address {
@@ -66,7 +74,31 @@ impl CPU {
         cycles
     }
 
-    pub fn ldr_instruction_execution(
+    fn str_instruction_execution(
+        &mut self,
+        rd: REGISTER,
+        address: u32,
+        byte_transfer: bool,
+        access_flag: AccessFlags,
+    ) -> CYCLES {
+        let data: WORD = self.get_register(rd);
+        {
+            let mut memory = self.memory.lock().unwrap();
+            if byte_transfer {
+                memory
+                    .write(address as usize, data as u8, access_flag)
+                    .unwrap();
+            } else {
+                memory
+                    .writeu32(address as usize, data, access_flag)
+                    .unwrap();
+            }
+        }
+        self.set_executed_instruction(format!("STR {} [{:#x}]", rd, address));
+        1
+    }
+
+    fn ldr_instruction_execution(
         &mut self,
         rd: REGISTER,
         address: u32,
@@ -90,7 +122,8 @@ impl CPU {
 
         self.set_register(rd, data);
         if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline(); }
+            cycles += self.flush_pipeline();
+        }
         self.set_executed_instruction(format!("LDR {} [{:#x}]", rd, address));
 
         cycles
@@ -101,7 +134,7 @@ impl CPU {
 mod sdt_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::cpu::CPU, memory::Memory};
+    use crate::{arm7tdmi::cpu::CPU, memory::{AccessFlags, Memory}};
 
     #[test]
     fn ldr_should_return_data_at_specified_address() {
@@ -113,7 +146,7 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x200;
 
-        let _res = mem.lock().unwrap().writeu32(address as usize, value);
+        let _res = mem.lock().unwrap().writeu32(address as usize, value, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -135,7 +168,7 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x200;
 
-        let _res = mem.lock().unwrap().writeu32(address as usize + 8, value);
+        let _res = mem.lock().unwrap().writeu32(address as usize + 8, value, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -157,7 +190,7 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x208;
 
-        let _res = mem.lock().unwrap().writeu32(address as usize - 8, value);
+        let _res = mem.lock().unwrap().writeu32(address as usize - 8, value, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -179,7 +212,7 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x200;
 
-        let _res = mem.lock().unwrap().writeu32(address as usize + 8, value);
+        let _res = mem.lock().unwrap().writeu32(address as usize + 8, value, AccessFlags::User);
 
         cpu.set_register(1, address);
         cpu.set_register(3, 4);
@@ -202,7 +235,7 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x200;
 
-        let _res = mem.lock().unwrap().writeu32(address as usize, value);
+        let _res = mem.lock().unwrap().writeu32(address as usize, value, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -220,7 +253,7 @@ mod sdt_tests {
 
         assert_eq!(cpu.get_register(2), (value & 0xFF00) >> 8);
     }
-    
+
     #[test]
     fn ldr_should_rotate_value_when_not_word_aligned() {
         let memory = Memory::new().unwrap();
@@ -231,8 +264,8 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x202;
 
-        let _res = mem.lock().unwrap().writeu32(0x200, value);
-        let _res = mem.lock().unwrap().writeu32(0x204, 0xABABABAB);
+        let _res = mem.lock().unwrap().writeu32(0x200, value, AccessFlags::User);
+        let _res = mem.lock().unwrap().writeu32(0x204, 0xABABABAB, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -240,7 +273,6 @@ mod sdt_tests {
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-
 
         assert_eq!(cpu.get_register(2), 0xABABFABC);
 
@@ -263,7 +295,7 @@ mod sdt_tests {
         let value = 0xFABCD321;
         let address: u32 = 0x200;
 
-        let _res = mem.lock().unwrap().writeu32(0x200, value);
+        let _res = mem.lock().unwrap().writeu32(0x200, value, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -272,9 +304,53 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-
         assert_eq!(cpu.get_register(2), value);
         assert_eq!(cpu.get_register(1), address + 4);
+    }
 
+    #[test]
+    fn str_should_store_word_at_memory_address() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let value = 0xFABCD321;
+        let address: u32 = 0x200;
+
+        cpu.set_register(1, address);
+        cpu.set_register(2, value);
+
+        cpu.fetched_instruction = 0xe5812000; // str r2, [r1]
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        let stored_value = mem.lock().unwrap().readu32(address as usize, AccessFlags::User).unwrap();
+
+        assert_eq!(value, stored_value);
+    }
+
+    #[test]
+    fn str_should_store_byte_at_address() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let value: u8 = 0x21;
+        let address: u32 = 0x203;
+
+        cpu.set_register(1, address);
+        cpu.set_register(2, value.into());
+
+        cpu.fetched_instruction = 0xe5c12000; // strb r2, [r1]
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        let stored_value = mem.lock().unwrap().read(address as usize, AccessFlags::User).unwrap();
+
+        assert_eq!(value, stored_value);
     }
 }
