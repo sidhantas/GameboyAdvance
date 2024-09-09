@@ -55,6 +55,7 @@ impl MemorySegments {
 
 pub enum AccessFlags {
     User = (1 << 0),
+    Privileged = (1 << 1)
 }
 
 #[allow(dead_code)]
@@ -107,7 +108,7 @@ impl Memory {
     }
 
     pub fn readu32(&self, address: usize, access_flags: AccessFlags) -> Result<WORD, String> {
-        assert!(address % 4 == 0);
+        // assert!(address % 4 == 0);
         match address {
             address if MemorySegments::BIOS.contains(&address) => Ok(u32::from_le_bytes(
                 self.bios[address..address + 4].try_into().unwrap(),

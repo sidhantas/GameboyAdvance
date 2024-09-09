@@ -65,7 +65,7 @@ impl CPU {
         );
         operation(self, rd, self.get_register(rn), operand2, set_flags);
         if rd == 15 {
-            self.flush_pipeline();
+            cycles += self.flush_pipeline();
         }
         return cycles;
     }
@@ -82,7 +82,9 @@ impl CPU {
 
             return immediate.rotate_right(shift_amount);
         }
-        return self.decode_shifted_register(instruction, shift_amount, set_flags);
+        let operand_register = instruction & 0x0000_000F;
+        let operand_register_value = self.get_register(operand_register);
+        return self.decode_shifted_register(instruction, shift_amount, operand_register_value, set_flags);
     }
 
     pub fn arm_add(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -605,7 +607,7 @@ mod tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        assert!(cpu.fetched_instruction == 0xe2931002);
+        assert!(cpu.decoded_instruction.unwrap().instruction == 0xe2931002);
     }
 
     #[test]

@@ -32,16 +32,18 @@ impl CPU {
         self.executed_instruction = name;
     }
     pub fn arm_branch(&mut self, instruction: ARMByteCode) -> CYCLES {
-        self.flush_pipeline();
+        let mut cycles = 1;
         if (instruction.bit_is_set(24)) {
             self.set_register(LINK_REGISTER, self.get_pc() - 4);
         }
         let offset = instruction & 0x00FF_FFFF;
-        let offset: i32 = sign_extend(offset << 2, 25) as i32;
-        let destination = offset as i64 + self.get_pc() as i64;
-        self.set_pc(destination as u32);
+        let offset = sign_extend(offset << 2, 25);
+        let destination = offset + self.get_pc();
+        self.set_pc(destination);
+        cycles += self.flush_pipeline();
         self.set_executed_instruction(format!("B {:#010x}", destination));
-        return 1;
+
+        cycles
     }
 
     pub fn arm_nop(&mut self, instruction: ARMByteCode) -> CYCLES {
@@ -96,15 +98,15 @@ mod instruction_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xea000005;
+        cpu.fetched_instruction = 0xea000002; // b 0x10
         cpu.set_pc(4);
 
-        let expected_destination = 0x14 + cpu.get_pc() + 8;
+        let expected_destination = 0x10 + 8;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        assert!(cpu.get_pc() == expected_destination);
+        assert_eq!(cpu.get_pc(), expected_destination);
     }
 
     #[test]
@@ -113,16 +115,15 @@ mod instruction_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xeafffff4;
-        cpu.set_pc(0x34);
+        cpu.fetched_instruction = 0xeafffffa; // b 0x0
+        cpu.set_pc(0x14);
 
-        let expected_destination = 12;
+        let expected_destination = 8;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        println!("PC: {:#x}", cpu.get_pc());
-        assert!(cpu.get_pc() == expected_destination);
+        assert_eq!(cpu.get_pc(), expected_destination);
     }
 
     #[test]
@@ -131,16 +132,15 @@ mod instruction_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xeb000005;
-        cpu.set_pc(4);
+        cpu.fetched_instruction = 0xebfffffa; // b 0
+        cpu.set_pc(0x14);
 
-        let expected_destination = 0x14 + cpu.get_pc() + 8;
+        let expected_destination = 8;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
         assert!(cpu.get_pc() == expected_destination);
-        println!("LR: {:#x}", cpu.get_register(LINK_REGISTER));
-        assert!(cpu.get_register(LINK_REGISTER) == 4);
+        assert!(cpu.get_register(LINK_REGISTER) == 0x14);
     }
 }

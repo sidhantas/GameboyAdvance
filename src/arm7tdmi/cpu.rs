@@ -9,7 +9,7 @@ use std::sync::{
 use crate::{
     debugger::debugger::DebugCommands,
     memory::{AccessFlags, Memory},
-    types::{ARMByteCode, REGISTER, WORD},
+    types::{ARMByteCode, CYCLES, REGISTER, WORD},
     utils::bits::Bits,
 };
 
@@ -107,14 +107,22 @@ impl CPU {
         }
     }
 
-    pub fn flush_pipeline(&mut self) {
+    pub fn flush_pipeline(&mut self) -> CYCLES {
+        let mut cycles = 0;
         self.decoded_instruction = None;
         self.fetched_instruction = 0;
+
+        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline();
+
+        cycles
     }
 
-    pub fn advance_pipeline(&mut self) {
+    pub fn advance_pipeline(&mut self) -> CYCLES{
         self.decode_instruction(self.fetched_instruction);
         self.fetch_instruction();
+        
+        1
     }
 
     pub fn get_pc(&self) -> u32 {
@@ -177,15 +185,21 @@ impl CPU {
         self.increment_pc();
     }
 
+    pub fn get_access_mode(&self) -> AccessFlags {
+        match self.cpu_mode {
+            CPUMode::USER => AccessFlags::User,
+            _ => AccessFlags::Privileged
+        }
+    }
+
     pub fn decode_shifted_register(
         &mut self,
         instruction: ARMByteCode,
         shift_amount: u32,
+        operand_register_value: u32,
         set_flags: bool,
     ) -> u32 {
         let shift_type = (instruction & 0x0000_0060) >> 5;
-        let operand_register = instruction & 0x0000_000F;
-        let operand_register_value = self.get_register(operand_register);
 
         if !instruction.bit_is_set(4) && shift_amount == 0 {
             // special case for shifting

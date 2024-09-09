@@ -64,7 +64,7 @@ impl CPU {
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
-                    ..Default::default()
+                    executable: CPU::sdt_instruction_execution
                 }
             }
             _ => ARMDecodedInstruction {
@@ -155,10 +155,9 @@ mod sub_decoders {
         utils::bits::Bits,
     };
 
-    use super::{ARMByteCode, CYCLES};
+    use super::ARMByteCode;
 
     impl CPU {
-
         pub fn decode_multiply(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
             if instruction.bit_is_set(21) {
                 return ARMDecodedInstruction {
@@ -172,14 +171,6 @@ mod sub_decoders {
                 instruction,
                 ..Default::default()
             };
-        }
-
-        pub fn decode_branch_instruction(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
-            ARMDecodedInstruction {
-                executable: CPU::arm_branch,
-                instruction,
-                ..Default::default()
-            }
         }
     }
 }
