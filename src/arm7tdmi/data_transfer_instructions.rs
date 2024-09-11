@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use crate::{
     memory::AccessFlags,
     types::{CYCLES, REGISTER, WORD},
@@ -167,8 +169,7 @@ impl CPU {
                 0b01 => self.ldrh_execution(rd, access_address),
                 0b10 => self.ldrsb_execution(rd, access_address),
                 0b11 => self.ldrsh_execution(rd, access_address),
-                _ => panic!("Invalid Opcode")
-
+                _ => panic!("Invalid Opcode"),
             }
         } else {
             self.strh_execution(rd, access_address)
@@ -197,10 +198,12 @@ impl CPU {
         let mut cycles = 2;
         let data = {
             let memory = self.memory.lock().unwrap();
-            memory.readu16(address as usize, self.get_access_mode()).unwrap()
+            memory
+                .readu16(address as usize, self.get_access_mode())
+                .unwrap()
         };
 
-        self.set_register(rd,sign_extend(data.into(), 15));
+        self.set_register(rd, sign_extend(data.into(), 15));
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
@@ -213,10 +216,12 @@ impl CPU {
         let mut cycles = 2;
         let data = {
             let memory = self.memory.lock().unwrap();
-            memory.read(address as usize, self.get_access_mode()).unwrap()
+            memory
+                .read(address as usize, self.get_access_mode())
+                .unwrap()
         };
 
-        self.set_register(rd,sign_extend(data.into(), 7));
+        self.set_register(rd, sign_extend(data.into(), 7));
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
@@ -228,7 +233,9 @@ impl CPU {
         let mut cycles = 2;
         let data = {
             let memory = self.memory.lock().unwrap();
-            memory.readu16(address as usize, self.get_access_mode()).unwrap()
+            memory
+                .readu16(address as usize, self.get_access_mode())
+                .unwrap()
         };
 
         self.set_register(rd, data.into());
@@ -238,6 +245,59 @@ impl CPU {
         self.set_executed_instruction(format!("LDRH {} [{:#x}]", rd, address));
 
         cycles
+    }
+
+    pub fn block_dt_execution(&mut self, instruction: u32) -> CYCLES {
+        let pre_indexed_addressing = instruction.bit_is_set(24);
+        let add_offset = instruction.bit_is_set(23);
+        let access_mode = if instruction.bit_is_set(22) {
+            AccessFlags::User
+        } else {
+            self.get_access_mode()
+        };
+
+        let write_back_address: bool = instruction.bit_is_set(21);
+
+        let base_address = self.get_register((instruction & 0x000F_0000) >> 16);
+
+        let mut register_list: Vec<REGISTER> = Vec::new();
+        for i in 0..PC_REGISTER {
+            if instruction.bit_is_set(i as u8) {
+                register_list.push(i as u32);
+            }
+        }
+
+        let base_address = if add_offset {
+            base_address
+        } else {
+            base_address - register_list.len() as u32 * size_of::<WORD>() as u32
+        };
+
+
+        if instruction.bit_is_set(20) {
+            self.ldm_execution(base_address as usize, &register_list);
+        }
+
+        3
+    }
+
+    fn ldm_execution(
+        &mut self,
+        base_address: usize,
+        register_list: &Vec<REGISTER>,
+    ) -> CYCLES {
+        for i in 0..register_list.len() {
+            let data = {
+                let memory = self.memory.lock().unwrap();
+                memory
+                    .readu32(base_address + i * size_of::<WORD>(), self.get_access_mode())
+                    .unwrap()
+            };
+            dbg!(data);
+            self.set_register(register_list[i] as u32, data);
+        }
+
+        1
     }
 }
 
@@ -624,5 +684,36 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(3), value | 0xFFFF_FF00);
+    }
+
+    #[test]
+    fn ldm_should_load_multiple_registers() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let value = 0x0000_0081;
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize, value, AccessFlags::User)
+            .unwrap();
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize + 4, 0x55, AccessFlags::User)
+            .unwrap();
+
+        cpu.fetched_instruction = 0xe8950003; // ldm r5, {r0, r1}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), value);
+        assert_eq!(cpu.get_register(1), 0x55);
     }
 }

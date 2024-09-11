@@ -45,6 +45,12 @@ impl CPU {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
                 self.decode_multiply(instruction)
             }
+            _ if arm_decoders::is_block_data_transfer(instruction) => {
+                ARMDecodedInstruction {
+                    executable: CPU::block_dt_execution,
+                    instruction
+                }
+            }
             _ if arm_decoders::is_single_data_swap(instruction) => {
                 ARMDecodedInstruction {
                     executable: CPU::single_data_swap,
@@ -275,6 +281,15 @@ mod arm_decoders_tests {
         let mut cpu = CPU::new(cpu_memory);
         let instruction = 0xe1014093;
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
+    }
+
+    #[test]
+    fn it_finds_block_data_transfer() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+        let instruction = 0xe895001f;
+        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
     }
 }
 

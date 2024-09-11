@@ -6,6 +6,7 @@ mov r3, #500
     
 str r2, [r1]
 swpb r4, r3, [r1]
+ldm r5, {r0, r1}
 
 
 .text
