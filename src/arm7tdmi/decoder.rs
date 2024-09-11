@@ -45,17 +45,23 @@ impl CPU {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
                 self.decode_multiply(instruction)
             }
-            _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
-                executable: CPU::arm_multiply_long,
-                instruction,
-                ..Default::default()
-            },
+            _ if arm_decoders::is_single_data_swap(instruction) => {
+                ARMDecodedInstruction {
+                    executable: CPU::single_data_swap,
+                    instruction
+                }
+            }
             _ if arm_decoders::is_hw_or_signed_data_transfer(instruction) => {
                 ARMDecodedInstruction {
                     executable: CPU::hw_or_signed_data_transfer,
                     instruction
                 }
             }
+            _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
+                executable: CPU::arm_multiply_long,
+                instruction,
+                ..Default::default()
+            },
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
                 ARMDecodedInstruction {
                     executable: CPU::remaining_cycle_data_processing_instruction,
@@ -176,7 +182,11 @@ mod sub_decoders {
 
 #[cfg(test)]
 mod arm_decoders_tests {
+    use std::sync::{Arc, Mutex};
+
     use arm_decoders::*;
+
+    use crate::memory::Memory;
 
     use super::*;
 
@@ -256,6 +266,15 @@ mod arm_decoders_tests {
     fn it_recognizes_a_load_store_instruction() {
         let instructions = vec![0xe59f101c, 0xe58f101c];
         test_decoder(is_load_or_store_register_unsigned, instructions);
+    }
+
+    #[test]
+    fn it_finds_single_data_swap() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+        let instruction = 0xe1014093;
+        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
     }
 }
 

@@ -1,10 +1,11 @@
 .global _main
 _main:
 mov r1, #200
-mov r2, #0x320
-
-strb r2, [r1]
-ldr r3, [r1]
+mov r2, #-5
+mov r3, #500
+    
+str r2, [r1]
+swpb r4, r3, [r1]
 
 
 .text
