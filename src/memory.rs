@@ -107,6 +107,16 @@ impl Memory {
         }
     }
 
+    pub fn readu16(&self, address: usize, access_flags: AccessFlags) -> Result<HWORD, String> {
+        // assert!(address % 4 == 0);
+        match address {
+            address if MemorySegments::BIOS.contains(&address) => Ok(u16::from_le_bytes(
+                self.bios[address..address + 2].try_into().unwrap(),
+            )),
+            _ => return Err(String::from("Not Implemeneted")),
+        }
+    }
+
     pub fn readu32(&self, address: usize, access_flags: AccessFlags) -> Result<WORD, String> {
         // assert!(address % 4 == 0);
         match address {
@@ -120,6 +130,18 @@ impl Memory {
     pub fn write(&mut self, address: usize, value: BYTE, access_flags: AccessFlags) -> Result<(), String> {
         match address {
             address if MemorySegments::BIOS.contains(&address) => self.bios[address] = value,
+            _ => return Err(String::from("Not Implemeneted")),
+        };
+
+        Ok(())
+    }
+
+    pub fn writeu16(&mut self, address: usize, value: HWORD, access_flags: AccessFlags) -> Result<(), String> {
+        assert!(address % 2 == 0);
+        match address {
+            address if MemorySegments::BIOS.contains(&address) => {
+                self.bios[address..][..2].copy_from_slice(&value.to_le_bytes())
+            },
             _ => return Err(String::from("Not Implemeneted")),
         };
 

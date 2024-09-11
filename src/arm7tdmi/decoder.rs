@@ -50,6 +50,12 @@ impl CPU {
                 instruction,
                 ..Default::default()
             },
+            _ if arm_decoders::is_hw_or_signed_data_transfer(instruction) => {
+                ARMDecodedInstruction {
+                    executable: CPU::hw_or_signed_data_transfer,
+                    instruction
+                }
+            }
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
                 ARMDecodedInstruction {
                     executable: CPU::remaining_cycle_data_processing_instruction,
@@ -129,16 +135,9 @@ mod arm_decoders {
         instruction & 0x0C00_0000 == 0x0000_0000
     }
 
-    pub fn is_single_data_transfer(instruction: u32) -> bool {
-        instruction & 0x0E00_0000 == 0x0600_0000
-    }
 
-    pub fn is_halfword_data_transfer_immediate_offset(instruction: u32) -> bool {
-        instruction & 0x0E40_0090 == 0x0040_0090
-    }
-
-    pub fn is_halfword_data_transfer_register_offset(instruction: u32) -> bool {
-        instruction & 0x0E40_0f90 == 0x0000_0090
+    pub fn is_hw_or_signed_data_transfer(instruction: u32) -> bool {
+        instruction & 0x0E00_0090 == 0x0000_0090
     }
 
     pub fn is_branch_and_exchange_instruction(instruction: u32) -> bool {
@@ -207,20 +206,20 @@ mod arm_decoders_tests {
 
     #[test]
     fn it_recognizes_a_halfword_data_transfer_register_offset() {
-        let instructions = vec![0xe19100b3];
-        test_decoder(is_halfword_data_transfer_register_offset, instructions);
+        let instructions = vec![0xe1c130b0];
+        test_decoder(is_hw_or_signed_data_transfer, instructions);
     }
 
     #[test]
     fn it_recognizes_a_halfword_data_transfer_immediate_offset() {
         let instructions = vec![0xe1d207bb];
-        test_decoder(is_halfword_data_transfer_immediate_offset, instructions);
+        test_decoder(is_hw_or_signed_data_transfer, instructions);
     }
 
     #[test]
     fn it_recognizes_a_single_data_transfer_instruction() {
         let instructions = vec![0xe7910003];
-        test_decoder(is_single_data_transfer, instructions);
+        test_decoder(is_load_or_store_register_unsigned, instructions);
     }
 
     #[test]
