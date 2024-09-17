@@ -248,17 +248,16 @@ impl CPU {
     }
 
     pub fn block_dt_execution(&mut self, instruction: u32) -> CYCLES {
+        if instruction.bit_is_set(22) {
+            todo!("Implement S bit");
+        }
+
         let pre_indexed_addressing = instruction.bit_is_set(24);
         let add_offset = instruction.bit_is_set(23);
-        let access_mode = if instruction.bit_is_set(22) {
-            AccessFlags::User
-        } else {
-            self.get_access_mode()
-        };
-
         let write_back_address: bool = instruction.bit_is_set(21);
 
-        let base_address = self.get_register((instruction & 0x000F_0000) >> 16);
+        let base_register = (instruction & 0x000F_0000) >> 16;
+        let base_address = self.get_register(base_register);
 
         let mut register_list: Vec<REGISTER> = Vec::new();
         for i in 0..PC_REGISTER {
@@ -267,33 +266,95 @@ impl CPU {
             }
         }
 
-        let base_address = if add_offset {
-            base_address
+        if add_offset {
+            if instruction.bit_is_set(20) {
+                self.ldm_execution(
+                    base_address as usize,
+                    pre_indexed_addressing,
+                    &register_list,
+                );
+            } else {
+                self.stm_execution(
+                    base_address as usize,
+                    pre_indexed_addressing,
+                    &register_list,
+                );
+            }
+            if write_back_address {
+                self.set_register(
+                    base_register,
+                    base_address + register_list.len() as u32 * size_of::<WORD>() as u32,
+                );
+            }
         } else {
-            base_address - register_list.len() as u32 * size_of::<WORD>() as u32
+            let base_address = base_address - register_list.len() as u32 * size_of::<WORD>() as u32;
+            if instruction.bit_is_set(20) {
+                self.ldm_execution(
+                    base_address as usize,
+                    !pre_indexed_addressing,
+                    &register_list,
+                );
+            } else {
+                self.stm_execution(
+                    base_address as usize,
+                    !pre_indexed_addressing,
+                    &register_list,
+                );
+            }
+            if write_back_address {
+                self.set_register(base_register, base_address);
+            }
         };
 
+        3
+    }
 
-        if instruction.bit_is_set(20) {
-            self.ldm_execution(base_address as usize, &register_list);
+    fn stm_execution(
+        &mut self,
+        base_address: usize,
+        pre_indexed_addressing: bool,
+        register_list: &Vec<REGISTER>,
+    ) -> CYCLES {
+        let mut curr_address = base_address;
+        for i in 0..register_list.len() {
+            if pre_indexed_addressing {
+                curr_address += size_of::<WORD>()
+            }
+            let data = self.get_register(register_list[i] as u32);
+            {
+                let mut memory = self.memory.lock().unwrap();
+                memory
+                    .writeu32(curr_address, data, self.get_access_mode())
+                    .unwrap()
+            };
+            if !pre_indexed_addressing {
+                curr_address += size_of::<WORD>()
+            }
         }
 
-        3
+        1
     }
 
     fn ldm_execution(
         &mut self,
         base_address: usize,
+        pre_indexed_addressing: bool,
         register_list: &Vec<REGISTER>,
     ) -> CYCLES {
+        let mut curr_address = base_address;
         for i in 0..register_list.len() {
+            if pre_indexed_addressing {
+                curr_address += size_of::<WORD>()
+            }
             let data = {
                 let memory = self.memory.lock().unwrap();
                 memory
-                    .readu32(base_address + i * size_of::<WORD>(), self.get_access_mode())
+                    .readu32(curr_address, self.get_access_mode())
                     .unwrap()
             };
-            dbg!(data);
+            if !pre_indexed_addressing {
+                curr_address += size_of::<WORD>()
+            }
             self.set_register(register_list[i] as u32, data);
         }
 
@@ -708,12 +769,247 @@ mod sdt_tests {
             .writeu32(address as usize + 4, 0x55, AccessFlags::User)
             .unwrap();
 
-        cpu.fetched_instruction = 0xe8950003; // ldm r5, {r0, r1}
+        cpu.fetched_instruction = 0xe8950003; // ldmia r5, {r0, r1}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(0), value);
         assert_eq!(cpu.get_register(1), 0x55);
+    }
+
+    #[test]
+    fn ldmib_should_load_multiple_registers_and_modify_base_register() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let value = 0x0000_0081;
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize + 4, value, AccessFlags::User)
+            .unwrap();
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize + 8, 0x55, AccessFlags::User)
+            .unwrap();
+
+        cpu.fetched_instruction = 0xe9b500c0; // ldmib r5!, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(6), value);
+        assert_eq!(cpu.get_register(7), 0x55);
+        assert_eq!(cpu.get_register(5), address + 8);
+    }
+
+    #[test]
+    fn ldmda_should_load_multiple_registers_and_modify_base_register() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let value = 0x0000_0081;
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize, value, AccessFlags::User)
+            .unwrap();
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize - 4, 0x55, AccessFlags::User)
+            .unwrap();
+
+        cpu.fetched_instruction = 0xe83500c0; // ldmda r5!, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(6), 0x55);
+        assert_eq!(cpu.get_register(7), value);
+        assert_eq!(cpu.get_register(5), address - 8);
+    }
+
+    #[test]
+    fn ldmdb_should_load_multiple_registers_and_modify_base_register() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let value = 0x0000_0081;
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize - 4, value, AccessFlags::User)
+            .unwrap();
+
+        mem.lock()
+            .unwrap()
+            .writeu32(address as usize - 8, 0x55, AccessFlags::User)
+            .unwrap();
+
+        cpu.fetched_instruction = 0xe93500c0; // ldmdb r5!, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(6), 0x55);
+        assert_eq!(cpu.get_register(7), value);
+        assert_eq!(cpu.get_register(5), address - 8);
+    }
+
+    #[test]
+    fn stm_should_store_multiple_registers() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+        cpu.set_register(6, 123);
+        cpu.set_register(7, 456);
+
+        cpu.fetched_instruction = 0xe88500c0; // stm r5, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x200, AccessFlags::User)
+                .unwrap(),
+            123
+        );
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x204, AccessFlags::User)
+                .unwrap(),
+            456
+        );
+    }
+
+    #[test]
+    fn stmia_should_store_multiple_registers_and_writeback() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+        cpu.set_register(6, 123);
+        cpu.set_register(7, 456);
+
+        cpu.fetched_instruction = 0xe9a500c0; // stmib r5!, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x204, AccessFlags::User)
+                .unwrap(),
+            123
+        );
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x208, AccessFlags::User)
+                .unwrap(),
+            456
+        );
+        assert_eq!(cpu.get_register(5), 0x208);
+    }
+
+    #[test]
+    fn stmdb_should_store_multiple_registers_and_writeback() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+        cpu.set_register(6, 123);
+        cpu.set_register(7, 456);
+
+        cpu.fetched_instruction = 0xe92500c0; // stmdb r5!, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32((address - 4) as usize, AccessFlags::User)
+                .unwrap(),
+            456
+        );
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32((address - 8) as usize, AccessFlags::User)
+                .unwrap(),
+            123
+        );
+        assert_eq!(cpu.get_register(5), address - 8);
+    }
+
+    #[test]
+    fn stmda_should_store_multiple_registers_and_writeback() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mem = Arc::clone(&cpu_memory);
+        let mut cpu = CPU::new(cpu_memory);
+
+        let address: u32 = 0x200;
+
+        cpu.set_register(5, address);
+        cpu.set_register(6, 123);
+        cpu.set_register(7, 456);
+
+        cpu.fetched_instruction = 0xe82500c0; // stmda r5!, {r6, r7}
+
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32((address) as usize, AccessFlags::User)
+                .unwrap(),
+            456
+        );
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32((address - 4) as usize, AccessFlags::User)
+                .unwrap(),
+            123
+        );
+        assert_eq!(cpu.get_register(5), address - 8);
     }
 }
