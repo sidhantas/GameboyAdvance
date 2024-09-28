@@ -5,7 +5,10 @@ use crate::{
     utils::bits::{sign_extend, Bits},
 };
 
-use super::cpu::{FlagsRegister, CPU};
+use super::{
+    cpu::{FlagsRegister, InstructionMode, CPU},
+    decoder::Instruction,
+};
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
 pub type ExecutingInstruction = fn(&mut CPU) -> ();
 pub type InternalOperation = fn(&mut CPU) -> CYCLES;
@@ -69,7 +72,18 @@ impl CPU {
     }
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
+        let destination = self.get_register(instruction & 0x0000_000F);
+        let mut cycles = 1;
+        if destination.bit_is_set(0) {
+            self.inst_mode = InstructionMode::THUMB;
+        } else {
+            self.inst_mode = InstructionMode::ARM;
+        }
+        self.set_pc(destination);
+        cycles += self.flush_pipeline();
+        self.set_executed_instruction(format!("BX {:#010x}", destination));
+
+        cycles
     }
 
     pub fn arm_load_store_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {

@@ -229,6 +229,7 @@ impl CPU {
 
         cycles
     }
+
     fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 2;
         let data = {

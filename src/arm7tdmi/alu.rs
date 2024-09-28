@@ -11,8 +11,7 @@ use super::{
 
 impl CPU {
 
-    #[allow(unused)]
-    pub fn remaining_cycle_data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
         let shift_amount;
         let mut cycles = 1;
         if instruction.bit_is_set(25) {
@@ -117,17 +116,17 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
 
-        self.set_executed_instruction(format!("SUB"))
+        self.set_executed_instruction(format!("SUB {:#x} {:#x} {:#x}", rd, operand1, operand2));
     }
 
     pub fn arm_rsb(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let operand1 = operand2.twos_complement();
-        let result = operand1 + operand2; // use two's complement to make setting flags easier
+        let operand1 = operand1.twos_complement();
+        let result = operand2 + operand1; // use two's complement to make setting flags easier
 
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
 
-        self.set_executed_instruction(format!("RSB"))
+        self.set_executed_instruction(format!("RSB {:#x} {:#x} {:#x}", rd, operand1, operand2));
     }
 
     pub fn arm_adc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -244,7 +243,7 @@ impl CPU {
         }
     }
 
-    fn set_arithmetic_flags(
+    pub fn set_arithmetic_flags(
         &mut self,
         result: WORD,
         operand1: u32,

@@ -1,5 +1,5 @@
 use super::{
-    cpu::{InstructionMode, CPU},
+    cpu::{FlagsRegister, InstructionMode, CPU},
     instructions::ARMDecodedInstruction,
 };
 use crate::types::*;
@@ -19,16 +19,36 @@ impl CPU {
         };
     }
 
-    fn condition_passed(instruction: ARMByteCode, _condition_flags: BYTE) -> bool {
+    fn condition_passed(&self, instruction: ARMByteCode) -> bool {
         let condition = (instruction & 0xF0000000) >> 28;
         match condition {
-            0b1110 => true,
-            _ => true,
+            0b0000 => self.get_flag(FlagsRegister::Z) == 1, //EQ
+            0b0001 => self.get_flag(FlagsRegister::Z) == 0, //NE
+            0b0010 => self.get_flag(FlagsRegister::C) == 1, //CS
+            0b0011 => self.get_flag(FlagsRegister::C) == 0, //CC
+            0b0100 => self.get_flag(FlagsRegister::N) == 1, //MI
+            0b0101 => self.get_flag(FlagsRegister::N) == 0, //PL
+            0b0110 => self.get_flag(FlagsRegister::V) == 1, //VS
+            0b0111 => self.get_flag(FlagsRegister::V) == 0, //VC
+            0b1000 => self.get_flag(FlagsRegister::C) == 1 && self.get_flag(FlagsRegister::Z) == 0, //HI
+            0b1001 => self.get_flag(FlagsRegister::C) == 0 || self.get_flag(FlagsRegister::Z) == 1, //LS
+            0b1010 => self.get_flag(FlagsRegister::N) == self.get_flag(FlagsRegister::V), //GE
+            0b1011 => self.get_flag(FlagsRegister::N) != self.get_flag(FlagsRegister::V), //LT
+            0b1100 => {
+                self.get_flag(FlagsRegister::Z) == 0
+                    && self.get_flag(FlagsRegister::N) == self.get_flag(FlagsRegister::V)
+            } //GT
+            0b1101 => {
+                self.get_flag(FlagsRegister::Z) == 1
+                    || self.get_flag(FlagsRegister::N) != self.get_flag(FlagsRegister::V)
+            } //LE
+            0b1110 => true,                                                               //AL
+            _ => panic!("Impossible Condition Code Encountered"),
         }
     }
 
     fn decode_arm_instruction(&mut self, instruction: ARMByteCode) -> ARMDecodedInstruction {
-        if !(Self::condition_passed(instruction, 0x00)) {
+        if !(self.condition_passed(instruction)) {
             return ARMDecodedInstruction {
                 executable: CPU::arm_nop,
                 instruction,
@@ -45,22 +65,18 @@ impl CPU {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
                 self.decode_multiply(instruction)
             }
-            _ if arm_decoders::is_block_data_transfer(instruction) => {
-                ARMDecodedInstruction {
-                    executable: CPU::block_dt_execution,
-                    instruction
-                }
-            }
-            _ if arm_decoders::is_single_data_swap(instruction) => {
-                ARMDecodedInstruction {
-                    executable: CPU::single_data_swap,
-                    instruction
-                }
-            }
+            _ if arm_decoders::is_block_data_transfer(instruction) => ARMDecodedInstruction {
+                executable: CPU::block_dt_execution,
+                instruction,
+            },
+            _ if arm_decoders::is_single_data_swap(instruction) => ARMDecodedInstruction {
+                executable: CPU::single_data_swap,
+                instruction,
+            },
             _ if arm_decoders::is_hw_or_signed_data_transfer(instruction) => {
                 ARMDecodedInstruction {
                     executable: CPU::hw_or_signed_data_transfer,
-                    instruction
+                    instruction,
                 }
             }
             _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
@@ -68,9 +84,15 @@ impl CPU {
                 instruction,
                 ..Default::default()
             },
+            _ if arm_decoders::is_branch_and_exchange_instruction(instruction) => {
+                ARMDecodedInstruction {
+                    executable: CPU::arm_branch_and_exchange,
+                    instruction,
+                }
+            }
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
                 ARMDecodedInstruction {
-                    executable: CPU::remaining_cycle_data_processing_instruction,
+                    executable: CPU::data_processing_instruction,
                     instruction,
                 }
             }
@@ -82,7 +104,7 @@ impl CPU {
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
-                    executable: CPU::sdt_instruction_execution
+                    executable: CPU::sdt_instruction_execution,
                 }
             }
             _ => ARMDecodedInstruction {
@@ -94,10 +116,25 @@ impl CPU {
     }
 
     fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
-        ARMDecodedInstruction {
-            instruction,
-            executable: CPU::arm_not_implemented,
-            ..Default::default()
+        match instruction {
+            _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_add_or_subtract_instruction
+                }
+            }
+
+            _ if thumb_decoders::is_move_shifted_register(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_move_shifted_register_instruction
+                }
+            }
+            _ => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::arm_not_implemented,
+                ..Default::default()
+            },
         }
     }
 }
@@ -147,22 +184,28 @@ mod arm_decoders {
         instruction & 0x0C00_0000 == 0x0000_0000
     }
 
-
     pub fn is_hw_or_signed_data_transfer(instruction: u32) -> bool {
         instruction & 0x0E00_0090 == 0x0000_0090
     }
 
     pub fn is_branch_and_exchange_instruction(instruction: u32) -> bool {
-        instruction & 0x0FFF_FFF0 == 0x012FFF10
+        instruction & 0x0FFF_FF00 == 0x012F_FF00
+    }
+}
+
+mod thumb_decoders {
+    pub fn is_add_or_subtract_instruction(instruction: u32) -> bool {
+        instruction & 0xF800 == 0x1800
+    }
+
+    pub fn is_move_shifted_register(instruction: u32) -> bool {
+        instruction & 0xE000 == 0x0000
     }
 }
 
 mod sub_decoders {
     use crate::{
-        arm7tdmi::{
-            cpu::CPU,
-            instructions::ARMDecodedInstruction,
-        },
+        arm7tdmi::{cpu::CPU, instructions::ARMDecodedInstruction},
         utils::bits::Bits,
     };
 
@@ -291,6 +334,14 @@ mod arm_decoders_tests {
         let instruction = 0xe895001f;
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
     }
+    #[test]
+    fn it_finds_a_branch_and_exchange_instruction() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+        let instruction = 0xe12fff10;
+        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange)
+    }
 }
 
 #[cfg(test)]
@@ -299,30 +350,278 @@ mod sub_decoder_tests {
 
     use crate::{arm7tdmi::decoder::*, memory::Memory};
 
-//    #[test]
-//    fn it_returns_a_multiply_instruction() {
-//        let memory = Memory::new().unwrap();
-//        let memory = Arc::new(Mutex::new(memory));
-//        let mut cpu = CPU::new(memory);
-//
-//        let instruction: ARMByteCode = 0xE0230192;
-//        cpu.decode_instruction(instruction);
-//        assert!(cpu.decoded_instruction.executable == CPU::arm_multiply_accumulate);
-//        let instruction: ARMByteCode = 0xE0050091;
-//        cpu.decode_instruction(instruction);
-//        assert!(cpu.decoded_instruction.executable == CPU::arm_multiply);
-//    }
-//
-//    #[test]
-//    fn it_returns_a_branch_instruction() {
-//        let memory = Memory::new().unwrap();
-//        let memory = Arc::new(Mutex::new(memory));
-//        let mut cpu = CPU::new(memory);
-//
-//        let instruction: ARMByteCode = 0xea000005;
-//        cpu.decode_instruction(instruction);
-//        assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
-//    }
+    #[test]
+    fn it_decodes_an_instruction_if_eq_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x028210c8; // addeq r1, r2, 200
+        cpu.set_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_not_decode_an_instruction_if_eq_not_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x028210c8; // addeq r1, r2, 200
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_decode_an_instruction_if_ne_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x128210c8; // addne r1, r2, 200
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_not_decode_an_instruction_if_ne_not_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x128210c8; // addne r1, r2, 200
+        cpu.set_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_decode_an_instruction_if_cs_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x228210c8; // addcs r1, r2, 200
+        cpu.set_flag(FlagsRegister::C);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_cc_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x328210c8; // addcc r1, r2, 200
+        cpu.reset_flag(FlagsRegister::C);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_mi_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x428210c8; // addmi r1, r2, 200
+        cpu.set_flag(FlagsRegister::N);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_pl_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x528210c8; // addpl r1, r2, 200
+        cpu.reset_flag(FlagsRegister::C);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_vs_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x628210c8; // addvs r1, r2, 200
+        cpu.set_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_vc_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x728210c8; // addvc r1, r2, 200
+        cpu.reset_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_hi_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x828210c8; // addhi r1, r2, 200
+        cpu.set_flag(FlagsRegister::C);
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_ls_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0x928210c8; // addls r1, r2, 200
+        cpu.reset_flag(FlagsRegister::C);
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.set_flag(FlagsRegister::C);
+        cpu.set_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.reset_flag(FlagsRegister::C);
+        cpu.set_flag(FlagsRegister::Z);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_decode_an_instruction_if_ge_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0xa28210c8; // addge r1, r2, 200
+        cpu.set_flag(FlagsRegister::N);
+        cpu.set_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.reset_flag(FlagsRegister::N);
+        cpu.reset_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_lt_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0xb28210c8; // addlt r1, r2, 200
+        cpu.reset_flag(FlagsRegister::N);
+        cpu.set_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.set_flag(FlagsRegister::N);
+        cpu.reset_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_decode_an_instruction_if_gt_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0xc28210c8; // addgt r1, r2, 200
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.set_flag(FlagsRegister::N);
+        cpu.set_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.reset_flag(FlagsRegister::N);
+        cpu.reset_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+
+    #[test]
+    fn it_does_decode_an_instruction_if_le_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0xd28210c8; // addle r1, r2, 200
+
+        cpu.set_flag(FlagsRegister::Z);
+        cpu.reset_flag(FlagsRegister::N);
+        cpu.reset_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.set_flag(FlagsRegister::N);
+        cpu.reset_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+
+        cpu.reset_flag(FlagsRegister::Z);
+        cpu.reset_flag(FlagsRegister::N);
+        cpu.set_flag(FlagsRegister::V);
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+    #[test]
+    fn it_does_decode_an_instruction_if_al_satisfied() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        let instruction: ARMByteCode = 0xe28210c8; // addal r1, r2, 200
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::data_processing_instruction);
+    }
+
+    //    #[test]
+    //    fn it_returns_a_multiply_instruction() {
+    //        let memory = Memory::new().unwrap();
+    //        let memory = Arc::new(Mutex::new(memory));
+    //        let mut cpu = CPU::new(memory);
+    //
+    //        let instruction: ARMByteCode = 0xE0230192;
+    //        cpu.decode_instruction(instruction);
+    //        assert!(cpu.decoded_instruction.executable == CPU::arm_multiply_accumulate);
+    //        let instruction: ARMByteCode = 0xE0050091;
+    //        cpu.decode_instruction(instruction);
+    //        assert!(cpu.decoded_instruction.executable == CPU::arm_multiply);
+    //    }
+    //
+    //    #[test]
+    //    fn it_returns_a_branch_instruction() {
+    //        let memory = Memory::new().unwrap();
+    //        let memory = Arc::new(Mutex::new(memory));
+    //        let mut cpu = CPU::new(memory);
+    //
+    //        let instruction: ARMByteCode = 0xea000005;
+    //        cpu.decode_instruction(instruction);
+    //        assert!(cpu.decoded_instruction.executable == CPU::arm_branch);
+    //    }
 
     //    #[test]
     //    fn it_returns_a_cmp_instruction() {

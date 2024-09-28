@@ -118,15 +118,15 @@ impl CPU {
         cycles
     }
 
-    pub fn advance_pipeline(&mut self) -> CYCLES{
+    pub fn advance_pipeline(&mut self) -> CYCLES {
         self.decode_instruction(self.fetched_instruction);
         self.fetch_instruction();
-        
+
         1
     }
 
     pub fn get_pc(&self) -> u32 {
-        self.registers[PC_REGISTER]
+        self.registers[PC_REGISTER] & 0xFFFF_FFFE
     }
 
     pub fn set_pc(&mut self, address: WORD) {
@@ -138,7 +138,10 @@ impl CPU {
     }
 
     pub fn increment_pc(&mut self) {
-        self.registers[PC_REGISTER] += 4;
+        match self.inst_mode {
+            InstructionMode::ARM => self.registers[PC_REGISTER] += 4,
+            InstructionMode::THUMB => self.registers[PC_REGISTER] += 2
+        }
     }
 
     pub fn get_register(&self, register_num: REGISTER) -> WORD {
@@ -162,7 +165,7 @@ impl CPU {
     }
 
     #[inline(always)]
-    pub fn get_flag(&mut self, flag: FlagsRegister) -> WORD {
+    pub fn get_flag(&self, flag: FlagsRegister) -> WORD {
         self.cpsr.get_bit(flag as u8)
     }
 
@@ -176,19 +179,28 @@ impl CPU {
     }
 
     fn fetch_instruction(&mut self) {
-        self.fetched_instruction = self
-            .memory
-            .lock()
-            .unwrap()
-            .readu32(self.get_pc() as usize, AccessFlags::User)
-            .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc()));
+        self.fetched_instruction = match self.inst_mode {
+            InstructionMode::ARM => self
+                .memory
+                .lock()
+                .unwrap()
+                .readu32(self.get_pc() as usize, AccessFlags::User)
+                .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc())),
+            InstructionMode::THUMB => self
+                .memory
+                .lock()
+                .unwrap()
+                .readu16(self.get_pc() as usize, AccessFlags::User)
+                .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc()))
+                .into(),
+        };
         self.increment_pc();
     }
 
     pub fn get_access_mode(&self) -> AccessFlags {
         match self.cpu_mode {
             CPUMode::USER => AccessFlags::User,
-            _ => AccessFlags::Privileged
+            _ => AccessFlags::Privileged,
         }
     }
 
