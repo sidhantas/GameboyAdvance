@@ -1,11 +1,13 @@
-use crate::types::{WORD};
+use std::mem::size_of;
+
+use crate::types::{BYTE, WORD};
 
 pub trait Bits {
-    fn twos_complement(self) -> WORD;
+    fn twos_complement(self) -> Self;
     fn bit_is_set(&self, bit: u8) -> bool;
     fn set_bit(&mut self, bit: u8);
     fn reset_bit(&mut self, bit: u8);
-    fn get_bit(self, bit: u8) -> WORD;
+    fn get_bit(self, bit: u8) -> Self;
 }
 
 impl Bits for WORD {
@@ -30,6 +32,32 @@ impl Bits for WORD {
     }
     
     fn twos_complement(self) -> WORD {
+        return !self + 1
+    }
+}
+
+impl Bits for BYTE {
+    fn bit_is_set(&self, bit: u8) -> bool {
+        assert!(bit < 8);
+        return self >> bit & 0x01 != 0;
+    }
+
+    fn set_bit(&mut self, bit: u8) {
+        assert!(bit < 8);
+        *self |= 1 << bit;
+    }
+
+    fn reset_bit(&mut self, bit: u8) {
+        assert!(bit < 8);
+        *self &= !(1 << bit);
+    }
+
+    fn get_bit(self, bit: u8) -> BYTE {
+        assert!(bit < 8);
+        return (self >> bit & 0x01) as BYTE;
+    }
+    
+    fn twos_complement(self) -> BYTE {
         return !self + 1
     }
 }

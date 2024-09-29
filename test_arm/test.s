@@ -8,4 +8,4 @@ _main:
 
 target:
     .thumb
-    lsr r0, r1, #32
+    add r0, #1

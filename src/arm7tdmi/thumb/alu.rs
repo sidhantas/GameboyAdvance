@@ -1,7 +1,7 @@
 use crate::{
     arm7tdmi::cpu::{FlagsRegister, CPU},
     types::{CYCLES, REGISTER},
-    utils::bits::Bits,
+    utils::bits::{sign_extend, Bits},
 };
 
 impl CPU {
@@ -149,6 +149,56 @@ impl CPU {
 
         operation(self, rd, rs_value, operand2_value, true);
         1
+    }
+
+    pub fn thumb_move_add_compare_add_subtract_immediate(&mut self, instruction: u32) -> CYCLES {
+        let opcode = (instruction & 0x1800) >> 11;
+        let rd = (instruction & 0x0700) >> 8;
+        let imm: u8 = (instruction & 0x00FF) as u8;
+
+        let operation = match opcode {
+            0b00 => CPU::thumb_move_imm,
+            0b01 => CPU::thumb_cmp_imm,
+            0b10 => CPU::thumb_add_imm,
+            0b11 => CPU::thumb_sub_imm,
+            _ => panic!()
+        };
+
+        operation(self, rd, imm);
+
+        1
+    }
+
+    fn thumb_move_imm(&mut self, rd: REGISTER, imm: u8) {
+        self.set_flag_from_bit(FlagsRegister::N, imm.get_bit(7));
+        if imm == 0 {
+            self.set_flag(FlagsRegister::Z);
+        } else {
+            self.reset_flag(FlagsRegister::Z);
+        }
+        self.set_register(rd, imm.into());
+    }
+
+    fn thumb_cmp_imm(&mut self, rd: REGISTER, imm: u8) {
+        let minuend = self.get_register(rd);
+        let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
+        let result =  minuend + imm;
+        self.set_arithmetic_flags(result, minuend, imm, 0, true);
+    }
+    
+    fn thumb_add_imm(&mut self, rd: REGISTER, imm: u8) {
+        let addend1 = self.get_register(rd);
+        let result = addend1 + imm as u32;
+        self.set_arithmetic_flags(result, addend1, imm as u32, 0, true);
+        self.set_register(rd, result);
+    }
+
+    fn thumb_sub_imm(&mut self, rd: REGISTER, imm: u8) {
+        let minuend = self.get_register(rd);
+        let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
+        let result =  minuend + imm;
+        self.set_arithmetic_flags(result, minuend, imm, 0, true);
+        self.set_register(rd, result);
     }
 }
 
@@ -532,5 +582,102 @@ mod thumb_move_shifted_register_tests {
         assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
         assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
         assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+    }
+}
+
+#[cfg(test)]
+mod thumb_move_compare_add_subtract_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        memory::Memory,
+    };
+
+    #[test]
+    fn should_move_immediate_into_r0() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0x200f; // movs r0, 15
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 15);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+
+    #[test]
+    fn should_move_immediate_into_r0_and_set_n_flag() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0x2096; // movs r0, 150
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 150);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+
+    #[test]
+    fn should_move_immediate_into_r0_and_set_z_flag() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0x2000; // movs r0, 0
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+    }
+
+    #[test]
+    fn should_sub_imm_from_r0_and_set_z_flag() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 15);
+        cpu.fetched_instruction = 0x380f; // subs r0, 15
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+    }
+
+    #[test]
+    fn should_add_imm_to_r0_and_set_n_flag() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 0x7FFF_FFFF);
+        cpu.fetched_instruction = 0x300f; // adds r0, 15
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0x8000_000E);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
     }
 }

@@ -130,6 +130,12 @@ impl CPU {
                     executable: CPU::thumb_move_shifted_register_instruction
                 }
             }
+            _ if thumb_decoders::is_move_compare_add_subtract_immediate(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_move_add_compare_add_subtract_immediate
+                }
+            }
             _ => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::arm_not_implemented,
@@ -200,6 +206,14 @@ mod thumb_decoders {
 
     pub fn is_move_shifted_register(instruction: u32) -> bool {
         instruction & 0xE000 == 0x0000
+    }
+
+    pub fn is_move_compare_add_subtract_immediate(instruction: u32) -> bool {
+        instruction & 0xE000 == 0x2000
+    }
+
+    pub fn is_alu_operation(instruction: u32) -> bool {
+        instruction & 0xFC00 == 0x4000
     }
 }
 
