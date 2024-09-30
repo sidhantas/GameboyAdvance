@@ -136,6 +136,30 @@ impl CPU {
                     executable: CPU::thumb_move_add_compare_add_subtract_immediate
                 }
             }
+            _ if thumb_decoders::is_alu_operation(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_alu_instructions
+                }
+            }
+            _ if thumb_decoders::is_alu_operation(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_alu_instructions
+                }
+            }
+            _ if thumb_decoders::is_thumb_bx(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_bx
+                }
+            }
+            _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_hi_reg_operations
+                }
+            }
             _ => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::arm_not_implemented,
@@ -214,6 +238,14 @@ mod thumb_decoders {
 
     pub fn is_alu_operation(instruction: u32) -> bool {
         instruction & 0xFC00 == 0x4000
+    }
+
+    pub fn is_thumb_hi_reg_operation(instruction: u32) -> bool {
+        instruction & 0xFC00 == 0x4400
+    }
+
+    pub fn is_thumb_bx(instruction: u32) -> bool {
+        instruction & 0xFF00 == 0x4700
     }
 }
 

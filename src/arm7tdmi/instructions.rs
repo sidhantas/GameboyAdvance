@@ -72,14 +72,15 @@ impl CPU {
     }
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) -> CYCLES {
-        let destination = self.get_register(instruction & 0x0000_000F);
+        let mut destination = self.get_register(instruction & 0x0000_000F);
         let mut cycles = 1;
         if destination.bit_is_set(0) {
             self.inst_mode = InstructionMode::THUMB;
         } else {
+            destination &= !2; // arm instructions must be word aligned
             self.inst_mode = InstructionMode::ARM;
         }
-        self.set_pc(destination);
+        self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
         cycles += self.flush_pipeline();
         self.set_executed_instruction(format!("BX {:#010x}", destination));
 

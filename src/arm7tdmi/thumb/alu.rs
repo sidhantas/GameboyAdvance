@@ -1,5 +1,5 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, CPU},
+    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER},
     types::{CYCLES, REGISTER},
     utils::bits::{sign_extend, Bits},
 };
@@ -19,78 +19,91 @@ impl CPU {
             }
         };
 
-        operation(self, rd, rs_val, offset);
+        operation(self, rd, rs_val, offset.into(), true);
         1
     }
 
-    fn thumb_lsl(&mut self, rd: REGISTER, rs_val: u32, offset: u8) {
+    fn thumb_lsl(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
+        let offset = offset & 0xFF;
         let result = rs_val << offset;
         self.set_register(rd, result);
 
-        if offset > 0 {
-            if rs_val.bit_is_set(32 - offset) {
-                self.set_flag(FlagsRegister::C)
-            } else {
-                self.reset_flag(FlagsRegister::C)
+        if set_flags {
+            if offset > 0 {
+                if rs_val.bit_is_set(32 - offset as u8) {
+                    self.set_flag(FlagsRegister::C)
+                } else {
+                    self.reset_flag(FlagsRegister::C)
+                }
             }
-        }
 
-        if result == 0 {
-            self.set_flag(FlagsRegister::Z);
-        } else {
-            self.reset_flag(FlagsRegister::Z);
-        }
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
 
-        if result.bit_is_set(31) {
-            self.set_flag(FlagsRegister::N);
-        } else {
-            self.reset_flag(FlagsRegister::N);
+            if result.bit_is_set(31) {
+                self.set_flag(FlagsRegister::N);
+            } else {
+                self.reset_flag(FlagsRegister::N);
+            }
         }
     }
 
-    fn thumb_lsr(&mut self, rd: REGISTER, rs_val: u32, offset: u8) {
+    fn thumb_lsr(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
+        let offset = offset & 0xFF;
         if offset == 0 {
             // LSR#32
-            self.set_flag(FlagsRegister::Z);
-            self.reset_flag(FlagsRegister::N);
-            self.set_flag_from_bit(FlagsRegister::C, rs_val.get_bit(31) as u8);
+            if set_flags {
+                self.set_flag(FlagsRegister::Z);
+                self.reset_flag(FlagsRegister::N);
+                self.set_flag_from_bit(FlagsRegister::C, rs_val.get_bit(31) as u8);
+            }
             self.set_register(rd, 0);
             return;
         }
         let result = rs_val >> offset;
 
-        if rs_val.bit_is_set((offset - 1) as u8) {
-            self.set_flag(FlagsRegister::C);
-        } else {
-            self.reset_flag(FlagsRegister::C);
-        }
+        if set_flags {
+            if rs_val.bit_is_set((offset - 1) as u8) {
+                self.set_flag(FlagsRegister::C);
+            } else {
+                self.reset_flag(FlagsRegister::C);
+            }
 
-        if result == 0 {
-            self.set_flag(FlagsRegister::Z);
-        } else {
-            self.reset_flag(FlagsRegister::Z);
-        }
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
 
-        if result.bit_is_set(31) {
-            self.set_flag(FlagsRegister::N);
-        } else {
-            self.reset_flag(FlagsRegister::N);
+            if result.bit_is_set(31) {
+                self.set_flag(FlagsRegister::N);
+            } else {
+                self.reset_flag(FlagsRegister::N);
+            }
         }
 
         self.set_register(rd, result);
     }
 
-    fn thumb_asr(&mut self, rd: REGISTER, rs_val: u32, offset: u8) {
+    fn thumb_asr(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
+        let offset = offset & 0xFF;
         if offset == 0 {
             if rs_val.bit_is_set(31) {
-                self.set_flag(FlagsRegister::C);
-                self.set_flag(FlagsRegister::N);
-                self.reset_flag(FlagsRegister::Z);
+                if set_flags {
+                    self.set_flag(FlagsRegister::C);
+                    self.set_flag(FlagsRegister::N);
+                    self.reset_flag(FlagsRegister::Z);
+                }
                 self.set_register(rd, u32::MAX);
             } else {
-                self.reset_flag(FlagsRegister::C);
-                self.set_flag(FlagsRegister::Z);
-                self.reset_flag(FlagsRegister::N);
+                if set_flags {
+                    self.reset_flag(FlagsRegister::C);
+                    self.set_flag(FlagsRegister::Z);
+                    self.reset_flag(FlagsRegister::N);
+                }
                 self.set_register(rd, 0);
             }
 
@@ -98,22 +111,24 @@ impl CPU {
         }
 
         let result = (rs_val as i32 >> offset) as u32;
-        if rs_val.bit_is_set((offset - 1) as u8) {
-            self.set_flag(FlagsRegister::C);
-        } else {
-            self.reset_flag(FlagsRegister::C);
-        }
+        if set_flags {
+            if rs_val.bit_is_set((offset - 1) as u8) {
+                self.set_flag(FlagsRegister::C);
+            } else {
+                self.reset_flag(FlagsRegister::C);
+            }
 
-        if result == 0 {
-            self.set_flag(FlagsRegister::Z);
-        } else {
-            self.reset_flag(FlagsRegister::Z);
-        }
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
 
-        if result.bit_is_set(31) {
-            self.set_flag(FlagsRegister::N);
-        } else {
-            self.reset_flag(FlagsRegister::N);
+            if result.bit_is_set(31) {
+                self.set_flag(FlagsRegister::N);
+            } else {
+                self.reset_flag(FlagsRegister::N);
+            }
         }
         self.set_register(rd, result);
     }
@@ -161,7 +176,7 @@ impl CPU {
             0b01 => CPU::thumb_cmp_imm,
             0b10 => CPU::thumb_add_imm,
             0b11 => CPU::thumb_sub_imm,
-            _ => panic!()
+            _ => panic!(),
         };
 
         operation(self, rd, imm);
@@ -182,10 +197,10 @@ impl CPU {
     fn thumb_cmp_imm(&mut self, rd: REGISTER, imm: u8) {
         let minuend = self.get_register(rd);
         let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
-        let result =  minuend + imm;
+        let result = minuend + imm;
         self.set_arithmetic_flags(result, minuend, imm, 0, true);
     }
-    
+
     fn thumb_add_imm(&mut self, rd: REGISTER, imm: u8) {
         let addend1 = self.get_register(rd);
         let result = addend1 + imm as u32;
@@ -196,9 +211,166 @@ impl CPU {
     fn thumb_sub_imm(&mut self, rd: REGISTER, imm: u8) {
         let minuend = self.get_register(rd);
         let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
-        let result =  minuend + imm;
+        let result = minuend + imm;
         self.set_arithmetic_flags(result, minuend, imm, 0, true);
         self.set_register(rd, result);
+    }
+
+    pub fn thumb_alu_instructions(&mut self, instruction: u32) -> CYCLES {
+        let opcode = (instruction & 0x03C0) >> 6;
+
+        let rd = instruction & 0x0007;
+        let rs = (instruction & 0x0038) >> 3;
+
+        let operation = match opcode {
+            0x0 => CPU::arm_and,
+            0x1 => CPU::arm_eor,
+            0x2 => CPU::thumb_lsl,
+            0x3 => CPU::thumb_lsr_register,
+            0x4 => CPU::thumb_asr_register,
+            0x5 => CPU::arm_adc,
+            0x6 => CPU::arm_sbc,
+            0x7 => CPU::thumb_ror,
+            0x8 => CPU::arm_tst,
+            0x9 => CPU::thumb_neg,
+            0xA => CPU::arm_cmp,
+            0xB => CPU::arm_cmn,
+            0xC => CPU::arm_orr,
+            0xD => CPU::thumb_mul,
+            0xE => CPU::arm_bic,
+            0xF => CPU::arm_mvn,
+            _ => panic!("Unimplemented operation"),
+        };
+
+        operation(self, rd, self.get_register(rd), self.get_register(rs), true);
+
+        1
+    }
+
+    fn thumb_lsr_register(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
+        let offset = offset & 0xFF;
+        let result = rs_val >> offset;
+
+        if set_flags {
+            if offset > 0 && rs_val.bit_is_set((offset - 1) as u8) {
+                self.set_flag(FlagsRegister::C);
+            } else {
+                self.reset_flag(FlagsRegister::C);
+            }
+
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
+
+            if result.bit_is_set(31) {
+                self.set_flag(FlagsRegister::N);
+            } else {
+                self.reset_flag(FlagsRegister::N);
+            }
+        }
+
+        self.set_register(rd, result);
+    }
+
+    fn thumb_asr_register(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
+        let offset = offset & 0xFF;
+        let result = (rs_val as i32 >> offset) as u32;
+        if set_flags {
+            if offset > 0 && rs_val.bit_is_set((offset - 1) as u8) {
+                self.set_flag(FlagsRegister::C);
+            } else {
+                self.reset_flag(FlagsRegister::C);
+            }
+
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
+
+            if result.bit_is_set(31) {
+                self.set_flag(FlagsRegister::N);
+            } else {
+                self.reset_flag(FlagsRegister::N);
+            }
+        }
+        self.set_register(rd, result);
+    }
+
+    fn thumb_ror(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1.rotate_right(operand2 & 0xFF);
+        if set_flags {
+            if operand2 > 0 && operand1.bit_is_set((operand2 - 1) as u8) {
+                self.set_flag(FlagsRegister::C);
+            } else {
+                self.reset_flag(FlagsRegister::C);
+            }
+        }
+        self.set_logical_flags(result, set_flags);
+        self.set_register(rd, result);
+    }
+
+    #[allow(unused)]
+    fn thumb_neg(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        self.arm_rsb(rd, 0, operand2, set_flags);
+    }
+
+    fn thumb_mul(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        let result = operand1 * operand2;
+        if set_flags {
+            self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+            if result == 0 {
+                self.set_flag(FlagsRegister::Z);
+            } else {
+                self.reset_flag(FlagsRegister::Z);
+            }
+            self.reset_flag(FlagsRegister::N);
+        }
+        self.set_register(rd, result);
+    }
+
+
+    pub fn thumb_hi_reg_operations(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 1;
+        let opcode = (instruction & 0x0300) >> 8;
+
+        let rd = (instruction.get_bit(7) << 3) | (instruction & 0x0007);
+        let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
+
+        let operation = match opcode {
+            0b00 => CPU::arm_add,
+            0b01 => CPU::arm_cmp,
+            0b10 => CPU::arm_mov,
+            _ => panic!()
+        };
+
+        operation(self, rd, self.get_register(rd), self.get_register(rs), false);
+
+        if rd == PC_REGISTER as u32 {
+            cycles += self.flush_pipeline();
+        }
+
+        cycles
+    }
+
+    pub fn thumb_bx(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 1;
+        let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
+        let mut destination = self.get_register(rs);
+        self.inst_mode = if destination.bit_is_set(0) {
+            InstructionMode::THUMB
+        } else {
+            destination &= !2; // arm instructions must be word aligned
+            InstructionMode::ARM
+        };
+
+        self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
+        cycles += self.flush_pipeline();
+        self.set_executed_instruction(format!("BX {:#010x}", destination));
+
+        cycles
     }
 }
 
@@ -565,7 +737,7 @@ mod thumb_move_shifted_register_tests {
         assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
         assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
     }
-    
+
     #[test]
     fn should_lsr_register_and_clear_register() {
         let memory = Memory::new().unwrap();
@@ -679,5 +851,198 @@ mod thumb_move_compare_add_subtract_tests {
         assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
         assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
         assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+}
+
+#[cfg(test)]
+mod thumb_alu_operations_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        memory::Memory,
+    };
+
+    #[test]
+    fn should_and_two_numbers_together() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 0x8123_2344);
+        cpu.set_register(1, 0x8000_2344);
+        cpu.fetched_instruction = 0x4008; // ands r0, r1
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0x8000_2344);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+
+    #[test]
+    fn should_eor_two_numbers_together() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 0x1010_1010);
+        cpu.set_register(1, 0x0101_0101);
+        cpu.fetched_instruction = 0x4048; // eors r0, r1
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0x1111_1111);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+    
+    #[test]
+    fn should_lsl_rd_by_5() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 0x0F11_1230);
+        cpu.set_register(1, 5);
+        cpu.fetched_instruction = 0x4088; // lsl r0, r1
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0xE222_4600);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+
+    #[test]
+    fn should_lsr_rd_by_0() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 0x0F11_1230);
+        cpu.set_register(1, 0);
+        cpu.fetched_instruction = 0x40c8; // lsr r0, r1
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 0x0F11_1230);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+}
+
+#[cfg(test)]
+mod thumb_hi_reg_operations {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        memory::Memory,
+    };
+
+    #[test]
+    fn should_add_two_regs_together_and_not_affect_flags() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 20);
+        cpu.set_register(11, 15);
+        cpu.set_flag(FlagsRegister::N);
+        cpu.fetched_instruction = 0x4458; // add r0, r11
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 35);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+    }
+
+    #[test]
+    fn should_cmp_registers_and_set_flags() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 20);
+        cpu.set_register(11, 20);
+        cpu.set_flag(FlagsRegister::N);
+        cpu.fetched_instruction = 0x4558; // cmp r0, r11
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 20);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+    }
+
+    #[test]
+    fn should_mov_register() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(0, 20);
+        cpu.set_register(11, 55);
+        cpu.set_flag(FlagsRegister::N);
+        cpu.fetched_instruction = 0x4658; // cmp r0, r11
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(0), 55);
+    }
+}
+
+#[cfg(test)]
+mod thumb_bx_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{
+        arm7tdmi::cpu::{InstructionMode, CPU},
+        memory::Memory,
+    };
+
+    #[test]
+    fn should_switch_to_arm_mode_and_align_address() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_register(5, 0x16);
+        cpu.fetched_instruction = 0x4728; // bx r5
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_pc(), 0x1C);
+        assert!(matches!(cpu.inst_mode, InstructionMode::ARM));
+    }
+
+    #[test]
+    fn should_switch_to_arm_mode_when_pc_operand() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.set_pc(0x16);
+        cpu.fetched_instruction = 0x4778; // bx r15
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_pc(), 0x20);
+        assert!(matches!(cpu.inst_mode, InstructionMode::ARM));
     }
 }

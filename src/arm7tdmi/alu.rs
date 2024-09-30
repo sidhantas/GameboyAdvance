@@ -232,7 +232,7 @@ impl CPU {
         self.set_executed_instruction(format!("MVN {:#x} {:#x}", rd, operand2));
     }
 
-    fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
+    pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags == true {
             self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
             if result == 0 {

@@ -8,4 +8,4 @@ _main:
 
 target:
     .thumb
-    add r0, #1
+    bx r15
