@@ -73,7 +73,7 @@ impl CPU {
         cycles
     }
 
-    fn str_instruction_execution(
+    pub fn str_instruction_execution(
         &mut self,
         rd: REGISTER,
         address: u32,
@@ -97,7 +97,7 @@ impl CPU {
         1
     }
 
-    fn ldr_instruction_execution(
+    pub fn ldr_instruction_execution(
         &mut self,
         rd: REGISTER,
         address: u32,
@@ -182,7 +182,7 @@ impl CPU {
         cycles
     }
 
-    fn strh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn strh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let data: WORD = self.get_register(rd);
         {
             let mut memory = self.memory.lock().unwrap();
@@ -194,7 +194,7 @@ impl CPU {
         1
     }
 
-    fn ldrsh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 2;
         let data = {
             let memory = self.memory.lock().unwrap();
@@ -212,7 +212,7 @@ impl CPU {
         cycles
     }
 
-    fn ldrsb_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 2;
         let data = {
             let memory = self.memory.lock().unwrap();
@@ -230,7 +230,7 @@ impl CPU {
         cycles
     }
 
-    fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 2;
         let data = {
             let memory = self.memory.lock().unwrap();

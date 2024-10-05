@@ -8,4 +8,4 @@ _main:
 
 target:
     .thumb
-    bx r15
+    ldr r5, [pc, #12]

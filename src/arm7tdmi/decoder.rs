@@ -160,6 +160,24 @@ impl CPU {
                     executable: CPU::thumb_hi_reg_operations
                 }
             }
+            _ if thumb_decoders::is_load_pc_relative(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::ldr_pc_relative
+                }
+            }
+            _ if thumb_decoders::is_sdt_register_offset(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::sdt_register_offset
+                }
+            }
+            _ if thumb_decoders::is_sdt_sign_extend_byte_or_halfword(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::sdt_sign_extend_byte_or_halfword
+                }
+            }
             _ => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::arm_not_implemented,
@@ -246,6 +264,18 @@ mod thumb_decoders {
 
     pub fn is_thumb_bx(instruction: u32) -> bool {
         instruction & 0xFF00 == 0x4700
+    }
+
+    pub fn is_load_pc_relative(instruction: u32) -> bool {
+        instruction & 0xF800 == 0x4800
+    }
+
+    pub fn is_sdt_register_offset(instruction: u32) -> bool {
+        instruction & 0xF200 == 0x5000
+    }
+
+    pub fn is_sdt_sign_extend_byte_or_halfword(instruction: u32) -> bool {
+        instruction & 0xF200 == 0x5200
     }
 }
 

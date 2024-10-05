@@ -130,7 +130,7 @@ impl CPU {
     }
 
     pub fn set_pc(&mut self, address: WORD) {
-        self.registers[PC_REGISTER] = address;
+        self.registers[PC_REGISTER] = address & !1;
     }
 
     pub fn get_sp(&self) -> u32 {
