@@ -310,7 +310,7 @@ impl CPU {
         3
     }
 
-    fn stm_execution(
+    pub fn stm_execution(
         &mut self,
         base_address: usize,
         pre_indexed_addressing: bool,
@@ -336,7 +336,7 @@ impl CPU {
         1
     }
 
-    fn ldm_execution(
+    pub fn ldm_execution(
         &mut self,
         base_address: usize,
         pre_indexed_addressing: bool,

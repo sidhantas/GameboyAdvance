@@ -178,6 +178,61 @@ impl CPU {
                     executable: CPU::sdt_sign_extend_byte_or_halfword
                 }
             }
+            _ if thumb_decoders::is_sdt_imm_offset(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::sdt_imm_offset
+                }
+            }
+            _ if thumb_decoders::is_sdt_sp_imm(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_sdt_sp_imm
+                }
+            }
+            _ if thumb_decoders::is_get_relative_address(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_get_relative_address
+                }
+            }
+            _ if thumb_decoders::is_add_offset_to_sp(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_add_offset_to_sp
+                }
+            }
+            _ if thumb_decoders::is_push_pop(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_push_pop
+                }
+            }
+            _ if thumb_decoders::is_thumb_block_dt(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_multiple_load_or_store
+                }
+            }
+            _ if thumb_decoders::is_conditional_branch(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_conditional_branch
+                }
+            }
+            _ if thumb_decoders::is_unconditional_branch(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::thumb_unconditional_branch
+                }
+            }
+            _ if thumb_decoders::is_long_branch_with_link(instruction) => {
+                let full_instruction = instruction << 16 | self.fetched_instruction;
+                ARMDecodedInstruction {
+                    instruction: full_instruction,
+                    executable: CPU::thumb_long_branch_with_link
+                }
+            }
             _ => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::arm_not_implemented,
@@ -276,6 +331,41 @@ mod thumb_decoders {
 
     pub fn is_sdt_sign_extend_byte_or_halfword(instruction: u32) -> bool {
         instruction & 0xF200 == 0x5200
+    }
+
+    pub fn is_sdt_imm_offset(instruction: u32) -> bool {
+        instruction & 0xE000 == 0x6000
+    }
+
+    pub fn is_sdt_sp_imm(instruction: u32) -> bool {
+        instruction & 0xF000 == 0x9000
+    }
+
+    pub fn is_get_relative_address(instruction: u32) -> bool {
+        instruction & 0xF000 == 0xA000
+    }
+
+    pub fn is_add_offset_to_sp(instruction: u32) -> bool {
+        instruction & 0xFF00 == 0xB000
+    }
+
+    pub fn is_push_pop(instruction: u32) -> bool {
+        instruction & 0xF600 == 0xB400
+    }
+
+    pub fn is_thumb_block_dt(instruction: u32) -> bool {
+        instruction & 0xF000 == 0xC000
+    }
+
+    pub fn is_conditional_branch(instruction: u32) -> bool {
+        instruction & 0xF000 == 0xD000
+    }
+    pub fn is_unconditional_branch(instruction: u32) -> bool {
+        instruction & 0xF800 == 0xE000
+    }
+
+    pub fn is_long_branch_with_link(instruction: u32) -> bool {
+        instruction & 0xF800 == 0xF000
     }
 }
 
@@ -852,4 +942,85 @@ mod sub_decoder_tests {
     //        assert!(cpu.decoded_instruction.rn == 0x3);
     //        assert!(cpu.decoded_instruction.operand2 == 0x0002_0000);
     //    }
+}
+
+#[cfg(test)]
+mod thumb_decoder_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{arm7tdmi::cpu::{InstructionMode, CPU}, memory::Memory};
+
+    #[test]
+    fn it_recognizes_sdt_imm_offset() {
+
+        let instruction = 0x68cd; // ldr r5, [r1, 12]
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::sdt_imm_offset);
+
+    }
+
+    #[test]
+    fn it_recognizes_sdt_sp_imm_offset() {
+
+        let instruction = 0x9d03; // ldr r5, [sp, 12]
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::thumb_sdt_sp_imm);
+
+    }
+
+    #[test]
+    fn it_recognizes_add_offset_to_sp() {
+
+        let instruction = 0xb07d; // add sp, 500
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::thumb_add_offset_to_sp);
+    }
+
+    #[test]
+    fn it_recognizes_thumb_push() {
+
+        let instruction = 0xb503; // push {r0-r1, lr}
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::thumb_push_pop);
+    }
+
+    #[test]
+    fn it_recognizes_thumb_bdt() {
+
+        let instruction = 0xc107; // stmia r1 {r0-r2}
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.decode_instruction(instruction);
+        assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
+        assert!(cpu.decoded_instruction.unwrap().executable == CPU::thumb_multiple_load_or_store);
+    }
+
+
 }

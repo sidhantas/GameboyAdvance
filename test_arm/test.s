@@ -1,6 +1,7 @@
 .global _main
 _main:
     mov r0, #target
+    mov sp, #500
     add r0, #1
     bx r0;
     nop;
@@ -8,4 +9,11 @@ _main:
 
 target:
     .thumb
-    ldr r5, [pc, #12]
+    bl destination
+    nop;
+    nop
+
+destination:
+    .thumb
+    mov r1, r2
+

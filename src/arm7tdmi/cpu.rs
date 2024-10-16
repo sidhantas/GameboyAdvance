@@ -133,6 +133,10 @@ impl CPU {
         self.registers[PC_REGISTER] = address & !1;
     }
 
+    pub fn set_sp(&mut self, address: WORD) {
+        self.registers[13] = address;
+    }
+
     pub fn get_sp(&self) -> u32 {
         self.registers[13]
     }

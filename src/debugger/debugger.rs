@@ -287,11 +287,11 @@ fn draw_cpsr(
         flag_values[1],
     );
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::C))).alignment(Alignment::Center),
+        Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::Z))).alignment(Alignment::Center),
         flag_values[2],
     );
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::Z))).alignment(Alignment::Center),
+        Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::C))).alignment(Alignment::Center),
         flag_values[3],
     );
     f.render_widget(

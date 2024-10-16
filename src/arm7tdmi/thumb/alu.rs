@@ -191,6 +191,7 @@ impl CPU {
         } else {
             self.reset_flag(FlagsRegister::Z);
         }
+        self.set_executed_instruction(format!("MOV {} {:#x}", rd, imm));
         self.set_register(rd, imm.into());
     }
 
@@ -206,6 +207,7 @@ impl CPU {
         let result = addend1 + imm as u32;
         self.set_arithmetic_flags(result, addend1, imm as u32, 0, true);
         self.set_register(rd, result);
+        self.set_executed_instruction(format!("ADD {} {:#x}", rd, imm));
     }
 
     fn thumb_sub_imm(&mut self, rd: REGISTER, imm: u8) {
@@ -331,7 +333,6 @@ impl CPU {
         self.set_register(rd, result);
     }
 
-
     pub fn thumb_hi_reg_operations(&mut self, instruction: u32) -> CYCLES {
         let mut cycles = 1;
         let opcode = (instruction & 0x0300) >> 8;
@@ -343,10 +344,16 @@ impl CPU {
             0b00 => CPU::arm_add,
             0b01 => CPU::arm_cmp,
             0b10 => CPU::arm_mov,
-            _ => panic!()
+            _ => panic!(),
         };
 
-        operation(self, rd, self.get_register(rd), self.get_register(rs), false);
+        operation(
+            self,
+            rd,
+            self.get_register(rd),
+            self.get_register(rs),
+            false,
+        );
 
         if rd == PC_REGISTER as u32 {
             cycles += self.flush_pipeline();
@@ -369,6 +376,39 @@ impl CPU {
         self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
         cycles += self.flush_pipeline();
         self.set_executed_instruction(format!("BX {:#010x}", destination));
+
+        cycles
+    }
+
+    pub fn thumb_get_relative_address(&mut self, instruction: u32) -> CYCLES {
+        let cycles = 1;
+        let opcode = instruction.get_bit(11);
+        let rd = (instruction & 0x0700) >> 8;
+        let imm = (instruction & 0x00FF) * 4;
+
+        let result = match opcode {
+            0b0 => (self.get_pc() & !2) + imm,
+            0b1 => self.get_sp() + imm,
+            _ => panic!(),
+        };
+
+        self.set_register(rd, result);
+
+        cycles
+    }
+
+    pub fn thumb_add_offset_to_sp(&mut self, instruction: u32) -> CYCLES {
+        let cycles = 1;
+        let opcode = instruction.get_bit(7);
+        let imm = (instruction & 0x007F) * 4;
+
+        let result = match opcode {
+            0b0 => self.get_sp() + imm,
+            0b1 => self.get_sp() - imm,
+            _ => panic!()
+        };
+
+        self.set_sp(result);
 
         cycles
     }
@@ -898,7 +938,7 @@ mod thumb_alu_operations_tests {
         assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
         assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
     }
-    
+
     #[test]
     fn should_lsl_rd_by_5() {
         let memory = Memory::new().unwrap();
@@ -1044,5 +1084,76 @@ mod thumb_bx_tests {
 
         assert_eq!(cpu.get_pc(), 0x20);
         assert!(matches!(cpu.inst_mode, InstructionMode::ARM));
+    }
+}
+
+#[cfg(test)]
+mod get_relative_address_tests {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{
+        arm7tdmi::cpu::{InstructionMode, CPU},
+        memory::Memory,
+    };
+
+    #[test]
+    fn should_add_12_to_pc() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0xa503; // add r5, pc, 12
+        cpu.set_pc(2);
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_pc(), 6);
+        assert_eq!(cpu.get_register(5), 16);
+    }
+
+    #[test]
+    fn should_add_16_to_sp_and_store_in_r5() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0xad04; // add r5, sp, 16
+        cpu.set_sp(2);
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(5), 18);
+    }
+
+    #[test]
+    fn should_add_500_to_sp() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0xb07d; // add sp, 500
+        cpu.set_sp(2);
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_sp(), 502);
+    }
+
+    #[test]
+    fn should_sub_500_to_sp() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0xb0fd; // add sp, 500
+        cpu.set_sp(2);
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_sp(), (2 - 500) as i32 as u32);
     }
 }

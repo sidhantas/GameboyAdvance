@@ -1,25 +1,29 @@
+use std::mem::size_of;
+
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER},
-    types::{CYCLES, REGISTER},
+    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER},
+    types::{CYCLES, REGISTER, WORD},
     utils::bits::{sign_extend, Bits},
 };
 
-
 impl CPU {
-    pub fn ldr_pc_relative(&mut self, instruction: u32) -> CYCLES{
+    pub fn ldr_pc_relative(&mut self, instruction: u32) -> CYCLES {
         let mut cycles = 1;
         let rd = (instruction & 0x0700) >> 8;
         let offset = (instruction & 0x00FF) * 4;
         let address = (self.get_pc() & !2) + offset;
         let data = {
             let memory = self.memory.lock().unwrap();
-            memory.readu32(address as usize, self.get_access_mode()).unwrap().into()
+            memory
+                .readu32(address as usize, self.get_access_mode())
+                .unwrap()
+                .into()
         };
 
         cycles += self.advance_pipeline();
 
         self.set_register(rd, data);
-        
+
         cycles
     }
 
@@ -35,14 +39,14 @@ impl CPU {
             0b01 => CPU::str_instruction_execution,
             0b10 => CPU::ldr_instruction_execution,
             0b11 => CPU::ldr_instruction_execution,
-            _ => panic!()
+            _ => panic!(),
         };
 
         let address = self.get_register(rb) + self.get_register(ro);
         let is_byte_transfer = opcode.bit_is_set(0);
 
         cycles += operation(self, rd, address, is_byte_transfer, self.get_access_mode());
-        
+
         cycles
     }
 
@@ -57,8 +61,7 @@ impl CPU {
             0b01 => CPU::ldrsb_execution,
             0b10 => CPU::ldrh_execution,
             0b11 => CPU::ldrsh_execution,
-            _ => panic!()
-
+            _ => panic!(),
         };
         let address = self.get_register(rb) + self.get_register(ro);
 
@@ -66,9 +69,137 @@ impl CPU {
 
         1
     }
-    
-}
 
+    pub fn sdt_imm_offset(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 1;
+        let opcode = (instruction & 0x1800) >> 11;
+        let imm = (instruction & 0x07C0) >> 6;
+        let rb = (instruction & 0x0038) >> 3;
+        let rd = instruction & 0x0007;
+
+        let base_address = self.get_register(rb);
+        let operation = match opcode {
+            0b00 => CPU::str_instruction_execution,
+            0b01 => CPU::ldr_instruction_execution,
+            0b10 => CPU::str_instruction_execution,
+            0b11 => CPU::ldr_instruction_execution,
+            _ => panic!(),
+        };
+
+        let is_byte_transfer = opcode.bit_is_set(1);
+
+        let address = if is_byte_transfer {
+            base_address + imm
+        } else {
+            base_address + imm * 4
+        };
+
+        cycles += operation(self, rd, address, is_byte_transfer, self.get_access_mode());
+
+        cycles
+    }
+
+    pub fn thumb_sdt_sp_imm(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 1;
+        let opcode = instruction.get_bit(11);
+        let rd = (instruction & 0x0700) >> 8;
+        let imm = instruction & 0x00FF;
+        let operation = match opcode {
+            0b0 => CPU::str_instruction_execution,
+            0b1 => CPU::ldr_instruction_execution,
+            _ => panic!(),
+        };
+
+        let address = self.get_sp() + imm * 4;
+
+        cycles += operation(self, rd, address, false, self.get_access_mode());
+
+        cycles
+    }
+
+    pub fn thumb_push_pop(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 1;
+        let opcode = instruction.get_bit(11);
+
+        let mut register_list: Vec<REGISTER> = Vec::new();
+
+        for i in 0..7 {
+            if instruction.bit_is_set(i) {
+                register_list.push(i as REGISTER);
+            }
+        }
+
+        let base_address;
+
+        cycles += match opcode {
+            0b0 => {
+                // STMDB (PUSH)
+                if instruction.bit_is_set(8) {
+                    register_list.push(LINK_REGISTER);
+                }
+                base_address =
+                    self.get_sp() - register_list.len() as u32 * size_of::<WORD>() as u32;
+                self.set_executed_instruction(format!("PUSH {:?}", register_list));
+                self.stm_execution(base_address as usize, true, &register_list)
+            }
+            0b1 => {
+                // LDMIA (POP)
+                if instruction.bit_is_set(8) {
+                    register_list.push(PC_REGISTER as u32);
+                }
+                base_address = self.get_sp();
+                self.set_executed_instruction(format!("POP {:?}", register_list));
+                self.ldm_execution(base_address as usize, true, &register_list)
+            }
+            _ => panic!(),
+        };
+
+        self.set_sp(base_address);
+
+        cycles
+    }
+
+    pub fn thumb_multiple_load_or_store(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 0;
+        let opcode = instruction.get_bit(11);
+        let rb = (instruction & 0x0700) >> 8;
+
+        let mut register_list: Vec<REGISTER> = Vec::new();
+
+        for i in 0..7 {
+            if instruction.bit_is_set(i) {
+                register_list.push(i as REGISTER);
+            }
+        }
+
+        let operation = match opcode {
+            0b0 => {
+                if instruction.bit_is_set(8) {
+                    register_list.push(LINK_REGISTER);
+                }
+                CPU::stm_execution
+            }
+            0b1 => {
+                if instruction.bit_is_set(8) {
+                    register_list.push(PC_REGISTER as u32);
+                }
+                CPU::ldm_execution
+            }
+            _ => panic!(),
+        };
+
+        let base_address = self.get_register(rb);
+
+        cycles += operation(self, base_address as usize, false, &register_list);
+
+        // Always write back
+        self.set_register(
+            rb,
+            base_address + register_list.len() as u32 * size_of::<WORD>() as u32,
+        );
+        cycles
+    }
+}
 
 #[cfg(test)]
 mod thumb_ldr_str_tests {
@@ -96,7 +227,6 @@ mod thumb_ldr_str_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        
         assert_eq!(cpu.get_register(5), 0x55);
     }
 }
