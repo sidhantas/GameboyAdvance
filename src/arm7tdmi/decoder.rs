@@ -226,10 +226,15 @@ impl CPU {
                     executable: CPU::thumb_unconditional_branch
                 }
             }
-            _ if thumb_decoders::is_long_branch_with_link(instruction) => {
-                let full_instruction = instruction << 16 | self.fetched_instruction;
+            _ if thumb_decoders::is_set_link_register(instruction) => {
                 ARMDecodedInstruction {
-                    instruction: full_instruction,
+                    instruction,
+                    executable: CPU::thumb_set_link_register
+                }
+            }
+            _ if thumb_decoders::is_long_branch_with_link(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
                     executable: CPU::thumb_long_branch_with_link
                 }
             }
@@ -364,8 +369,12 @@ mod thumb_decoders {
         instruction & 0xF800 == 0xE000
     }
 
-    pub fn is_long_branch_with_link(instruction: u32) -> bool {
+    pub fn is_set_link_register(instruction: u32) -> bool {
         instruction & 0xF800 == 0xF000
+    }
+
+    pub fn is_long_branch_with_link(instruction: u32) -> bool {
+        instruction & 0xF800 == 0xF800
     }
 }
 

@@ -1,6 +1,6 @@
 use num_traits::sign;
 
-use crate::{arm7tdmi::cpu::{FlagsRegister, CPU}, types::CYCLES, utils::bits::{sign_extend, Bits}};
+use crate::{arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, types::CYCLES, utils::bits::{sign_extend, Bits}};
 
 impl CPU {
     pub fn thumb_conditional_branch(&mut self, instruction: u32) -> CYCLES {
@@ -52,14 +52,25 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_long_branch_with_link(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_set_link_register(&mut self, instruction: u32) -> CYCLES {
         
-        let full_instruction = instruction << 16 | self.fetched_instruction;
-        self.fetched_instruction = 0;
-        self.advance_pipeline();
-        self.set_executed_instruction(format!("BL {:#x}", full_instruction));
+        self.set_register(LINK_REGISTER, self.get_pc() + ((instruction & 0x07FF) << 12));
+        
+        self.set_executed_instruction(format!("SET LR: {:#x}", self.get_pc()));
         1
-        
+    }
+
+    pub fn thumb_long_branch_with_link(&mut self, instruction: u32) -> CYCLES {
+
+        let link_register_val = self.get_register(LINK_REGISTER);
+        self.set_register(LINK_REGISTER, (self.get_pc() - 2) | 1);
+        let destination = link_register_val + ((instruction & 0x7FF) << 1);
+        self.set_pc(destination);
+
+        self.flush_pipeline();
+
+        self.set_executed_instruction(format!("BL: {:#x}", destination));
+        1
     }
 }
 
@@ -68,7 +79,7 @@ mod branch_tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
         memory::Memory,
     };
 
@@ -106,4 +117,22 @@ mod branch_tests {
         assert_eq!(cpu.get_pc(), 0x1c);
     }
 
+    #[test]
+    fn should_set_link_register_and_branch() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.inst_mode = InstructionMode::THUMB;
+
+        cpu.fetched_instruction = 0xf000; // set link_register
+        cpu.set_pc(0x1a);
+        cpu.execute_cpu_cycle();
+        cpu.fetched_instruction = 0xf802; // bl 0x20
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+
+        assert_eq!(cpu.get_pc(), 0x24);
+        assert_eq!(cpu.get_register(LINK_REGISTER), 0x1d);
+    }
 }
