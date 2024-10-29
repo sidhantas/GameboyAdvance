@@ -380,7 +380,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -405,7 +405,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -430,7 +430,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000208;
+        let address: u32 = 0x3000208;
 
         let _res = mem
             .lock()
@@ -455,7 +455,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -481,7 +481,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -513,16 +513,16 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000202;
+        let address: u32 = 0x3000202;
 
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x2000200, value, AccessFlags::User);
+            .writeu32(0x3000200, value, AccessFlags::User);
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x2000204, 0xABABABAB, AccessFlags::User);
+            .writeu32(0x3000204, 0xABABABAB, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -533,7 +533,7 @@ mod sdt_tests {
 
         assert_eq!(cpu.get_register(2), 0xABABFABC);
 
-        cpu.set_register(1, 0x2000203);
+        cpu.set_register(1, 0x3000203);
 
         cpu.fetched_instruction = 0xe5912000; // ldr r2, [r1]
 
@@ -550,7 +550,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -576,7 +576,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(1, address);
         cpu.set_register(2, value);
@@ -603,7 +603,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value: u8 = 0x21;
-        let address: u32 = 0x2000203;
+        let address: u32 = 0x3000203;
 
         cpu.set_register(1, address);
         cpu.set_register(2, value.into());
@@ -630,7 +630,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value: u16 = 0x21;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(1, address);
         cpu.set_register(3, value.into());
@@ -657,7 +657,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value: u32 = 0x1234_5678;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(1, address);
         cpu.set_register(3, value);
@@ -684,7 +684,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -708,7 +708,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_FABC;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -732,7 +732,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         let _res = mem
             .lock()
@@ -756,7 +756,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
@@ -785,7 +785,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
@@ -815,7 +815,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
@@ -845,7 +845,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
@@ -874,7 +874,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -902,7 +902,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -931,7 +931,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -966,7 +966,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x2000200;
+        let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);

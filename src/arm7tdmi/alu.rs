@@ -591,14 +591,14 @@ mod tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let _res = mem.lock().unwrap().writeu32(0x2000000, 0xe25f1008, AccessFlags::User);
-        let _res = mem.lock().unwrap().writeu32(0x2000004, 0xe1a00000, AccessFlags::User);
-        let _res = mem.lock().unwrap().writeu32(0x2000008, 0xe1a00000, AccessFlags::User); // nop
-        let _res = mem.lock().unwrap().writeu32(0x200000C, 0xe1a00000, AccessFlags::User); // nop
-        let _res = mem.lock().unwrap().writeu32(0x2000010, 0xe1a00000, AccessFlags::User); // nop
-        let _res = mem.lock().unwrap().writeu32(0x2000014, 0xe281f000, AccessFlags::User); 
+        let _res = mem.lock().unwrap().writeu32(0x3000000, 0xe25f1008, AccessFlags::User);
+        let _res = mem.lock().unwrap().writeu32(0x3000004, 0xe1a00000, AccessFlags::User);
+        let _res = mem.lock().unwrap().writeu32(0x3000008, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem.lock().unwrap().writeu32(0x300000C, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem.lock().unwrap().writeu32(0x3000010, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem.lock().unwrap().writeu32(0x3000014, 0xe281f000, AccessFlags::User); 
 
-        cpu.set_pc(0x2000000);
+        cpu.set_pc(0x3000000);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

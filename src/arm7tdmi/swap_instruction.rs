@@ -58,11 +58,11 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        cpu.set_register(1, 0x2000200);
+        cpu.set_register(1, 0x3000200);
         cpu.set_register(3, 10);
         mem.lock()
             .unwrap()
-            .writeu32(0x2000200, 5, AccessFlags::User);
+            .writeu32(0x3000200, 5, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe1014093; // swp r4, r3, [r1]
 
@@ -70,7 +70,7 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x2000200, AccessFlags::User).data, 10);
+        assert_eq!(mem.lock().unwrap().readu32(0x3000200, AccessFlags::User).data, 10);
 
     }
 
@@ -81,7 +81,7 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address = 0x2000200;
+        let address = 0x3000200;
 
         cpu.set_register(1, address);
         mem.lock()
@@ -94,7 +94,7 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x2000200, AccessFlags::User).data, 0x2000200);
+        assert_eq!(mem.lock().unwrap().readu32(0x3000200, AccessFlags::User).data, 0x3000200);
     }
     
     #[test]
@@ -104,7 +104,7 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address = 0x2000200;
+        let address = 0x3000200;
 
         cpu.set_register(4, 15);
 
@@ -120,7 +120,7 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x2000200, AccessFlags::User).data, 15);
+        assert_eq!(mem.lock().unwrap().readu32(0x3000200, AccessFlags::User).data, 15);
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address = 0x2000200;
+        let address = 0x3000200;
 
         cpu.set_register(3, 0x1234_FABC);
         cpu.set_register(4, 0xFFFF_FFFF);
@@ -147,6 +147,6 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 0x12);
-        assert_eq!(mem.lock().unwrap().read(0x2000200, AccessFlags::User).data, 0xBC);
+        assert_eq!(mem.lock().unwrap().read(0x3000200, AccessFlags::User).data, 0xBC);
     }
 }
