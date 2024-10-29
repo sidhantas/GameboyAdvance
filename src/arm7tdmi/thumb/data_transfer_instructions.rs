@@ -8,18 +8,18 @@ use crate::{
 
 impl CPU {
     pub fn ldr_pc_relative(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
+        let mut cycles = 0;
         let rd = (instruction & 0x0700) >> 8;
         let offset = (instruction & 0x00FF) * 4;
         let address = (self.get_pc() & !2) + offset;
-        let data = {
+        let memory_fetch = {
             let memory = self.memory.lock().unwrap();
             memory
                 .readu32(address as usize, self.get_access_mode())
-                .unwrap()
-                .into()
         };
 
+        cycles += memory_fetch.cycles;
+        let data = memory_fetch.data;
         cycles += self.advance_pipeline();
 
         self.set_register(rd, data);
@@ -65,9 +65,9 @@ impl CPU {
         };
         let address = self.get_register(rb) + self.get_register(ro);
 
-        operation(self, rd, address);
+        let cycles = operation(self, rd, address);
 
-        1
+        cycles
     }
 
     pub fn sdt_imm_offset(&mut self, instruction: u32) -> CYCLES {
@@ -217,12 +217,9 @@ mod thumb_ldr_str_tests {
         let mem = memory.clone();
         let mut cpu = CPU::new(memory);
         cpu.inst_mode = InstructionMode::THUMB;
-        mem.lock()
-            .unwrap()
-            .writeu32(0x24, 0x55, AccessFlags::User)
-            .unwrap();
+        mem.lock().unwrap().writeu32(0x2000024, 0x55, AccessFlags::User);
 
-        cpu.set_pc(0x16);
+        cpu.set_pc(0x2000016);
         cpu.fetched_instruction = 0x4d03; // ldr r5, [pc, 12]
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

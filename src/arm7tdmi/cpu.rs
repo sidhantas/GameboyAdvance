@@ -120,9 +120,7 @@ impl CPU {
 
     pub fn advance_pipeline(&mut self) -> CYCLES {
         self.decode_instruction(self.fetched_instruction);
-        self.fetch_instruction();
-
-        1
+        self.fetch_instruction()
     }
 
     pub fn get_pc(&self) -> u32 {
@@ -144,7 +142,7 @@ impl CPU {
     pub fn increment_pc(&mut self) {
         match self.inst_mode {
             InstructionMode::ARM => self.registers[PC_REGISTER] += 4,
-            InstructionMode::THUMB => self.registers[PC_REGISTER] += 2
+            InstructionMode::THUMB => self.registers[PC_REGISTER] += 2,
         }
     }
 
@@ -182,23 +180,22 @@ impl CPU {
         self.set_flag(flag);
     }
 
-    fn fetch_instruction(&mut self) {
-        self.fetched_instruction = match self.inst_mode {
-            InstructionMode::ARM => self
-                .memory
-                .lock()
-                .unwrap()
-                .readu32(self.get_pc() as usize, AccessFlags::User)
-                .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc())),
-            InstructionMode::THUMB => self
-                .memory
-                .lock()
-                .unwrap()
-                .readu16(self.get_pc() as usize, AccessFlags::User)
-                .unwrap_or_else(|_| panic!("Unable to access memory at {:#04x}", self.get_pc()))
-                .into(),
+    fn fetch_instruction(&mut self) -> CYCLES {
+        let mut cycles = 0;
+        let memory_fetch = {
+            let memory = self.memory.lock().unwrap();
+            match self.inst_mode {
+                InstructionMode::ARM => memory.readu32(self.get_pc() as usize, AccessFlags::User),
+                InstructionMode::THUMB => memory
+                    .readu16(self.get_pc() as usize, AccessFlags::User)
+                    .into(),
+            }
         };
+        cycles += memory_fetch.cycles;
+        self.fetched_instruction = memory_fetch.data;
         self.increment_pc();
+
+        cycles
     }
 
     pub fn get_access_mode(&self) -> AccessFlags {

@@ -1,8 +1,10 @@
 .global _main
 _main:
-    mov r0, #target
-    mov sp, #500
-    add r0, #1
+    subs r1, r15, #8
+    nop;
+    nop;
+    nop;
+    add r15, r1, #0
     bx r0;
     nop;
     nop;

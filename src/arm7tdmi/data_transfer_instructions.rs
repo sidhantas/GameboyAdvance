@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use crate::{
-    memory::AccessFlags,
+    memory::{self, AccessFlags, MemoryFetch},
     types::{CYCLES, REGISTER, WORD},
     utils::bits::{sign_extend, Bits},
 };
@@ -81,20 +81,16 @@ impl CPU {
         access_flag: AccessFlags,
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
-        {
+        let cycles = {
             let mut memory = self.memory.lock().unwrap();
             if byte_transfer {
-                memory
-                    .write(address as usize, data as u8, access_flag)
-                    .unwrap();
+                memory.write(address as usize, data as u8, access_flag)
             } else {
-                memory
-                    .writeu32(address as usize, data, access_flag)
-                    .unwrap();
+                memory.writeu32(address as usize, data, access_flag)
             }
-        }
+        };
         self.set_executed_instruction(format!("STR {} [{:#x}]", rd, address));
-        1
+        cycles
     }
 
     pub fn ldr_instruction_execution(
@@ -104,20 +100,22 @@ impl CPU {
         byte_transfer: bool,
         access_flag: AccessFlags,
     ) -> CYCLES {
-        let mut cycles = 2;
-        let data: WORD;
-        {
+        let mut cycles = 0;
+        let data = {
             let memory = self.memory.lock().unwrap();
-            data = if byte_transfer {
-                memory.read(address as usize, access_flag).unwrap().into()
+            let memory_fetch = if byte_transfer {
+                memory.read(address as usize, access_flag).into()
             } else {
-                let mut word = memory.readu32(address as usize, access_flag).unwrap();
-                if word % 4 != 0 {
-                    word = word.rotate_right(8 * address & 0b11);
+                let memory_fetch = memory.readu32(address as usize, access_flag);
+                MemoryFetch {
+                    data: memory_fetch.data.rotate_right(8 * address & 0b11),
+                    ..memory_fetch
                 }
-                word
-            }
-        }
+            };
+            cycles += memory_fetch.cycles;
+
+            memory_fetch.data
+        };
 
         self.set_register(rd, data);
         if rd as usize == PC_REGISTER {
@@ -184,24 +182,24 @@ impl CPU {
 
     pub fn strh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let data: WORD = self.get_register(rd);
-        {
+        let cycles = {
             let mut memory = self.memory.lock().unwrap();
-            memory
-                .writeu16(address as usize, data as u16, self.get_access_mode())
-                .unwrap();
-        }
+            memory.writeu16(address as usize, data as u16, self.get_access_mode())
+        };
         self.set_executed_instruction(format!("STRH {} [{:#x}]", rd, address));
-        1
+
+        cycles
     }
 
     pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
-        let mut cycles = 2;
-        let data = {
+        let mut cycles = 0;
+        let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            memory
-                .readu16(address as usize, self.get_access_mode())
-                .unwrap()
+            memory.readu16(address as usize, self.get_access_mode())
         };
+
+        cycles += memory_fetch.cycles;
+        let data = memory_fetch.data;
 
         self.set_register(rd, sign_extend(data.into(), 15));
         if rd as usize == PC_REGISTER {
@@ -213,13 +211,14 @@ impl CPU {
     }
 
     pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
-        let mut cycles = 2;
-        let data = {
+        let mut cycles = 0;
+        let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            memory
-                .read(address as usize, self.get_access_mode())
-                .unwrap()
+            memory.read(address as usize, self.get_access_mode())
         };
+
+        cycles += memory_fetch.cycles;
+        let data = memory_fetch.data;
 
         self.set_register(rd, sign_extend(data.into(), 7));
         if rd as usize == PC_REGISTER {
@@ -231,13 +230,14 @@ impl CPU {
     }
 
     pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
-        let mut cycles = 2;
-        let data = {
+        let mut cycles = 0;
+        let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            memory
-                .readu16(address as usize, self.get_access_mode())
-                .unwrap()
+            memory.readu16(address as usize, self.get_access_mode())
         };
+
+        cycles += memory_fetch.cycles;
+        let data = memory_fetch.data;
 
         self.set_register(rd, data.into());
         if rd as usize == PC_REGISTER {
@@ -316,24 +316,23 @@ impl CPU {
         pre_indexed_addressing: bool,
         register_list: &Vec<REGISTER>,
     ) -> CYCLES {
+        let mut cycles = 0;
         let mut curr_address = base_address;
         for i in 0..register_list.len() {
             if pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
             }
             let data = self.get_register(register_list[i] as u32);
-            {
+            cycles += {
                 let mut memory = self.memory.lock().unwrap();
-                memory
-                    .writeu32(curr_address, data, self.get_access_mode())
-                    .unwrap()
+                memory.writeu32(curr_address, data, self.get_access_mode())
             };
             if !pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
             }
         }
 
-        1
+        cycles
     }
 
     pub fn ldm_execution(
@@ -342,24 +341,25 @@ impl CPU {
         pre_indexed_addressing: bool,
         register_list: &Vec<REGISTER>,
     ) -> CYCLES {
+        let mut cycles = 0;
         let mut curr_address = base_address;
         for i in 0..register_list.len() {
             if pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
             }
-            let data = {
+            let memory_fetch = {
                 let memory = self.memory.lock().unwrap();
-                memory
-                    .readu32(curr_address, self.get_access_mode())
-                    .unwrap()
+                memory.readu32(curr_address, self.get_access_mode())
             };
+            cycles += memory_fetch.cycles;
+            let data = memory_fetch.data;
             if !pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
             }
             self.set_register(register_list[i] as u32, data);
         }
 
-        1
+        cycles
     }
 }
 
@@ -380,7 +380,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -405,7 +405,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -430,7 +430,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x208;
+        let address: u32 = 0x2000208;
 
         let _res = mem
             .lock()
@@ -455,7 +455,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -481,7 +481,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -513,16 +513,16 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x202;
+        let address: u32 = 0x2000202;
 
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x200, value, AccessFlags::User);
+            .writeu32(0x2000200, value, AccessFlags::User);
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x204, 0xABABABAB, AccessFlags::User);
+            .writeu32(0x2000204, 0xABABABAB, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -533,7 +533,7 @@ mod sdt_tests {
 
         assert_eq!(cpu.get_register(2), 0xABABFABC);
 
-        cpu.set_register(1, 0x203);
+        cpu.set_register(1, 0x2000203);
 
         cpu.fetched_instruction = 0xe5912000; // ldr r2, [r1]
 
@@ -550,12 +550,12 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x200, value, AccessFlags::User);
+            .writeu32(address as usize, value, AccessFlags::User);
 
         cpu.set_register(1, address);
 
@@ -576,7 +576,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(1, address);
         cpu.set_register(2, value);
@@ -590,7 +590,7 @@ mod sdt_tests {
             .lock()
             .unwrap()
             .readu32(address as usize, AccessFlags::User)
-            .unwrap();
+            .data;
 
         assert_eq!(value, stored_value);
     }
@@ -603,7 +603,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value: u8 = 0x21;
-        let address: u32 = 0x203;
+        let address: u32 = 0x2000203;
 
         cpu.set_register(1, address);
         cpu.set_register(2, value.into());
@@ -617,7 +617,7 @@ mod sdt_tests {
             .lock()
             .unwrap()
             .read(address as usize, AccessFlags::User)
-            .unwrap();
+            .data;
 
         assert_eq!(value, stored_value);
     }
@@ -630,7 +630,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value: u16 = 0x21;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(1, address);
         cpu.set_register(3, value.into());
@@ -644,7 +644,7 @@ mod sdt_tests {
             .lock()
             .unwrap()
             .readu16(address as usize, AccessFlags::User)
-            .unwrap();
+            .data;
 
         assert_eq!(value as u16, stored_value);
     }
@@ -657,7 +657,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value: u32 = 0x1234_5678;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(1, address);
         cpu.set_register(3, value);
@@ -671,7 +671,7 @@ mod sdt_tests {
             .lock()
             .unwrap()
             .readu32(address as usize, AccessFlags::User)
-            .unwrap();
+            .data;
 
         assert_eq!(value & 0x0000_FFFF, stored_value);
     }
@@ -684,7 +684,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0xFABCD321;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -708,7 +708,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_FABC;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -732,7 +732,7 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         let _res = mem
             .lock()
@@ -756,19 +756,17 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize, value, AccessFlags::User);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize + 4, 0x55, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize + 4, 0x55, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe8950003; // ldmia r5, {r0, r1}
 
@@ -787,19 +785,17 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize + 4, value, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize + 4, value, AccessFlags::User);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize + 8, 0x55, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize + 8, 0x55, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe9b500c0; // ldmib r5!, {r6, r7}
 
@@ -819,19 +815,17 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize, value, AccessFlags::User);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize - 4, 0x55, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize - 4, 0x55, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe83500c0; // ldmda r5!, {r6, r7}
 
@@ -851,19 +845,17 @@ mod sdt_tests {
         let mut cpu = CPU::new(cpu_memory);
 
         let value = 0x0000_0081;
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize - 4, value, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize - 4, value, AccessFlags::User);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize - 8, 0x55, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize - 8, 0x55, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe93500c0; // ldmdb r5!, {r6, r7}
 
@@ -882,7 +874,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -894,29 +886,23 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x200, AccessFlags::User)
-                .unwrap(),
+            mem.lock().unwrap().readu32(address as usize, AccessFlags::User).data,
             123
         );
         assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x204, AccessFlags::User)
-                .unwrap(),
+            mem.lock().unwrap().readu32(address as usize + 4, AccessFlags::User).data,
             456
         );
     }
 
     #[test]
-    fn stmia_should_store_multiple_registers_and_writeback() {
+    fn stmib_should_store_multiple_registers_and_writeback() {
         let memory = Memory::new().unwrap();
         let cpu_memory = Arc::new(Mutex::new(memory));
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -928,20 +914,14 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x204, AccessFlags::User)
-                .unwrap(),
+            mem.lock().unwrap().readu32(address as usize + 4, AccessFlags::User).data,
             123
         );
         assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x208, AccessFlags::User)
-                .unwrap(),
+            mem.lock().unwrap().readu32(address as usize + 8, AccessFlags::User).data,
             456
         );
-        assert_eq!(cpu.get_register(5), 0x208);
+        assert_eq!(cpu.get_register(5), address + 8);
     }
 
     #[test]
@@ -951,7 +931,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -966,14 +946,14 @@ mod sdt_tests {
             mem.lock()
                 .unwrap()
                 .readu32((address - 4) as usize, AccessFlags::User)
-                .unwrap(),
+                .data,
             456
         );
         assert_eq!(
             mem.lock()
                 .unwrap()
                 .readu32((address - 8) as usize, AccessFlags::User)
-                .unwrap(),
+                .data,
             123
         );
         assert_eq!(cpu.get_register(5), address - 8);
@@ -986,7 +966,7 @@ mod sdt_tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address: u32 = 0x200;
+        let address: u32 = 0x2000200;
 
         cpu.set_register(5, address);
         cpu.set_register(6, 123);
@@ -1001,14 +981,14 @@ mod sdt_tests {
             mem.lock()
                 .unwrap()
                 .readu32((address) as usize, AccessFlags::User)
-                .unwrap(),
+                .data,
             456
         );
         assert_eq!(
             mem.lock()
                 .unwrap()
                 .readu32((address - 4) as usize, AccessFlags::User)
-                .unwrap(),
+                .data,
             123
         );
         assert_eq!(cpu.get_register(5), address - 8);

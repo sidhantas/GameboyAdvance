@@ -371,8 +371,7 @@ fn draw_memory(
                 .read(
                     (start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize,
                     AccessFlags::Privileged,
-                )
-                .unwrap_or(0x00);
+                ).data;
 
             let widget = Paragraph::new(format!("0x{:0>2x}", value))
                 .style(Style::default().fg(if value > 0 { tui::style::Color::Blue } else {tui::style::Color::White}))

@@ -1,42 +1,45 @@
 use crate::{
-    memory::AccessFlags,
+    memory::{AccessFlags, MemoryFetch},
     types::{CYCLES, REGISTER, WORD},
     utils::bits::{sign_extend, Bits},
 };
 
-use super::cpu::{CPU, PC_REGISTER};
+use super::cpu::{CPU};
 
 impl CPU {
     pub fn single_data_swap(&mut self, instruction: WORD) -> CYCLES {
+        let mut cycles = 1; // 1 I cycle
         let is_byte_swap = instruction.bit_is_set(22);
         let rn = (instruction & 0x000F_0000) >> 16;
         let rd = (instruction & 0x0000_F000) >> 12;
         let rm = instruction & 0x0000_000F;
-            let address = self.get_register(rn) as usize;
+        let address = self.get_register(rn) as usize;
 
 
         let memory_data = if is_byte_swap {
             let mut memory = self.memory.lock().unwrap();
-            let data = memory
-                .read(address, self.get_access_mode())
-                .unwrap();
-            memory.write(address, self.get_register(rm) as u8, self.get_access_mode()).unwrap();
+            let memory_fetch = memory
+                .read(address, self.get_access_mode());
+            cycles += memory_fetch.cycles;
+            cycles += memory.write(address, self.get_register(rm) as u8, self.get_access_mode());
 
-            data as u32
+            memory_fetch.data as u32
+
         } else {
             let mut memory = self.memory.lock().unwrap();
-            let data = memory
-                .readu32(address, self.get_access_mode())
-                .unwrap();
-            memory.writeu32(address, self.get_register(rm), self.get_access_mode()).unwrap();
+            let memory_fetch = memory
+                .readu32(address, self.get_access_mode());
 
-            data
+            cycles += memory_fetch.cycles;
+            cycles += memory.writeu32(address, self.get_register(rm), self.get_access_mode());
+
+            memory_fetch.data
         };
 
         self.set_executed_instruction(format!("SWP {} {} [{:#x}]", rd, rm, address));
         self.set_register(rd, memory_data);
 
-        4
+        cycles
     }
 }
 
@@ -55,12 +58,11 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        cpu.set_register(1, 0x200);
+        cpu.set_register(1, 0x2000200);
         cpu.set_register(3, 10);
         mem.lock()
             .unwrap()
-            .writeu32(0x200, 5, AccessFlags::User)
-            .unwrap();
+            .writeu32(0x2000200, 5, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe1014093; // swp r4, r3, [r1]
 
@@ -68,7 +70,7 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x200, AccessFlags::User).unwrap(), 10);
+        assert_eq!(mem.lock().unwrap().readu32(0x2000200, AccessFlags::User).data, 10);
 
     }
 
@@ -79,13 +81,12 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address = 0x200;
+        let address = 0x2000200;
 
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(0x200, 5, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize, 5, AccessFlags::User);
 
         cpu.fetched_instruction = 0xe1014091; // swp r4, r1, [r1]
 
@@ -93,7 +94,7 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x200, AccessFlags::User).unwrap(), 0x200);
+        assert_eq!(mem.lock().unwrap().readu32(0x2000200, AccessFlags::User).data, 0x2000200);
     }
     
     #[test]
@@ -103,15 +104,15 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address = 0x200;
+        let address = 0x2000200;
 
         cpu.set_register(4, 15);
 
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(0x200, 5, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize, 5, AccessFlags::User)
+            ;
 
         cpu.fetched_instruction = 0xe1014094; // swp r4, r4, [r1]
 
@@ -119,7 +120,7 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x200, AccessFlags::User).unwrap(), 15);
+        assert_eq!(mem.lock().unwrap().readu32(0x2000200, AccessFlags::User).data, 15);
     }
 
     #[test]
@@ -129,7 +130,7 @@ mod single_data_swap_test {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let address = 0x200;
+        let address = 0x2000200;
 
         cpu.set_register(3, 0x1234_FABC);
         cpu.set_register(4, 0xFFFF_FFFF);
@@ -137,8 +138,8 @@ mod single_data_swap_test {
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(0x200, 0x7890_DD12, AccessFlags::User)
-            .unwrap();
+            .writeu32(address as usize, 0x7890_DD12, AccessFlags::User)
+            ;
 
         cpu.fetched_instruction = 0xe1414093; // swpb r4, r3, [r1]
 
@@ -146,6 +147,6 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 0x12);
-        assert_eq!(mem.lock().unwrap().read(0x200, AccessFlags::User).unwrap(), 0xBC);
+        assert_eq!(mem.lock().unwrap().read(0x2000200, AccessFlags::User).data, 0xBC);
     }
 }
