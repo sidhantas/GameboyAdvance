@@ -49,6 +49,8 @@ impl CPU {
                 self.reset_flag(FlagsRegister::N);
             }
         }
+
+        self.set_executed_instruction(format!("LSL {rd} {:#x} {:#x}", rs_val, offset));
     }
 
     fn thumb_lsr(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
@@ -86,6 +88,7 @@ impl CPU {
         }
 
         self.set_register(rd, result);
+        self.set_executed_instruction(format!("LSR {rd} {:#x} {:#x}", rs_val, offset));
     }
 
     fn thumb_asr(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
@@ -131,6 +134,7 @@ impl CPU {
             }
         }
         self.set_register(rd, result);
+        self.set_executed_instruction(format!("ASR {rd} {:#x} {:#x}", rs_val, offset));
     }
 
     pub fn thumb_add_or_subtract_instruction(&mut self, instruction: u32) -> CYCLES {
@@ -366,11 +370,11 @@ impl CPU {
         let mut cycles = 1;
         let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
         let mut destination = self.get_register(rs);
-        self.inst_mode = if destination.bit_is_set(0) {
-            InstructionMode::THUMB
+        if destination.bit_is_set(0) {
+            self.set_instruction_mode(InstructionMode::THUMB);
         } else {
             destination &= !2; // arm instructions must be word aligned
-            InstructionMode::ARM
+            self.set_instruction_mode(InstructionMode::ARM);
         };
 
         self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
@@ -428,7 +432,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 20);
         cpu.set_register(2, 43);
@@ -448,7 +452,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 20);
         cpu.set_register(2, (-43 as i32) as u32);
@@ -468,7 +472,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 20);
         cpu.set_register(2, (-20 as i32) as u32);
@@ -488,7 +492,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0);
         cpu.set_register(2, 0);
@@ -508,7 +512,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x1);
         cpu.set_register(2, 0x7FFF_FFFF);
@@ -528,7 +532,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, -10 as i32 as u32);
         cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
@@ -547,7 +551,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, -5 as i32 as u32);
         cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
@@ -566,7 +570,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x7FFF_FFFF);
         cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
@@ -585,7 +589,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0xFFFF_FFFF);
         cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
@@ -604,7 +608,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 50);
         cpu.set_register(2, 20);
@@ -624,7 +628,7 @@ mod thumb_add_and_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 25);
         cpu.set_register(2, 50);
@@ -654,7 +658,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x0F00_0000);
         cpu.fetched_instruction = 0x0148; // lsls r0, r1, 5
@@ -672,7 +676,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x0F00_0000);
         cpu.set_flag(FlagsRegister::C);
@@ -691,7 +695,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0xF000_0000);
         cpu.set_flag(FlagsRegister::V);
@@ -711,7 +715,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x0000_008F);
         cpu.fetched_instruction = 0x1108; // asrs r0, r1, 4
@@ -729,7 +733,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_008F);
         cpu.fetched_instruction = 0x1108; // asrs r0, r1, 4
@@ -747,7 +751,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_0000);
         cpu.fetched_instruction = 0x1008; // asrs r0, r1, 32
@@ -765,7 +769,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_008F);
         cpu.fetched_instruction = 0x0a88; // lsrs r0, r1, 10
@@ -783,7 +787,7 @@ mod thumb_move_shifted_register_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_008F);
         cpu.fetched_instruction = 0x0808; // lsrs r0, r1, 32
@@ -811,7 +815,7 @@ mod thumb_move_compare_add_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0x200f; // movs r0, 15
         cpu.execute_cpu_cycle();
@@ -828,7 +832,7 @@ mod thumb_move_compare_add_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0x2096; // movs r0, 150
         cpu.execute_cpu_cycle();
@@ -845,7 +849,7 @@ mod thumb_move_compare_add_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0x2000; // movs r0, 0
         cpu.execute_cpu_cycle();
@@ -862,7 +866,7 @@ mod thumb_move_compare_add_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 15);
         cpu.fetched_instruction = 0x380f; // subs r0, 15
@@ -880,7 +884,7 @@ mod thumb_move_compare_add_subtract_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 0x7FFF_FFFF);
         cpu.fetched_instruction = 0x300f; // adds r0, 15
@@ -908,7 +912,7 @@ mod thumb_alu_operations_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 0x8123_2344);
         cpu.set_register(1, 0x8000_2344);
@@ -926,7 +930,7 @@ mod thumb_alu_operations_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 0x1010_1010);
         cpu.set_register(1, 0x0101_0101);
@@ -944,7 +948,7 @@ mod thumb_alu_operations_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 0x0F11_1230);
         cpu.set_register(1, 5);
@@ -963,7 +967,7 @@ mod thumb_alu_operations_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 0x0F11_1230);
         cpu.set_register(1, 0);
@@ -992,7 +996,7 @@ mod thumb_hi_reg_operations {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 20);
         cpu.set_register(11, 15);
@@ -1012,7 +1016,7 @@ mod thumb_hi_reg_operations {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 20);
         cpu.set_register(11, 20);
@@ -1032,7 +1036,7 @@ mod thumb_hi_reg_operations {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 20);
         cpu.set_register(11, 55);
@@ -1059,7 +1063,7 @@ mod thumb_bx_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(5, 0x16);
         cpu.fetched_instruction = 0x4728; // bx r5
@@ -1067,7 +1071,7 @@ mod thumb_bx_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_pc(), 0x1C);
-        assert!(matches!(cpu.inst_mode, InstructionMode::ARM));
+        assert!(matches!(cpu.get_instruction_mode(), InstructionMode::ARM));
     }
 
     #[test]
@@ -1075,7 +1079,7 @@ mod thumb_bx_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_pc(0x16);
         cpu.fetched_instruction = 0x4778; // bx r15
@@ -1083,7 +1087,7 @@ mod thumb_bx_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_pc(), 0x20);
-        assert!(matches!(cpu.inst_mode, InstructionMode::ARM));
+        assert!(matches!(cpu.get_instruction_mode(), InstructionMode::ARM));
     }
 }
 
@@ -1101,7 +1105,7 @@ mod get_relative_address_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xa503; // add r5, pc, 12
         cpu.set_pc(2);
@@ -1117,7 +1121,7 @@ mod get_relative_address_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xad04; // add r5, sp, 16
         cpu.set_sp(2);
@@ -1132,7 +1136,7 @@ mod get_relative_address_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xb07d; // add sp, 500
         cpu.set_sp(2);
@@ -1147,7 +1151,7 @@ mod get_relative_address_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xb0fd; // add sp, 500
         cpu.set_sp(2);

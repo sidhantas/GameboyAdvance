@@ -88,7 +88,7 @@ mod branch_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xd006; // beq 12
         cpu.set_pc(0x1a);
@@ -105,7 +105,7 @@ mod branch_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xd0f9; // beq 12
         cpu.set_pc(0x24);
@@ -122,7 +122,7 @@ mod branch_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.fetched_instruction = 0xf000; // set link_register
         cpu.set_pc(0x1a);

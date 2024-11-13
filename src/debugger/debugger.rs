@@ -1,11 +1,14 @@
 use crossterm::{
-    event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
     io::{self, Stdout},
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{
+        mpsc::{Receiver, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -19,10 +22,10 @@ use tui::{
 
 use crate::{
     arm7tdmi::{
-        cpu::{FlagsRegister, InstructionMode, CPU},
+        cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
         instructions::ARMDecodedInstruction,
     },
-    memory::{self, AccessFlags},
+    memory::AccessFlags,
 };
 
 pub enum DebugCommands {
@@ -33,6 +36,7 @@ pub enum DebugCommands {
 pub fn start_debugger(
     cpu: Arc<Mutex<CPU>>,
     cpu_sender: Sender<DebugCommands>,
+    debug_receiver: Receiver<DebugCommands>,
 ) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
@@ -41,24 +45,22 @@ pub fn start_debugger(
     terminal.clear()?;
     let mut end_debugger = false;
 
-    let mut memory_start_address: u32 = 0;
+    let mut memory_start_address: u32 = 0x0400_0000;
 
     while !end_debugger {
+        if let Ok(data) = debug_receiver.try_recv() {
+            if let DebugCommands::End = data {
+                end_debugger = true;
+            }
+        }
         if event::poll(Duration::from_millis(100))? {
             match read()? {
                 Event::Key(event) => {
-                    if event.modifiers == KeyModifiers::CONTROL && event.code == KeyCode::Char('c')
-                    {
-                        end_debugger = true;
-                        cpu_sender.send(DebugCommands::End).unwrap();
-                    }
-                    else if event.code == KeyCode::Char('n') {
+                    if event.code == KeyCode::Char('n') {
                         cpu_sender.send(DebugCommands::Continue).unwrap();
-                    }
-                    else if event.code == KeyCode::Char('b') {
+                    } else if event.code == KeyCode::Char('b') {
                         memory_start_address -= 0x100;
-                    }
-                    else if event.code == KeyCode::Char('m') {
+                    } else if event.code == KeyCode::Char('m') {
                         memory_start_address += 0x100;
                     }
                 }
@@ -88,6 +90,7 @@ pub fn start_debugger(
                         Constraint::Length(20),
                         Constraint::Length(20),
                         Constraint::Length(20),
+                        Constraint::Length(20),
                         Constraint::Length(50),
                     ]
                     .as_ref(),
@@ -102,11 +105,13 @@ pub fn start_debugger(
 
             let cpu_chunk = horizontal_chunks[0];
             let register_chunk = horizontal_chunks[1];
-            let flags_chunk = horizontal_chunks[2];
+            let register_chunk_2 = horizontal_chunks[2];
+            let flags_chunk = horizontal_chunks[3];
             let memory_chunk = horizontal_chunks_1[0];
 
             draw_cpu(f, cpu_chunk, &cpu.lock().unwrap()).unwrap();
-            draw_registers(f, register_chunk, &cpu.lock().unwrap()).unwrap();
+            draw_registers(f, register_chunk, 0, &cpu.lock().unwrap()).unwrap();
+            draw_registers(f, register_chunk_2, 10, &cpu.lock().unwrap()).unwrap();
             draw_cpsr(f, flags_chunk, &cpu.lock().unwrap()).unwrap();
             draw_memory(f, memory_chunk, &cpu.lock().unwrap(), memory_start_address).unwrap();
         }) else {
@@ -177,15 +182,13 @@ fn draw_cpu(
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
 
-    let inst_mode_text = match cpu.inst_mode {
+    let inst_mode_text = match cpu.get_instruction_mode() {
         InstructionMode::ARM => "ARM",
         InstructionMode::THUMB => "THUMB",
-
     };
-    let inst_mode = 
-        Paragraph::new(format!("Instruction Mode:\n{}", inst_mode_text))
-            .alignment(tui::layout::Alignment::Center)
-            .wrap(Wrap { trim: true });
+    let inst_mode = Paragraph::new(format!("Instruction Mode:\n{}", inst_mode_text))
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
 
     f.render_widget(block, cpu_chunk);
     f.render_widget(pc, sections[1]);
@@ -197,14 +200,16 @@ fn draw_cpu(
 
     Ok(())
 }
+
 fn draw_registers(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,
     register_chunk: Rect,
+    start: usize,
     cpu: &CPU,
 ) -> Result<(), std::io::Error> {
     let register_sections = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(register_chunk);
 
     let block2 = Block::default()
@@ -222,18 +227,34 @@ fn draw_registers(
         .constraints([Constraint::Length(1); 15])
         .split(register_sections[1]);
 
-    for i in 1..register_names.len() {
-        let register_name = Paragraph::new(format!("{}", i - 1))
-            .alignment(tui::layout::Alignment::Center)
-            .wrap(Wrap { trim: true });
-        f.render_widget(register_name, register_names[i]);
-    }
+    let get_register_suffix = |cpu_mode: CPUMode, register_num: usize| {
+        if register_num < 8 || register_num == 15 {
+            return "";
+        } 
+        match cpu_mode {
+            CPUMode::FIQ => "_fiq",
+            CPUMode::USER | CPUMode::SYS => "",
+            _ if register_num < 13 => "",
+            CPUMode::SVC => "_svc",
+            CPUMode::UND => "_und",
+            CPUMode::IRQ => "_irq",
+            CPUMode::ABT => "_abt",
+        }
+    };
 
-    for i in 1..register_names.len() {
-        let register_value = Paragraph::new(format!("{}", cpu.get_register(i as u32 - 1)))
+    for i in (start + 1)..(start + register_names.len()) {
+        if i - 1 > 15 {
+            break;
+        }
+        let register_name = Paragraph::new(format!("{}{}", i - 1, get_register_suffix(cpu.get_cpu_mode(), i - 1)))
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
-        f.render_widget(register_value, register_values[i]);
+        f.render_widget(register_name, register_names[i - start]);
+
+        let register_value = Paragraph::new(format!("{:#x}", cpu.get_register(i as u32 - 1)))
+            .alignment(tui::layout::Alignment::Center)
+            .wrap(Wrap { trim: true });
+        f.render_widget(register_value, register_values[i - start]);
     }
 
     f.render_widget(block2, register_chunk);
@@ -252,17 +273,17 @@ fn draw_cpsr(
 
     let flags_sections = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(flags_chunk);
 
     let flag_names = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1); 5])
+        .constraints([Constraint::Length(1); 8])
         .split(flags_sections[0]);
 
     let flag_values = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1); 5])
+        .constraints([Constraint::Length(1); 8])
         .split(flags_sections[1]);
 
     f.render_widget(
@@ -283,6 +304,20 @@ fn draw_cpsr(
     );
 
     f.render_widget(
+        Paragraph::new(format!("OP MODE")).alignment(Alignment::Center),
+        flag_names[5],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("I MODE")).alignment(Alignment::Center),
+        flag_names[6],
+    );
+    f.render_widget(
+        Paragraph::new(format!("CPSR")).alignment(Alignment::Center),
+        flag_names[7],
+    );
+
+    f.render_widget(
         Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::N))).alignment(Alignment::Center),
         flag_values[1],
     );
@@ -297,6 +332,33 @@ fn draw_cpsr(
     f.render_widget(
         Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::V))).alignment(Alignment::Center),
         flag_values[4],
+    );
+    f.render_widget(
+        Paragraph::new(format!(
+            "{}",
+            match cpu.get_cpu_mode() {
+                CPUMode::FIQ => "FIQ",
+                CPUMode::USER =>"USER",
+                CPUMode::IRQ => "IRQ",
+                CPUMode::SVC => "SVC",
+                CPUMode::ABT => "ABT",
+                CPUMode::UND => "UND",
+                CPUMode::SYS => "SYS",
+            }
+        ))
+        .alignment(Alignment::Center),
+        flag_values[5],
+    );
+    f.render_widget(
+        Paragraph::new(format!("{}", match cpu.get_instruction_mode() {
+            InstructionMode::ARM => "ARM",
+            InstructionMode::THUMB => "THUMB"
+        })).alignment(Alignment::Center),
+        flag_values[6],
+    );
+    f.render_widget(
+        Paragraph::new(format!("{:08x}", cpu.cpsr)).alignment(Alignment::Center),
+        flag_values[7],
     );
     f.render_widget(block, flags_chunk);
 
@@ -371,10 +433,15 @@ fn draw_memory(
                 .read(
                     (start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize,
                     AccessFlags::Privileged,
-                ).data;
+                )
+                .data;
 
             let widget = Paragraph::new(format!("0x{:0>2x}", value))
-                .style(Style::default().fg(if value > 0 { tui::style::Color::Blue } else {tui::style::Color::White}))
+                .style(Style::default().fg(if value > 0 {
+                    tui::style::Color::Blue
+                } else {
+                    tui::style::Color::White
+                }))
                 .alignment(Alignment::Center);
             f.render_widget(widget, memory_grid[column][row]);
         }

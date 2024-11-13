@@ -116,7 +116,7 @@ impl Memory {
     const VRAM: MemorySegment = MemorySegment {
         range: std::ops::Range {
             start: 0x06000000,
-            end: 0x06000000,
+            end: 0x06017FFF,
         },
         wait_states: [1, 1, 2],
         read_access_widths: [true, true, true],
@@ -293,7 +293,7 @@ impl Memory {
         }
     }
 
-    fn can_write(segment: &MemorySegment, access_flags: &AccessFlags, width: AddressWidth) -> bool {
+    fn can_write(segment: &MemorySegment, _access_flags: &AccessFlags, width: AddressWidth) -> bool {
         (*segment).write_access_widths[width as usize]
     }
 

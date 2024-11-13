@@ -1,16 +1,14 @@
 use crate::{
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::bits::Bits,
+    utils::bits::{self, Bits},
 };
 
 use super::{
-    cpu::{FlagsRegister, CPU, PC_REGISTER},
+    cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
     instructions::ALUOperation,
 };
 
-
 impl CPU {
-
     pub fn data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
         let shift_amount;
         let mut cycles = 1;
@@ -39,10 +37,34 @@ impl CPU {
             0x5 => CPU::arm_adc,
             0x6 => CPU::arm_sbc,
             0x7 => CPU::arm_rsc,
-            0x8 => CPU::arm_tst,
-            0x9 => CPU::arm_teq,
-            0xa => CPU::arm_cmp,
-            0xb => CPU::arm_cmn,
+            0x8 => {
+                if instruction.bit_is_set(20) {
+                    CPU::arm_tst
+                } else {
+                    return self.arm_mrs(instruction);
+                }
+            }
+            0x9 => {
+                if instruction.bit_is_set(20) {
+                    CPU::arm_teq
+                } else {
+                    return self.arm_msr(instruction);
+                }
+            }
+            0xa => {
+                if instruction.bit_is_set(20) {
+                    CPU::arm_cmp
+                } else {
+                    return self.arm_mrs(instruction);
+                }
+            }
+            0xb => {
+                if instruction.bit_is_set(20) {
+                    CPU::arm_cmn
+                } else {
+                    return self.arm_msr(instruction);
+                }
+            }
             0xc => CPU::arm_orr,
             0xd => CPU::arm_mov,
             0xe => CPU::arm_bic,
@@ -57,11 +79,7 @@ impl CPU {
         if rd == 15 && set_flags {
             todo!("SPSR corresponding to current mode should be placed in CPSR");
         }
-        let operand2 = self.decode_operand2(
-            instruction,
-            set_flags,
-            shift_amount
-        );
+        let operand2 = self.decode_operand2(instruction, set_flags, shift_amount);
         operation(self, rd, self.get_register(rn), operand2, set_flags);
         if rd == 15 {
             cycles += self.flush_pipeline();
@@ -83,7 +101,12 @@ impl CPU {
         }
         let operand_register = instruction & 0x0000_000F;
         let operand_register_value = self.get_register(operand_register);
-        return self.decode_shifted_register(instruction, shift_amount, operand_register_value, set_flags);
+        return self.decode_shifted_register(
+            instruction,
+            shift_amount,
+            operand_register_value,
+            set_flags,
+        );
     }
 
     pub fn arm_add(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -232,6 +255,74 @@ impl CPU {
         self.set_executed_instruction(format!("MVN {:#x} {:#x}", rd, operand2));
     }
 
+    pub fn arm_mrs(&mut self, instruction: ARMByteCode) -> CYCLES {
+        let rd = (instruction & 0x0000_F000) >> 12;
+        let source_psr = if instruction.bit_is_set(22) {
+            match self.get_current_spsr() {
+                Some(spsr) => *spsr,
+                None => {
+                    return 1;
+                }
+            }
+        } else {
+            self.cpsr
+        };
+
+        self.set_register(rd, source_psr);
+        let psr = if instruction.bit_is_set(22) {
+            "SPSR"
+        } else {
+            "CPSR"
+        };
+
+        self.set_executed_instruction(format!("MRS {} {}", rd, psr));
+        1
+    }
+
+    pub fn arm_msr(&mut self, instruction: ARMByteCode) -> CYCLES {
+        const FLG_MASK: u32 = 0xFF00_0000;
+        const CTL_MASK: u32 = 0x0000_00DF; // can't assign T-bit with this operation
+        let current_cpu_mode = self.get_cpu_mode();
+
+        let operand = if instruction.bit_is_set(25) {
+            // lower 8 bits rotated right by bits instruction[11:8] * 2
+            (instruction & 0x0000_00FF).rotate_right((instruction & 0x0000_0F00) >> 7)
+        } else {
+            self.get_register(instruction & 0x0000_000F)
+        };
+
+        let destination_psr: &mut u32 = if instruction.bit_is_set(22) {
+            match self.get_current_spsr() {
+                Some(spsr) => spsr,
+                None => {
+                    return 1;
+                }
+            }
+        } else {
+            &mut self.cpsr
+        };
+
+        if instruction.bit_is_set(19) {
+            (*destination_psr) &= !FLG_MASK;
+            (*destination_psr) |= operand & FLG_MASK;
+        }
+
+        if instruction.bit_is_set(16) && !matches!(current_cpu_mode, CPUMode::USER) {
+            (*destination_psr) &= !CTL_MASK;
+            (*destination_psr) |= operand & CTL_MASK;
+        }
+
+        let updated_psr = if instruction.bit_is_set(22) {
+            "SPSR"
+        } else {
+            "CPSR"
+        };
+
+        self.set_executed_instruction(format!("MSR {} {:#x}", updated_psr, operand));
+
+        1
+    }
+
     pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags == true {
             self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
@@ -277,9 +368,12 @@ impl CPU {
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use rstest::rstest;
+
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, CPU},
+        arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU},
         memory::{AccessFlags, Memory},
+        types::REGISTER,
     };
 
     #[test]
@@ -591,12 +685,30 @@ mod tests {
         let mem = Arc::clone(&cpu_memory);
         let mut cpu = CPU::new(cpu_memory);
 
-        let _res = mem.lock().unwrap().writeu32(0x3000000, 0xe25f1008, AccessFlags::User);
-        let _res = mem.lock().unwrap().writeu32(0x3000004, 0xe1a00000, AccessFlags::User);
-        let _res = mem.lock().unwrap().writeu32(0x3000008, 0xe1a00000, AccessFlags::User); // nop
-        let _res = mem.lock().unwrap().writeu32(0x300000C, 0xe1a00000, AccessFlags::User); // nop
-        let _res = mem.lock().unwrap().writeu32(0x3000010, 0xe1a00000, AccessFlags::User); // nop
-        let _res = mem.lock().unwrap().writeu32(0x3000014, 0xe281f000, AccessFlags::User); 
+        let _res = mem
+            .lock()
+            .unwrap()
+            .writeu32(0x3000000, 0xe25f1008, AccessFlags::User);
+        let _res = mem
+            .lock()
+            .unwrap()
+            .writeu32(0x3000004, 0xe1a00000, AccessFlags::User);
+        let _res = mem
+            .lock()
+            .unwrap()
+            .writeu32(0x3000008, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem
+            .lock()
+            .unwrap()
+            .writeu32(0x300000C, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem
+            .lock()
+            .unwrap()
+            .writeu32(0x3000010, 0xe1a00000, AccessFlags::User); // nop
+        let _res = mem
+            .lock()
+            .unwrap()
+            .writeu32(0x3000014, 0xe281f000, AccessFlags::User);
 
         cpu.set_pc(0x3000000);
         cpu.execute_cpu_cycle();
@@ -772,5 +884,103 @@ mod tests {
         assert!(cpu.get_flag(FlagsRegister::N) == 0);
         assert!(cpu.get_flag(FlagsRegister::Z) == 0);
         assert!(cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[rstest]
+    #[case(0xe10f2000, 0x000000d3, 2, 0x000000d3)]
+    #[case(0xe10f2000, 0x330000d3, 2, 0x330000d3)]
+    fn mrs_should_move_instruction_from_psr_to_destination_reg(
+        #[case] opcode: u32,
+        #[case] cpsr: u32,
+        #[case] expected_dst: REGISTER,
+        #[case] expected_val: u32,
+    ) {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.cpsr = cpsr;
+
+        cpu.fetched_instruction = opcode;
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.get_register(expected_dst), expected_val);
+    }
+
+    #[rstest]
+    #[case(0xe129f002, CPUMode::SVC, 0x000000d3, 2, 0x000000d3)] //msr CPSR_fc, r2
+    #[case(0xe129f002, CPUMode::SVC, 0x00FFFFd3, 2, 0x000000d3)] //msr CPSR_fc, r2
+    #[case(0xe129f002, CPUMode::SVC, 0xf0FFFFf3, 2, 0xf00000d3)] //msr CPSR_fc, r2 
+                                                                 //thumb bit should not get used
+    #[case(0xe121f002, CPUMode::SVC, 0xF0FFFFd3, 2, 0x000000d3)] //msr CPSR_c, r2
+    #[case(0xe128f002, CPUMode::SVC, 0xF0FFFFFF, 2, 0xF00000d3)] //msr CPSR_f, r2
+    #[case(0xe129f002, CPUMode::USER, 0xF0FFFFd3, 2, 0xF00000d0)] //msr CPSR_fc, r2
+                                                                  // shouldn't set C bits
+    fn msr_should_move_psr_from_register_to_cpsr(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] psr_val: u32,
+        #[case] register: u32,
+        #[case] expected_val: u32,
+    ) {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_mode(mode);
+        cpu.set_register(register, psr_val);
+
+        cpu.fetched_instruction = opcode;
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.cpsr, expected_val);
+    }
+
+    #[rstest]
+    #[case(0xe169f002, CPUMode::SVC, 0x000000df, 2, 0x000000df)] // msr SPSR r2
+    #[case(0xe169f002, CPUMode::SVC, 0x000000df, 2, 0x000000df)]
+    #[case(0xe169f002, CPUMode::ABT, 0xF0FFFFdf, 2, 0xf00000df)]
+    fn msr_should_move_psr_from_register_to_spsr(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] psr_val: u32,
+        #[case] register: u32,
+        #[case] expected_val: u32,
+    ) {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_mode(mode);
+        cpu.set_register(register, psr_val);
+
+        cpu.fetched_instruction = opcode;
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(*cpu.get_current_spsr().unwrap(), expected_val);
+    }
+
+    #[rstest]
+    #[case(0xe329f0d0, CPUMode::SVC, 0x000000d0)]  // msr CPSR, 0x24
+    #[case(0xe328f20d, CPUMode::SVC, 0xd00000d3)]  // msr CPSR, 0xd0000000
+    fn msr_should_move_imm_to_cpsr(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] expected_val: u32,
+    ) {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+
+        cpu.set_mode(mode);
+
+        cpu.fetched_instruction = opcode;
+        cpu.execute_cpu_cycle();
+        cpu.execute_cpu_cycle();
+
+        assert_eq!(cpu.cpsr, expected_val);
     }
 }

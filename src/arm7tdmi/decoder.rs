@@ -13,7 +13,7 @@ pub enum Instruction {
 
 impl CPU {
     pub fn decode_instruction(&mut self, instruction: ARMByteCode) {
-        self.decoded_instruction = match self.inst_mode {
+        self.decoded_instruction = match self.get_instruction_mode() {
             InstructionMode::ARM => Some(self.decode_arm_instruction(instruction)),
             InstructionMode::THUMB => Some(self.decode_thumb_instruction(instruction)),
         };
@@ -966,7 +966,7 @@ mod thumb_decoder_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.decode_instruction(instruction);
         assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
@@ -981,7 +981,7 @@ mod thumb_decoder_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.decode_instruction(instruction);
         assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
@@ -996,7 +996,7 @@ mod thumb_decoder_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.decode_instruction(instruction);
         assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
@@ -1010,7 +1010,7 @@ mod thumb_decoder_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.decode_instruction(instruction);
         assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);
@@ -1024,7 +1024,7 @@ mod thumb_decoder_tests {
         let memory = Memory::new().unwrap();
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
-        cpu.inst_mode = InstructionMode::THUMB;
+        cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.decode_instruction(instruction);
         assert!(cpu.decoded_instruction.unwrap().executable != CPU::arm_nop);

@@ -1,21 +1,15 @@
 .global _main
 _main:
-    subs r1, r15, #8
-    nop;
-    nop;
-    nop;
-    add r15, r1, #0
-    bx r0;
-    nop;
-    nop;
 
-target:
-    .thumb
-    bl destination
+msr CPSR_f, #0xd0000000
+bx r3;
+mov ip, #223
+mov r1, #0xF
+mov r13, #0xFF
+orr r2, ip, r1, LSL#28 
+mrs r2, CPSR
+
+
+
+bx_dest:
     nop;
-    nop
-
-destination:
-    .thumb
-    mov r1, r2
-

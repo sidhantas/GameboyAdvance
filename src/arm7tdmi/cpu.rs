@@ -24,11 +24,13 @@ pub enum InstructionMode {
 }
 
 pub enum CPUMode {
-    USER,
-    FIQ, // Fast Interrupt
-    SVC, // Supervisor
-    ABT, // Abort
-    UND, // Undefined
+    USER = 0b10000,
+    FIQ = 0b10001, // Fast Interrupt
+    IRQ = 0b10010, // IRQ
+    SVC = 0b10011, // Supervisor
+    ABT = 0b10111, // Abort
+    UND = 0b11011, // Undefined
+    SYS = 0b11111, // System
 }
 
 #[repr(u8)]
@@ -40,9 +42,12 @@ pub enum FlagsRegister {
 }
 
 pub struct CPU {
-    registers: [WORD; 31],
-    pub inst_mode: InstructionMode,
-    pub cpu_mode: CPUMode,
+    registers: [WORD; 16],
+    registers_fiq: [WORD; 8],
+    registers_svc: [WORD; 2],
+    registers_abt: [WORD; 2],
+    registers_irq: [WORD; 2],
+    registers_und: [WORD; 2],
     pub memory: Arc<Mutex<Memory>>,
     pub decoded_instruction: Option<ARMDecodedInstruction>,
     pub fetched_instruction: ARMByteCode,
@@ -95,15 +100,21 @@ impl CPU {
 
     pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
         CPU {
-            registers: [0; 31],
-            inst_mode: InstructionMode::ARM,
-            cpu_mode: CPUMode::USER,
+            registers: [0; 16],
             fetched_instruction: 0,
             decoded_instruction: None,
             memory,
             executed_instruction: String::from(""),
-            cpsr: 0,
+            // start in supervisor mode
+            // interrupts are disabled
+            // start in arm mode
+            cpsr: 0b00000000_00000000_00000000_11010011, 
             spsr: [0; 5],
+            registers_fiq: [0; 8],
+            registers_svc: [0; 2],
+            registers_abt: [0; 2],
+            registers_irq: [0; 2],
+            registers_und: [0; 2],
         }
     }
 
@@ -140,20 +151,50 @@ impl CPU {
     }
 
     pub fn increment_pc(&mut self) {
-        match self.inst_mode {
+        match self.get_instruction_mode() {
             InstructionMode::ARM => self.registers[PC_REGISTER] += 4,
             InstructionMode::THUMB => self.registers[PC_REGISTER] += 2,
         }
     }
 
+    fn get_register_ref(&self, register_num: REGISTER) -> &WORD {
+        if register_num < 8 || register_num == 15 {
+            return &self.registers[register_num as usize];
+        } 
+        match self.get_cpu_mode() {
+            CPUMode::FIQ => &self.registers_fiq[(register_num - 8) as usize],
+            CPUMode::USER | CPUMode::SYS => &self.registers[register_num as usize],
+            _ if register_num < 13 => &self.registers[register_num as usize],
+            CPUMode::SVC => &self.registers_svc[(register_num - 13) as usize],
+            CPUMode::UND => &self.registers_und[(register_num - 13) as usize],
+            CPUMode::IRQ => &self.registers_irq[(register_num - 13) as usize],
+            CPUMode::ABT => &self.registers_abt[(register_num - 13) as usize],
+        }
+    }
+
     pub fn get_register(&self, register_num: REGISTER) -> WORD {
         assert!(register_num < 16);
-        self.registers[register_num as usize]
+        *self.get_register_ref(register_num)
+    }
+
+    fn get_register_ref_mut(&mut self, register_num: REGISTER) -> &mut WORD {
+        if register_num < 8 || register_num == 15 {
+            return &mut self.registers[register_num as usize];
+        } 
+        match self.get_cpu_mode() {
+            CPUMode::FIQ => &mut self.registers_fiq[(register_num - 8) as usize],
+            CPUMode::USER | CPUMode::SYS => &mut self.registers[register_num as usize],
+            _ if register_num < 13 => &mut self.registers[register_num as usize],
+            CPUMode::SVC => &mut self.registers_svc[(register_num - 13) as usize],
+            CPUMode::UND => &mut self.registers_und[(register_num - 13) as usize],
+            CPUMode::IRQ => &mut self.registers_irq[(register_num - 13) as usize],
+            CPUMode::ABT => &mut self.registers_abt[(register_num - 13) as usize],
+        }
     }
 
     pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
         assert!(register_num < 16);
-        self.registers[register_num as usize] = value;
+        *self.get_register_ref_mut(register_num) = value;
     }
 
     #[inline(always)]
@@ -171,6 +212,51 @@ impl CPU {
         self.cpsr.get_bit(flag as u8)
     }
 
+    #[inline(always)]
+    pub fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
+        match instruction_mode {
+            InstructionMode::ARM => self.cpsr.reset_bit(5),
+            InstructionMode::THUMB => self.cpsr.set_bit(5)
+        }
+    }
+
+    #[inline(always)]
+    pub fn get_instruction_mode(&self) -> InstructionMode {
+        if self.cpsr.bit_is_set(5) {
+            return InstructionMode::THUMB;
+        }
+        return InstructionMode::ARM;
+    }
+
+    pub fn set_mode(&mut self, mode: CPUMode) {
+        self.cpsr &= !0x1F; // clear bottom 5 bits
+        self.cpsr |= mode as u32;
+    }
+
+    pub fn get_cpu_mode(&self) -> CPUMode {
+        match (self.cpsr & 0x0000_001F) as u8 {
+            x if x == CPUMode::USER as u8 => CPUMode::USER,
+            x if x == CPUMode::FIQ as u8 => CPUMode::FIQ,
+            x if x == CPUMode::IRQ as u8 => CPUMode::IRQ,
+            x if x == CPUMode::SVC as u8 => CPUMode::SVC,
+            x if x == CPUMode::ABT as u8 => CPUMode::ABT,
+            x if x == CPUMode::UND as u8 => CPUMode::UND,
+            x if x == CPUMode::SYS as u8 => CPUMode::SYS,
+            _ => panic!("Impossible cpsr value")
+        }
+    }
+
+    pub fn get_current_spsr(&mut self) -> Option<&mut WORD> {
+        match self.get_cpu_mode() {
+            CPUMode::FIQ => Some(&mut self.spsr[0]),
+            CPUMode::SVC => Some(&mut self.spsr[1]),
+            CPUMode::ABT => Some(&mut self.spsr[2]),
+            CPUMode::IRQ => Some(&mut self.spsr[3]),
+            CPUMode::UND => Some(&mut self.spsr[4]),
+            _ => None
+        }
+    }
+
     pub fn set_flag_from_bit(&mut self, flag: FlagsRegister, bit: u8) {
         assert!(bit == 0 || bit == 1);
         if bit == 0 {
@@ -184,7 +270,7 @@ impl CPU {
         let mut cycles = 0;
         let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            match self.inst_mode {
+            match self.get_instruction_mode() {
                 InstructionMode::ARM => memory.readu32(self.get_pc() as usize, AccessFlags::User),
                 InstructionMode::THUMB => memory
                     .readu16(self.get_pc() as usize, AccessFlags::User)
@@ -199,7 +285,7 @@ impl CPU {
     }
 
     pub fn get_access_mode(&self) -> AccessFlags {
-        match self.cpu_mode {
+        match self.get_cpu_mode() {
             CPUMode::USER => AccessFlags::User,
             _ => AccessFlags::Privileged,
         }
@@ -296,7 +382,7 @@ impl CPU {
 mod cpu_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{memory::Memory, utils::bits::Bits};
+    use crate::{arm7tdmi::cpu::CPUMode, memory::Memory, utils::bits::Bits};
 
     use super::CPU;
 
@@ -319,5 +405,14 @@ mod cpu_tests {
         cpu.reset_flag(super::FlagsRegister::C);
         assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::C as u8) == false);
         assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::N as u8));
+    }
+
+    #[test]
+    fn cpu_starts_in_svc_mode() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let cpu = CPU::new(memory);
+
+        assert!(matches!(cpu.get_cpu_mode(), CPUMode::SVC));
     }
 }
