@@ -1,9 +1,9 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER},
+    arm7tdmi::cpu::{InstructionMode, CPU, LINK_REGISTER, PC_REGISTER},
     types::{CYCLES, REGISTER, WORD},
-    utils::bits::{sign_extend, Bits},
+    utils::bits::Bits,
 };
 
 impl CPU {
@@ -123,7 +123,7 @@ impl CPU {
 
         let mut register_list: Vec<REGISTER> = Vec::new();
 
-        for i in 0..7 {
+        for i in 0..8 {
             if instruction.bit_is_set(i) {
                 register_list.push(i as REGISTER);
             }

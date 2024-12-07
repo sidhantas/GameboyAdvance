@@ -29,7 +29,7 @@ use crate::{
 };
 
 pub enum DebugCommands {
-    Continue,
+    Continue(u32),
     End,
 }
 
@@ -45,19 +45,17 @@ pub fn start_debugger(
     terminal.clear()?;
     let mut end_debugger = false;
 
-    let mut memory_start_address: u32 = 0x0400_0000;
+    let mut memory_start_address: u32 = 0x0300_0000;
 
     while !end_debugger {
-        if let Ok(data) = debug_receiver.try_recv() {
-            if let DebugCommands::End = data {
-                end_debugger = true;
-            }
+        if let Ok(DebugCommands::End) = debug_receiver.try_recv() {
+            end_debugger = true;
         }
-        if event::poll(Duration::from_millis(100))? {
+        if event::poll(Duration::from_millis(10))? {
             match read()? {
                 Event::Key(event) => {
                     if event.code == KeyCode::Char('n') {
-                        cpu_sender.send(DebugCommands::Continue).unwrap();
+                        cpu_sender.send(DebugCommands::Continue(1)).unwrap();
                     } else if event.code == KeyCode::Char('b') {
                         memory_start_address -= 0x100;
                     } else if event.code == KeyCode::Char('m') {
@@ -182,11 +180,7 @@ fn draw_cpu(
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
 
-    let inst_mode_text = match cpu.get_instruction_mode() {
-        InstructionMode::ARM => "ARM",
-        InstructionMode::THUMB => "THUMB",
-    };
-    let inst_mode = Paragraph::new(format!("Instruction Mode:\n{}", inst_mode_text))
+    let inst_mode = Paragraph::new(format!("{:#x}", cpu.executed_instruction_hex))
         .alignment(tui::layout::Alignment::Center)
         .wrap(Wrap { trim: true });
 

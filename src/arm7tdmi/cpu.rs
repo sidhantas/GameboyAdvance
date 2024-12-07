@@ -50,6 +50,7 @@ pub struct CPU {
     registers_und: [WORD; 2],
     pub memory: Arc<Mutex<Memory>>,
     pub decoded_instruction: Option<ARMDecodedInstruction>,
+    pub executed_instruction_hex: ARMByteCode,
     pub fetched_instruction: ARMByteCode,
     pub executed_instruction: String,
     pub cpsr: WORD,
@@ -64,15 +65,18 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
                 DebugCommands::End => {
                     break;
                 }
-                DebugCommands::Continue => {
-                    instructions_left += 1;
+                DebugCommands::Continue(num) => {
+                    instructions_left += num;
                 }
             },
             Err(Disconnected) => break,
             Err(Empty) => {}
         }
+        let mut cpu = cpu.lock().unwrap();
+//        while cpu.get_pc() < 0x1000 {
+//            cpu.execute_cpu_cycle();
+//        }
         if instructions_left > 0 {
-            let mut cpu = cpu.lock().unwrap();
             cpu.execute_cpu_cycle();
             instructions_left -= 1;
         }
@@ -81,12 +85,10 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
 
 impl CPU {
     pub fn execute_cpu_cycle(&mut self) {
-        match self.decoded_instruction {
-            Some(decoded_instruction) => {
-                self.decoded_instruction = None;
-                (decoded_instruction.executable)(self, decoded_instruction.instruction);
-            }
-            _ => {}
+        if let Some(decoded_instruction) = self.decoded_instruction {
+            self.executed_instruction_hex = decoded_instruction.instruction;
+            self.decoded_instruction = None;
+            (decoded_instruction.executable)(self, decoded_instruction.instruction);
         }
 
         match self.decoded_instruction {
@@ -103,12 +105,13 @@ impl CPU {
             registers: [0; 16],
             fetched_instruction: 0,
             decoded_instruction: None,
+            executed_instruction_hex: 0,
             memory,
             executed_instruction: String::from(""),
             // start in supervisor mode
             // interrupts are disabled
             // start in arm mode
-            cpsr: 0b00000000_00000000_00000000_11010011, 
+            cpsr: 0b00000000_00000000_00000000_11010011,
             spsr: [0; 5],
             registers_fiq: [0; 8],
             registers_svc: [0; 2],
@@ -160,7 +163,7 @@ impl CPU {
     fn get_register_ref(&self, register_num: REGISTER) -> &WORD {
         if register_num < 8 || register_num == 15 {
             return &self.registers[register_num as usize];
-        } 
+        }
         match self.get_cpu_mode() {
             CPUMode::FIQ => &self.registers_fiq[(register_num - 8) as usize],
             CPUMode::USER | CPUMode::SYS => &self.registers[register_num as usize],
@@ -180,7 +183,7 @@ impl CPU {
     fn get_register_ref_mut(&mut self, register_num: REGISTER) -> &mut WORD {
         if register_num < 8 || register_num == 15 {
             return &mut self.registers[register_num as usize];
-        } 
+        }
         match self.get_cpu_mode() {
             CPUMode::FIQ => &mut self.registers_fiq[(register_num - 8) as usize],
             CPUMode::USER | CPUMode::SYS => &mut self.registers[register_num as usize],
@@ -216,7 +219,7 @@ impl CPU {
     pub fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
         match instruction_mode {
             InstructionMode::ARM => self.cpsr.reset_bit(5),
-            InstructionMode::THUMB => self.cpsr.set_bit(5)
+            InstructionMode::THUMB => self.cpsr.set_bit(5),
         }
     }
 
@@ -242,7 +245,7 @@ impl CPU {
             x if x == CPUMode::ABT as u8 => CPUMode::ABT,
             x if x == CPUMode::UND as u8 => CPUMode::UND,
             x if x == CPUMode::SYS as u8 => CPUMode::SYS,
-            _ => panic!("Impossible cpsr value")
+            _ => panic!("Impossible cpsr value"),
         }
     }
 
@@ -253,7 +256,7 @@ impl CPU {
             CPUMode::ABT => Some(&mut self.spsr[2]),
             CPUMode::IRQ => Some(&mut self.spsr[3]),
             CPUMode::UND => Some(&mut self.spsr[4]),
-            _ => None
+            _ => None,
         }
     }
 

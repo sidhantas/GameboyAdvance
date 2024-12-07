@@ -53,8 +53,8 @@ impl CPU {
     }
 
     pub fn thumb_set_link_register(&mut self, instruction: u32) -> CYCLES {
-        
-        self.set_register(LINK_REGISTER, self.get_pc() + ((instruction & 0x07FF) << 12));
+        let value = sign_extend(self.get_pc() + ((instruction & 0x07FF) << 12), 23);
+        self.set_register(LINK_REGISTER, value);
         
         self.set_executed_instruction(format!("SET LR: {:#x}", self.get_pc()));
         1
