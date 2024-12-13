@@ -1,5 +1,5 @@
 use crossterm::{
-    event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -52,17 +52,14 @@ pub fn start_debugger(
             end_debugger = true;
         }
         if event::poll(Duration::from_millis(10))? {
-            match read()? {
-                Event::Key(event) => {
-                    if event.code == KeyCode::Char('n') {
-                        cpu_sender.send(DebugCommands::Continue(1)).unwrap();
-                    } else if event.code == KeyCode::Char('b') {
-                        memory_start_address -= 0x100;
-                    } else if event.code == KeyCode::Char('m') {
-                        memory_start_address += 0x100;
-                    }
+            if let Event::Key(event) = read()? {
+                match event.code {
+                    KeyCode::Char('n') => cpu_sender.send(DebugCommands::Continue(1)).unwrap(),
+                    KeyCode::Char('N') => cpu_sender.send(DebugCommands::Continue(0x100)).unwrap(),
+                    KeyCode::Char('M') => memory_start_address -= 0x100,
+                    KeyCode::Char('m') => memory_start_address += 0x100,
+                    _ => {}
                 }
-                _ => {}
             }
         }
 
@@ -224,7 +221,7 @@ fn draw_registers(
     let get_register_suffix = |cpu_mode: CPUMode, register_num: usize| {
         if register_num < 8 || register_num == 15 {
             return "";
-        } 
+        }
         match cpu_mode {
             CPUMode::FIQ => "_fiq",
             CPUMode::USER | CPUMode::SYS => "",
@@ -240,9 +237,13 @@ fn draw_registers(
         if i - 1 > 15 {
             break;
         }
-        let register_name = Paragraph::new(format!("{}{}", i - 1, get_register_suffix(cpu.get_cpu_mode(), i - 1)))
-            .alignment(tui::layout::Alignment::Center)
-            .wrap(Wrap { trim: true });
+        let register_name = Paragraph::new(format!(
+            "{}{}",
+            i - 1,
+            get_register_suffix(cpu.get_cpu_mode(), i - 1)
+        ))
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
         f.render_widget(register_name, register_names[i - start]);
 
         let register_value = Paragraph::new(format!("{:#x}", cpu.get_register(i as u32 - 1)))
@@ -332,7 +333,7 @@ fn draw_cpsr(
             "{}",
             match cpu.get_cpu_mode() {
                 CPUMode::FIQ => "FIQ",
-                CPUMode::USER =>"USER",
+                CPUMode::USER => "USER",
                 CPUMode::IRQ => "IRQ",
                 CPUMode::SVC => "SVC",
                 CPUMode::ABT => "ABT",
@@ -344,10 +345,14 @@ fn draw_cpsr(
         flag_values[5],
     );
     f.render_widget(
-        Paragraph::new(format!("{}", match cpu.get_instruction_mode() {
-            InstructionMode::ARM => "ARM",
-            InstructionMode::THUMB => "THUMB"
-        })).alignment(Alignment::Center),
+        Paragraph::new(format!(
+            "{}",
+            match cpu.get_instruction_mode() {
+                InstructionMode::ARM => "ARM",
+                InstructionMode::THUMB => "THUMB",
+            }
+        ))
+        .alignment(Alignment::Center),
         flag_values[6],
     );
     f.render_widget(
