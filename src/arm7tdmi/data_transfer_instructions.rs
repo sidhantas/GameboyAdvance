@@ -3,7 +3,7 @@ use std::mem::size_of;
 use crate::{
     memory::{self, AccessFlags, MemoryFetch},
     types::{CYCLES, REGISTER, WORD},
-    utils::bits::{sign_extend, Bits},
+    utils::{bits::{sign_extend, Bits}, utils::print_vec},
 };
 
 use super::cpu::{CPU, PC_REGISTER};
@@ -331,6 +331,13 @@ impl CPU {
                 curr_address += size_of::<WORD>()
             }
         }
+
+        self.set_executed_instruction(format!(
+            "STM{} {:#x}\n{}",
+            if pre_indexed_addressing { "IB" } else { "IA" },
+            base_address,
+            print_vec(register_list)
+        ));
 
         cycles
     }
@@ -886,11 +893,17 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(
-            mem.lock().unwrap().readu32(address as usize, AccessFlags::User).data,
+            mem.lock()
+                .unwrap()
+                .readu32(address as usize, AccessFlags::User)
+                .data,
             123
         );
         assert_eq!(
-            mem.lock().unwrap().readu32(address as usize + 4, AccessFlags::User).data,
+            mem.lock()
+                .unwrap()
+                .readu32(address as usize + 4, AccessFlags::User)
+                .data,
             456
         );
     }
@@ -914,11 +927,17 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
 
         assert_eq!(
-            mem.lock().unwrap().readu32(address as usize + 4, AccessFlags::User).data,
+            mem.lock()
+                .unwrap()
+                .readu32(address as usize + 4, AccessFlags::User)
+                .data,
             123
         );
         assert_eq!(
-            mem.lock().unwrap().readu32(address as usize + 8, AccessFlags::User).data,
+            mem.lock()
+                .unwrap()
+                .readu32(address as usize + 8, AccessFlags::User)
+                .data,
             456
         );
         assert_eq!(cpu.get_register(5), address + 8);

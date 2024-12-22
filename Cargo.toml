@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 [profile.dev]
 overflow-checks = false
+panic = "abort"
 [dependencies]
 crossterm = "0.27.0"
 ctrlc = "3.4.4"
@@ -12,4 +13,3 @@ num-traits = "0.2.19"
 rstest = "0.23.0"
 sdl2 = "0.37.0"
 tui = "0.19.0"
-

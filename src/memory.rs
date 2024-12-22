@@ -116,7 +116,7 @@ impl Memory {
     const VRAM: MemorySegment = MemorySegment {
         range: std::ops::Range {
             start: 0x06000000,
-            end: 0x06017FFF,
+            end: 0x06018000,
         },
         wait_states: [1, 1, 2],
         read_access_widths: [true, true, true],

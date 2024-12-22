@@ -1,6 +1,6 @@
 use crate::{
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::bits::{self, Bits},
+    utils::bits::Bits,
 };
 
 use super::{
@@ -210,11 +210,11 @@ impl CPU {
 
     #[allow(unused)]
     pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
+        self.set_executed_instruction(format!("CMP {:#x} {:#x}", operand1, operand2));
         let operand2 = !operand2 + 1;
         let result = operand1 + operand2; // use two's complement to make setting flags easier
 
         self.set_arithmetic_flags(result, operand1, operand2, 0, true);
-        self.set_executed_instruction(format!("CMP {:#x} {:#x}", operand1, operand2));
     }
 
     #[allow(unused)]

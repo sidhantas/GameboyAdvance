@@ -195,8 +195,8 @@ impl CPU {
         } else {
             self.reset_flag(FlagsRegister::Z);
         }
-        self.set_executed_instruction(format!("MOV {} {:#x}", rd, imm));
         self.set_register(rd, imm.into());
+        self.set_executed_instruction(format!("MOV {} {:#x}", rd, imm));
     }
 
     fn thumb_cmp_imm(&mut self, rd: REGISTER, imm: u8) {
@@ -204,6 +204,7 @@ impl CPU {
         let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
         let result = minuend + imm;
         self.set_arithmetic_flags(result, minuend, imm, 0, true);
+        self.set_executed_instruction(format!("CMP {} {:#x}", rd, imm));
     }
 
     fn thumb_add_imm(&mut self, rd: REGISTER, imm: u8) {
@@ -220,6 +221,7 @@ impl CPU {
         let result = minuend + imm;
         self.set_arithmetic_flags(result, minuend, imm, 0, true);
         self.set_register(rd, result);
+        self.set_executed_instruction(format!("SUB {} {:#x}", rd, imm));
     }
 
     pub fn thumb_alu_instructions(&mut self, instruction: u32) -> CYCLES {

@@ -4,13 +4,10 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
-    io::{self, Stdout},
-    sync::{
+    cmp::max, io::{self, Stdout}, sync::{
         mpsc::{Receiver, Sender},
         Arc, Mutex,
-    },
-    thread,
-    time::Duration,
+    }, thread, time::Duration
 };
 use tui::{
     backend::CrosstermBackend,
@@ -28,9 +25,31 @@ use crate::{
     memory::AccessFlags,
 };
 
+use super::terminal_commands::{parse_command, TerminalHistoryEntry};
+
 pub enum DebugCommands {
     Continue(u32),
     End,
+}
+
+pub struct Debugger {
+    pub memory_start_address: u32,
+    pub cpu_sender: Sender<DebugCommands>,
+    pub terminal_buffer: String,
+    pub terminal_history: Vec<TerminalHistoryEntry>,
+    pub end_debugger: bool,
+}
+
+impl Debugger {
+    fn new(cpu_sender: Sender<DebugCommands>) -> Self {
+        Self {
+            memory_start_address: 0,
+            cpu_sender,
+            terminal_buffer: String::new(),
+            terminal_history: Vec::new(),
+            end_debugger: false
+        }
+    }
 }
 
 pub fn start_debugger(
@@ -43,23 +62,60 @@ pub fn start_debugger(
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
-    let mut end_debugger = false;
+    let mut terminal_enabled = false;
 
-    let mut memory_start_address: u32 = 0x0300_0000;
+    let mut debugger = Debugger::new(cpu_sender.clone());
 
-    while !end_debugger {
+    let mut memory_start_address: u32 = 0x3007_FFA;
+
+    while !debugger.end_debugger {
         if let Ok(DebugCommands::End) = debug_receiver.try_recv() {
-            end_debugger = true;
+            debugger.end_debugger = true;
         }
-        if event::poll(Duration::from_millis(10))? {
-            if let Event::Key(event) = read()? {
-                match event.code {
-                    KeyCode::Char('n') => cpu_sender.send(DebugCommands::Continue(1)).unwrap(),
-                    KeyCode::Char('N') => cpu_sender.send(DebugCommands::Continue(0x100)).unwrap(),
-                    KeyCode::Char('M') => memory_start_address -= 0x100,
-                    KeyCode::Char('m') => memory_start_address += 0x100,
-                    _ => {}
+        loop {
+            if event::poll(Duration::from_millis(10))? {
+                if let Event::Key(event) = read()? {
+                    if let KeyCode::Char('t') = event.code {
+                        if event.modifiers == KeyModifiers::CONTROL {
+                            terminal_enabled = !terminal_enabled;
+                            continue;
+                        }
+                    }
+                    if terminal_enabled {
+                        match event.code {
+                            KeyCode::Backspace => {
+                                debugger.terminal_buffer.pop();
+                            }
+                            KeyCode::Char(c) => debugger.terminal_buffer.push(c),
+                            KeyCode::Enter => {
+                                match parse_command(&mut debugger) {
+                                    Ok(_) => debugger.terminal_history.push(TerminalHistoryEntry { command: debugger.terminal_buffer.clone(), result: "Success!".into()}),
+                                    Err(err) =>debugger.terminal_history.push(TerminalHistoryEntry { command: debugger.terminal_buffer.clone(), result: format!("{}", err)}) 
+                                };
+                                debugger.terminal_buffer.clear();
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        match event.code {
+                            KeyCode::Char('n') => {
+                                cpu_sender.send(DebugCommands::Continue(1)).unwrap()
+                            }
+                            KeyCode::Char('N') => {
+                                cpu_sender.send(DebugCommands::Continue(0x80)).unwrap()
+                            }
+                            KeyCode::Char('M') => memory_start_address -= 0x100,
+                            KeyCode::Char('m') => memory_start_address += 0x100,
+                            KeyCode::Char('q') => {
+                                cpu_sender.send(DebugCommands::End).unwrap();
+                                debugger.end_debugger = true;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
+            } else {
+                break;
             }
         }
 
@@ -95,7 +151,14 @@ pub fn start_debugger(
             let horizontal_chunks_1 = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
-                .constraints([Constraint::Length(110), Constraint::Length(50)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(110),
+                        Constraint::Length(40),
+                        Constraint::Length(50),
+                    ]
+                    .as_ref(),
+                )
                 .split(vertical_chunks[1]);
 
             let cpu_chunk = horizontal_chunks[0];
@@ -103,12 +166,17 @@ pub fn start_debugger(
             let register_chunk_2 = horizontal_chunks[2];
             let flags_chunk = horizontal_chunks[3];
             let memory_chunk = horizontal_chunks_1[0];
+            let terminal_chunk = horizontal_chunks_1[1];
 
-            draw_cpu(f, cpu_chunk, &cpu.lock().unwrap()).unwrap();
-            draw_registers(f, register_chunk, 0, &cpu.lock().unwrap()).unwrap();
-            draw_registers(f, register_chunk_2, 10, &cpu.lock().unwrap()).unwrap();
-            draw_cpsr(f, flags_chunk, &cpu.lock().unwrap()).unwrap();
-            draw_memory(f, memory_chunk, &cpu.lock().unwrap(), memory_start_address).unwrap();
+            {
+                let cpu = &cpu.lock().unwrap();
+                draw_cpu(f, cpu_chunk, cpu).unwrap();
+                draw_registers(f, register_chunk, 0, cpu).unwrap();
+                draw_registers(f, register_chunk_2, 10, cpu).unwrap();
+                draw_cpsr(f, flags_chunk, cpu).unwrap();
+                draw_memory(f, memory_chunk, cpu, memory_start_address).unwrap();
+                draw_terminal(f, terminal_chunk, terminal_enabled, &debugger).unwrap();
+            }
         }) else {
             break;
         };
@@ -144,7 +212,7 @@ fn draw_cpu(
             Constraint::Length(1),
             Constraint::Length(2),
             Constraint::Length(2),
-            Constraint::Length(2),
+            Constraint::Length(3),
             Constraint::Length(2),
         ])
         .split(cpu_chunk);
@@ -450,5 +518,47 @@ fn draw_memory(
 
     f.render_widget(border, memory_sections[0]);
     f.render_widget(block, memory_chunk);
+    Ok(())
+}
+
+fn draw_terminal(
+    f: &mut Frame<'_, CrosstermBackend<Stdout>>,
+    terminal_chunk: Rect,
+    terminal_enabled: bool,
+    debugger: &Debugger,
+) -> Result<(), std::io::Error> {
+    let block = Block::default()
+        .title("Terminal")
+        .title_alignment(tui::layout::Alignment::Center)
+        .borders(Borders::ALL);
+
+    let terminal_sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(90), Constraint::Length(3)])
+        .split(terminal_chunk);
+
+    let border = Block::default().borders(Borders::ALL);
+    if terminal_enabled {
+        let input = Paragraph::new(format!(" > {}", debugger.terminal_buffer));
+        f.render_widget(input, terminal_sections[1]);
+    }
+
+    let mut output = String::new();
+    for entry in &debugger.terminal_history {
+        output.push_str(&entry.command);
+        output.push_str("\n");
+        output.push_str(&entry.result);
+        output.push_str("\n");
+    }
+
+    let num_lines = output.split("\n").collect::<Vec<&str>>().len();
+    let output: Vec<&str> = output
+        .split("\n")
+        .skip(max(terminal_sections[0].y as usize, num_lines) - terminal_sections[0].y as usize)
+        .collect();
+    let output = Paragraph::new(output.join("\n")).block(border);
+
+    f.render_widget(output, terminal_sections[0]);
+    f.render_widget(block, terminal_chunk);
     Ok(())
 }

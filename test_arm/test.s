@@ -1,15 +1,23 @@
 .global _main
 _main:
-
-msr CPSR_f, #0xd0000000
-bx r3;
-mov ip, #223
-mov r1, #0xF
-mov r13, #0xFF
-orr r2, ip, r1, LSL#28 
-mrs r2, CPSR
+b  b_dest
 
 
+.org 0x9c2
+main_2:
+nop;
+nop;
+nop;
+add r2, r3, #1
 
+.org 0x1930
+b_dest:
+
+ldr r2, =bx_dest
+add r2, r2, #1
+bx r2
 bx_dest:
+.thumb
+    add r1, r1, r1
+    bl main_2;
     nop;

@@ -1,5 +1,3 @@
-use num_traits::sign;
-
 use crate::{arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, types::CYCLES, utils::bits::{sign_extend, Bits}};
 
 impl CPU {
@@ -32,12 +30,13 @@ impl CPU {
             _ => panic!("Impossible/Undefined condition code")
         };
 
+        let destination = self.get_pc() + sign_extend(offset, 8);
         if condition_passed {
-            self.set_pc(self.get_pc() + sign_extend(offset, 8));
+            self.set_pc(destination);
             cycles += self.flush_pipeline();
         }
 
-        self.set_executed_instruction(format!("B C {:#x}", offset));
+        self.set_executed_instruction(format!("B {:#b} {:#x}", condition, destination));
 
         cycles
     }
@@ -53,15 +52,17 @@ impl CPU {
     }
 
     pub fn thumb_set_link_register(&mut self, instruction: u32) -> CYCLES {
-        let value = sign_extend(self.get_pc() + ((instruction & 0x07FF) << 12), 23);
+        let value = self.get_pc() + sign_extend((instruction & 0x07FF) << 12, 22);
+        self.set_executed_instruction(format!("SET LR: {:#x}", value));
         self.set_register(LINK_REGISTER, value);
         
-        self.set_executed_instruction(format!("SET LR: {:#x}", self.get_pc()));
         1
     }
 
     pub fn thumb_long_branch_with_link(&mut self, instruction: u32) -> CYCLES {
-
+        // TODO: This function is broken, it doesn't do the correct addition for the
+        // destination, range should be from -0x400_000 to 0x3FFFFF
+        // Also todo, check all twos complement addition again
         let link_register_val = self.get_register(LINK_REGISTER);
         self.set_register(LINK_REGISTER, (self.get_pc() - 2) | 1);
         let destination = link_register_val + ((instruction & 0x7FF) << 1);

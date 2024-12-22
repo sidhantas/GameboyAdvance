@@ -1,3 +1,4 @@
+use std::panic;
 use std::{
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -37,7 +38,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let memory = Arc::new(Mutex::new(memory));
 
-    let display_memory = memory.clone();
+    //let display_memory = memory.clone();
     let cpu = Arc::new(Mutex::new(CPU::new(memory)));
     let (cpu_tx, cpu_rx) = mpsc::channel();
     let (debug_tx, debug_rx) = mpsc::channel();
@@ -47,9 +48,7 @@ fn main() -> Result<(), std::io::Error> {
         let debug_cpu_sender = cpu_tx.clone();
         scope.spawn(move || cpu_thread(cpu, cpu_rx));
         scope.spawn(move || start_debugger(debug_cpu, debug_cpu_sender, debug_rx));
-        start_display(display_memory);
-        let _ = cpu_tx.send(DebugCommands::End);
-        let _ = debug_tx.send(DebugCommands::End);
+        //start_display(display_memory);
     });
 
     Ok(())

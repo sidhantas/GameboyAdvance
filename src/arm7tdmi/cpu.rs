@@ -1,15 +1,21 @@
-use std::sync::{
-    mpsc::{
-        Receiver,
-        TryRecvError::{Disconnected, Empty},
+use std::{
+    fmt::Debug,
+    panic,
+    sync::{
+        mpsc::{
+            Receiver,
+            TryRecvError::{Disconnected, Empty},
+        },
+        Arc, Mutex,
     },
-    Arc, Mutex,
 };
+
+use sdl2::libc;
 
 use crate::{
     debugger::debugger::DebugCommands,
     memory::{AccessFlags, Memory},
-    types::{ARMByteCode, CYCLES, REGISTER, WORD},
+    types::*,
     utils::bits::Bits,
 };
 
@@ -57,26 +63,39 @@ pub struct CPU {
     pub spsr: [WORD; 5],
 }
 
+impl Debug for CPU {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = format!("Execute Instruction: {}", self.executed_instruction);
+        write!(f, "{}", s)
+    }
+}
+
 pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
     let mut instructions_left = 0;
+    let mut breakpoint = false;
     loop {
-        match rx.try_recv() {
-            Ok(data) => match data {
-                DebugCommands::End => {
+        loop {
+            match rx.try_recv() {
+                Ok(data) => match data {
+                    DebugCommands::End => {
+                        return;
+                    }
+                    DebugCommands::Continue(num) => {
+                        instructions_left += num;
+                    }
+                },
+                Err(Disconnected) => return,
+                Err(Empty) => {
                     break;
                 }
-                DebugCommands::Continue(num) => {
-                    instructions_left += num;
-                }
-            },
-            Err(Disconnected) => break,
-            Err(Empty) => {}
+            }
         }
         let mut cpu = cpu.lock().unwrap();
-//        while cpu.get_pc() < 0x1000 {
-//            cpu.execute_cpu_cycle();
-//        }
-        if instructions_left > 0 {
+        while cpu.get_pc() != 0x124 && breakpoint == false {
+            cpu.execute_cpu_cycle();
+        }
+        breakpoint = true;
+        while instructions_left > 0 {
             cpu.execute_cpu_cycle();
             instructions_left -= 1;
         }
@@ -231,6 +250,7 @@ impl CPU {
         return InstructionMode::ARM;
     }
 
+    #[cfg(test)]
     pub fn set_mode(&mut self, mode: CPUMode) {
         self.cpsr &= !0x1F; // clear bottom 5 bits
         self.cpsr |= mode as u32;
