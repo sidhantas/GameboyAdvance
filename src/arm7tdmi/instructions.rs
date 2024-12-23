@@ -114,10 +114,10 @@ mod instruction_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xea000002; // b 0x10
+        cpu.prefetch[0] = Some(0xea000002); // b 0x10
         cpu.set_pc(4);
 
-        let expected_destination = 0x10 + 8;
+        let expected_destination = 0x10 + 0x8;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -131,10 +131,12 @@ mod instruction_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xeafffffa; // b 0x0
+        cpu.prefetch[0] = Some(0xeafffffa); // b 0x0
+        cpu.prefetch[1] = Some(0xe1a00000);
+
         cpu.set_pc(0x14);
 
-        let expected_destination = 8;
+        let expected_destination = 0x8;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -148,10 +150,10 @@ mod instruction_tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xebfffffa; // b 0
+        cpu.prefetch[0] = Some(0xebfffffa); // b 0
         cpu.set_pc(0x14);
 
-        let expected_destination = 8;
+        let expected_destination = 0x8;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

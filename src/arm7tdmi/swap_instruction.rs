@@ -64,7 +64,7 @@ mod single_data_swap_test {
             .unwrap()
             .writeu32(0x3000200, 5, AccessFlags::User);
 
-        cpu.fetched_instruction = 0xe1014093; // swp r4, r3, [r1]
+        cpu.prefetch[0] = Some(0xe1014093); // swp r4, r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -88,7 +88,7 @@ mod single_data_swap_test {
             .unwrap()
             .writeu32(address as usize, 5, AccessFlags::User);
 
-        cpu.fetched_instruction = 0xe1014091; // swp r4, r1, [r1]
+        cpu.prefetch[0] = Some(0xe1014091); // swp r4, r1, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -114,7 +114,7 @@ mod single_data_swap_test {
             .writeu32(address as usize, 5, AccessFlags::User)
             ;
 
-        cpu.fetched_instruction = 0xe1014094; // swp r4, r4, [r1]
+        cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -141,7 +141,7 @@ mod single_data_swap_test {
             .writeu32(address as usize, 0x7890_DD12, AccessFlags::User)
             ;
 
-        cpu.fetched_instruction = 0xe1414093; // swpb r4, r3, [r1]
+        cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

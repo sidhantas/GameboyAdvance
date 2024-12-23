@@ -438,7 +438,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 20);
         cpu.set_register(2, 43);
-        cpu.fetched_instruction = 0x1888; // adds r0, r1, r2
+        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -458,7 +458,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 20);
         cpu.set_register(2, (-43 as i32) as u32);
-        cpu.fetched_instruction = 0x1888; // adds r0, r1, r2
+        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -478,7 +478,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 20);
         cpu.set_register(2, (-20 as i32) as u32);
-        cpu.fetched_instruction = 0x1888; // adds r0, r1, r2
+        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -498,7 +498,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 0);
         cpu.set_register(2, 0);
-        cpu.fetched_instruction = 0x1888; // adds r0, r1, r2
+        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -518,7 +518,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 0x1);
         cpu.set_register(2, 0x7FFF_FFFF);
-        cpu.fetched_instruction = 0x1888; // adds r0, r1, r2
+        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -537,7 +537,7 @@ mod thumb_add_and_subtract_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, -10 as i32 as u32);
-        cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
+        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -556,7 +556,7 @@ mod thumb_add_and_subtract_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, -5 as i32 as u32);
-        cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
+        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -575,7 +575,7 @@ mod thumb_add_and_subtract_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x7FFF_FFFF);
-        cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
+        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -594,7 +594,7 @@ mod thumb_add_and_subtract_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0xFFFF_FFFF);
-        cpu.fetched_instruction = 0x1d48; // adds r0, r1, 5
+        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -614,7 +614,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 50);
         cpu.set_register(2, 20);
-        cpu.fetched_instruction = 0x1a88; // subs r0, r1, r2
+        cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -634,7 +634,7 @@ mod thumb_add_and_subtract_tests {
 
         cpu.set_register(1, 25);
         cpu.set_register(2, 50);
-        cpu.fetched_instruction = 0x1a88; // subs r0, r1, r2
+        cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -663,7 +663,7 @@ mod thumb_move_shifted_register_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x0F00_0000);
-        cpu.fetched_instruction = 0x0148; // lsls r0, r1, 5
+        cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -682,7 +682,7 @@ mod thumb_move_shifted_register_tests {
 
         cpu.set_register(1, 0x0F00_0000);
         cpu.set_flag(FlagsRegister::C);
-        cpu.fetched_instruction = 0x0008; // lsls r0, r1, 0
+        cpu.prefetch[0] = Some(0x0008); // lsls r0, r1, 0
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -701,7 +701,7 @@ mod thumb_move_shifted_register_tests {
 
         cpu.set_register(1, 0xF000_0000);
         cpu.set_flag(FlagsRegister::V);
-        cpu.fetched_instruction = 0x0148; // lsls r0, r1, 5
+        cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -720,7 +720,7 @@ mod thumb_move_shifted_register_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x0000_008F);
-        cpu.fetched_instruction = 0x1108; // asrs r0, r1, 4
+        cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -738,7 +738,7 @@ mod thumb_move_shifted_register_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_008F);
-        cpu.fetched_instruction = 0x1108; // asrs r0, r1, 4
+        cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -756,7 +756,7 @@ mod thumb_move_shifted_register_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_0000);
-        cpu.fetched_instruction = 0x1008; // asrs r0, r1, 32
+        cpu.prefetch[0] = Some(0x1008); // asrs r0, r1, 32
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -774,7 +774,7 @@ mod thumb_move_shifted_register_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_008F);
-        cpu.fetched_instruction = 0x0a88; // lsrs r0, r1, 10
+        cpu.prefetch[0] = Some(0x0a88); // lsrs r0, r1, 10
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -792,7 +792,7 @@ mod thumb_move_shifted_register_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(1, 0x8000_008F);
-        cpu.fetched_instruction = 0x0808; // lsrs r0, r1, 32
+        cpu.prefetch[0] = Some(0x0808); // lsrs r0, r1, 32
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -819,7 +819,7 @@ mod thumb_move_compare_add_subtract_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0x200f; // movs r0, 15
+        cpu.prefetch[0] = Some(0x200f); // movs r0, 15
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -836,7 +836,7 @@ mod thumb_move_compare_add_subtract_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0x2096; // movs r0, 150
+        cpu.prefetch[0] = Some(0x2096); // movs r0, 150
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -853,7 +853,7 @@ mod thumb_move_compare_add_subtract_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0x2000; // movs r0, 0
+        cpu.prefetch[0] = Some(0x2000); // movs r0, 0
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -871,7 +871,7 @@ mod thumb_move_compare_add_subtract_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 15);
-        cpu.fetched_instruction = 0x380f; // subs r0, 15
+        cpu.prefetch[0] = Some(0x380f); // subs r0, 15
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -889,7 +889,7 @@ mod thumb_move_compare_add_subtract_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(0, 0x7FFF_FFFF);
-        cpu.fetched_instruction = 0x300f; // adds r0, 15
+        cpu.prefetch[0] = Some(0x300f); // adds r0, 15
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -918,7 +918,7 @@ mod thumb_alu_operations_tests {
 
         cpu.set_register(0, 0x8123_2344);
         cpu.set_register(1, 0x8000_2344);
-        cpu.fetched_instruction = 0x4008; // ands r0, r1
+        cpu.prefetch[0] = Some(0x4008); // ands r0, r1
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -936,7 +936,7 @@ mod thumb_alu_operations_tests {
 
         cpu.set_register(0, 0x1010_1010);
         cpu.set_register(1, 0x0101_0101);
-        cpu.fetched_instruction = 0x4048; // eors r0, r1
+        cpu.prefetch[0] = Some(0x4048); // eors r0, r1
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -954,7 +954,7 @@ mod thumb_alu_operations_tests {
 
         cpu.set_register(0, 0x0F11_1230);
         cpu.set_register(1, 5);
-        cpu.fetched_instruction = 0x4088; // lsl r0, r1
+        cpu.prefetch[0] = Some(0x4088); // lsl r0, r1
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -973,7 +973,7 @@ mod thumb_alu_operations_tests {
 
         cpu.set_register(0, 0x0F11_1230);
         cpu.set_register(1, 0);
-        cpu.fetched_instruction = 0x40c8; // lsr r0, r1
+        cpu.prefetch[0] = Some(0x40c8); // lsr r0, r1
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -1003,8 +1003,7 @@ mod thumb_hi_reg_operations {
         cpu.set_register(0, 20);
         cpu.set_register(11, 15);
         cpu.set_flag(FlagsRegister::N);
-        cpu.fetched_instruction = 0x4458; // add r0, r11
-        cpu.execute_cpu_cycle();
+        cpu.prefetch[1] = Some(0x4458); // add r0, r11
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(0), 35);
@@ -1023,7 +1022,7 @@ mod thumb_hi_reg_operations {
         cpu.set_register(0, 20);
         cpu.set_register(11, 20);
         cpu.set_flag(FlagsRegister::N);
-        cpu.fetched_instruction = 0x4558; // cmp r0, r11
+        cpu.prefetch[0] = Some(0x4558); // cmp r0, r11
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -1043,7 +1042,7 @@ mod thumb_hi_reg_operations {
         cpu.set_register(0, 20);
         cpu.set_register(11, 55);
         cpu.set_flag(FlagsRegister::N);
-        cpu.fetched_instruction = 0x4658; // cmp r0, r11
+        cpu.prefetch[0] = Some(0x4658); // cmp r0, r11
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -1068,7 +1067,7 @@ mod thumb_bx_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_register(5, 0x16);
-        cpu.fetched_instruction = 0x4728; // bx r5
+        cpu.prefetch[0] = Some(0x4728); // bx r5
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -1084,7 +1083,7 @@ mod thumb_bx_tests {
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
         cpu.set_pc(0x16);
-        cpu.fetched_instruction = 0x4778; // bx r15
+        cpu.prefetch[0] = Some(0x4778); // bx r15
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -1109,7 +1108,7 @@ mod get_relative_address_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xa503; // add r5, pc, 12
+        cpu.prefetch[0] = Some(0xa503); // add r5, pc, 12
         cpu.set_pc(2);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -1125,7 +1124,7 @@ mod get_relative_address_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xad04; // add r5, sp, 16
+        cpu.prefetch[0] = Some(0xad04); // add r5, sp, 16
         cpu.set_sp(2);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -1140,7 +1139,7 @@ mod get_relative_address_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xb07d; // add sp, 500
+        cpu.prefetch[0] = Some(0xb07d); // add sp, 500
         cpu.set_sp(2);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -1155,7 +1154,7 @@ mod get_relative_address_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xb0fd; // add sp, 500
+        cpu.prefetch[0] = Some(0xb0fd); // add sp, 500
         cpu.set_sp(2);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

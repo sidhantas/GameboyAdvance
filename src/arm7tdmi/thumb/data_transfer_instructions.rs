@@ -220,7 +220,7 @@ mod thumb_ldr_str_tests {
         mem.lock().unwrap().writeu32(0x3000024, 0x55, AccessFlags::User);
 
         cpu.set_pc(0x3000016);
-        cpu.fetched_instruction = 0x4d03; // ldr r5, [pc, 12]
+        cpu.prefetch[0] = Some(0x4d03); // ldr r5, [pc, 12]
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 

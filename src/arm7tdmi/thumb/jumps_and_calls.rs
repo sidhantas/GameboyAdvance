@@ -91,7 +91,7 @@ mod branch_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xd006; // beq 12
+        cpu.prefetch[0] = Some(0xd006); // beq 12
         cpu.set_pc(0x1a);
         cpu.set_flag(FlagsRegister::Z);
         cpu.execute_cpu_cycle();
@@ -108,7 +108,7 @@ mod branch_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xd0f9; // beq 12
+        cpu.prefetch[0] = Some(0xd0f9); // beq 12
         cpu.set_pc(0x24);
         cpu.set_flag(FlagsRegister::Z);
         cpu.execute_cpu_cycle();
@@ -125,10 +125,10 @@ mod branch_tests {
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.fetched_instruction = 0xf000; // set link_register
+        cpu.prefetch[0] = Some(0xf000); // set link_register
         cpu.set_pc(0x1a);
         cpu.execute_cpu_cycle();
-        cpu.fetched_instruction = 0xf802; // bl 0x20
+        cpu.prefetch[0] = Some(0xf802); // bl 0x20
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 

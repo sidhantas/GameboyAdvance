@@ -396,7 +396,7 @@ mod sdt_tests {
 
         cpu.set_register(1, address);
 
-        cpu.fetched_instruction = 0xe5912000; // ldr r2, [r1]
+        cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -421,7 +421,7 @@ mod sdt_tests {
 
         cpu.set_register(1, address);
 
-        cpu.fetched_instruction = 0xe5912008; // ldr r2, [r1, 8]
+        cpu.prefetch[0] = Some(0xe5912008); // ldr r2, [r1, 8]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -446,7 +446,7 @@ mod sdt_tests {
 
         cpu.set_register(1, address);
 
-        cpu.fetched_instruction = 0xe5112008; // ldr r2, [r1, -8]
+        cpu.prefetch[0] = Some(0xe5112008); // ldr r2, [r1, -8]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -472,7 +472,7 @@ mod sdt_tests {
         cpu.set_register(1, address);
         cpu.set_register(3, 4);
 
-        cpu.fetched_instruction = 0xe7912083; //  ldr r2, [r1, r3, lsl 1]
+        cpu.prefetch[0] = Some(0xe7912083); //  ldr r2, [r1, r3, lsl 1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -497,14 +497,14 @@ mod sdt_tests {
 
         cpu.set_register(1, address);
 
-        cpu.fetched_instruction = 0xe5d12000; //  ldrb r2, [r1]
+        cpu.prefetch[0] = Some(0xe5d12000); //  ldrb r2, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(2), value & 0xFF);
 
-        cpu.fetched_instruction = 0xe5d12001; //  ldrb r2, [r1, 1]
+        cpu.prefetch[0] = Some(0xe5d12001); //  ldrb r2, [r1, 1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -533,7 +533,7 @@ mod sdt_tests {
 
         cpu.set_register(1, address);
 
-        cpu.fetched_instruction = 0xe5912000; // ldr r2, [r1]
+        cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -542,7 +542,7 @@ mod sdt_tests {
 
         cpu.set_register(1, 0x3000203);
 
-        cpu.fetched_instruction = 0xe5912000; // ldr r2, [r1]
+        cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -566,7 +566,7 @@ mod sdt_tests {
 
         cpu.set_register(1, address);
 
-        cpu.fetched_instruction = 0xe4912004; // ldr r2, [r1], 4
+        cpu.prefetch[0] = Some(0xe4912004); // ldr r2, [r1], 4
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -588,7 +588,7 @@ mod sdt_tests {
         cpu.set_register(1, address);
         cpu.set_register(2, value);
 
-        cpu.fetched_instruction = 0xe5812000; // str r2, [r1]
+        cpu.prefetch[0] = Some(0xe5812000); // str r2, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -615,7 +615,7 @@ mod sdt_tests {
         cpu.set_register(1, address);
         cpu.set_register(2, value.into());
 
-        cpu.fetched_instruction = 0xe5c12000; // strb r2, [r1]
+        cpu.prefetch[0] = Some(0xe5c12000); // strb r2, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -642,7 +642,7 @@ mod sdt_tests {
         cpu.set_register(1, address);
         cpu.set_register(3, value.into());
 
-        cpu.fetched_instruction = 0xe1c130b0; // strh r3, [r1]
+        cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -669,7 +669,7 @@ mod sdt_tests {
         cpu.set_register(1, address);
         cpu.set_register(3, value);
 
-        cpu.fetched_instruction = 0xe1c130b0; // strh r3, [r1]
+        cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -699,7 +699,7 @@ mod sdt_tests {
             .writeu32(address as usize, value, AccessFlags::User);
 
         cpu.set_register(1, address);
-        cpu.fetched_instruction = 0xe1d130b0; // ldrh r3, [r1]
+        cpu.prefetch[0] = Some(0xe1d130b0); // ldrh r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -723,7 +723,7 @@ mod sdt_tests {
             .writeu32(address as usize, value, AccessFlags::User);
 
         cpu.set_register(1, address);
-        cpu.fetched_instruction = 0xe1d130f0; // ldrsh r3, [r1]
+        cpu.prefetch[0] = Some(0xe1d130f0); // ldrsh r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -747,7 +747,7 @@ mod sdt_tests {
             .writeu32(address as usize, value, AccessFlags::User);
 
         cpu.set_register(1, address);
-        cpu.fetched_instruction = 0xe1d130d0; // ldrsb r3, [r1]
+        cpu.prefetch[0] = Some(0xe1d130d0); // ldrsb r3, [r1]
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -775,7 +775,7 @@ mod sdt_tests {
             .unwrap()
             .writeu32(address as usize + 4, 0x55, AccessFlags::User);
 
-        cpu.fetched_instruction = 0xe8950003; // ldmia r5, {r0, r1}
+        cpu.prefetch[0] = Some(0xe8950003); // ldmia r5, {r0, r1}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -804,7 +804,7 @@ mod sdt_tests {
             .unwrap()
             .writeu32(address as usize + 8, 0x55, AccessFlags::User);
 
-        cpu.fetched_instruction = 0xe9b500c0; // ldmib r5!, {r6, r7}
+        cpu.prefetch[0] = Some(0xe9b500c0); // ldmib r5!, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -834,7 +834,7 @@ mod sdt_tests {
             .unwrap()
             .writeu32(address as usize - 4, 0x55, AccessFlags::User);
 
-        cpu.fetched_instruction = 0xe83500c0; // ldmda r5!, {r6, r7}
+        cpu.prefetch[0] = Some(0xe83500c0); // ldmda r5!, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -864,7 +864,7 @@ mod sdt_tests {
             .unwrap()
             .writeu32(address as usize - 8, 0x55, AccessFlags::User);
 
-        cpu.fetched_instruction = 0xe93500c0; // ldmdb r5!, {r6, r7}
+        cpu.prefetch[0] = Some(0xe93500c0); // ldmdb r5!, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -887,7 +887,7 @@ mod sdt_tests {
         cpu.set_register(6, 123);
         cpu.set_register(7, 456);
 
-        cpu.fetched_instruction = 0xe88500c0; // stm r5, {r6, r7}
+        cpu.prefetch[0] = Some(0xe88500c0); // stm r5, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -921,7 +921,7 @@ mod sdt_tests {
         cpu.set_register(6, 123);
         cpu.set_register(7, 456);
 
-        cpu.fetched_instruction = 0xe9a500c0; // stmib r5!, {r6, r7}
+        cpu.prefetch[0] = Some(0xe9a500c0); // stmib r5!, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -956,7 +956,7 @@ mod sdt_tests {
         cpu.set_register(6, 123);
         cpu.set_register(7, 456);
 
-        cpu.fetched_instruction = 0xe92500c0; // stmdb r5!, {r6, r7}
+        cpu.prefetch[0] = Some(0xe92500c0); // stmdb r5!, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -991,7 +991,7 @@ mod sdt_tests {
         cpu.set_register(6, 123);
         cpu.set_register(7, 456);
 
-        cpu.fetched_instruction = 0xe82500c0; // stmda r5!, {r6, r7}
+        cpu.prefetch[0] = Some(0xe82500c0); // stmda r5!, {r6, r7}
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();

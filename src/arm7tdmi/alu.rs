@@ -76,8 +76,10 @@ impl CPU {
         let rd = (0x0000_F000 & instruction) >> 12;
 
         let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
-        if rd == 15 && set_flags {
-            todo!("SPSR corresponding to current mode should be placed in CPSR");
+        if rd == 15 && instruction.bit_is_set(20) {
+            if let Some(spsr) = self.get_current_spsr() {
+                self.cpsr = *spsr;
+            }
         }
         let operand2 = self.decode_operand2(instruction, set_flags, shift_amount);
         operation(self, rd, self.get_register(rn), operand2, set_flags);
@@ -136,7 +138,7 @@ impl CPU {
         let operand2 = operand2.twos_complement();
         let result = operand1 + operand2; // use two's complement to make setting flags easier
 
-        self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
+        self.set_arithmetic_flags(result, operand1, operand2, 1, set_flags);
         self.set_register(rd, result);
 
         self.set_executed_instruction(format!("SUB {:#x} {:#x} {:#x}", rd, operand1, operand2));
@@ -214,7 +216,7 @@ impl CPU {
         let operand2 = !operand2 + 1;
         let result = operand1 + operand2; // use two's complement to make setting flags easier
 
-        self.set_arithmetic_flags(result, operand1, operand2, 0, true);
+        self.set_arithmetic_flags(result, operand1, operand2, 1, true);
     }
 
     #[allow(unused)]
@@ -385,7 +387,7 @@ mod tests {
         cpu.set_register(2, u32::MAX);
         cpu.set_register(3, 2);
 
-        cpu.fetched_instruction = 0xe0931002; // adds r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe0931002); // adds r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -405,7 +407,7 @@ mod tests {
         cpu.set_register(2, 0x8000_0000);
         cpu.set_register(3, 0x8000_0000);
 
-        cpu.fetched_instruction = 0xe0931002; // adds r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe0931002); // adds r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -425,7 +427,7 @@ mod tests {
         cpu.set_register(2, 0x8000_0000);
         cpu.set_register(3, 0x0000_0001);
 
-        cpu.fetched_instruction = 0xe0931002; // adds r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe0931002); // adds r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -445,7 +447,7 @@ mod tests {
         cpu.set_register(2, 0x0000_FFFF);
         cpu.set_register(3, 0x0000_0001);
 
-        cpu.fetched_instruction = 0xe01312a2; // ands r1, r3, r2 LSR 5;
+        cpu.prefetch[0] = Some(0xe01312a2); // ands r1, r3, r2 LSR 5;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -465,7 +467,7 @@ mod tests {
         cpu.set_register(2, 0x8000_FFFF);
         cpu.set_register(3, 0x8000_0001);
 
-        cpu.fetched_instruction = 0xe0131002; // ands r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe0131002); // ands r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -485,7 +487,7 @@ mod tests {
         cpu.set_register(2, 0x8000_FFFF);
         cpu.set_register(3, 0x0000_0000);
 
-        cpu.fetched_instruction = 0xe0131002; // ands r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe0131002); // ands r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -505,7 +507,7 @@ mod tests {
         cpu.set_register(2, 0x0000_0000);
         cpu.set_register(3, 0x0000_0000);
 
-        cpu.fetched_instruction = 0xe1931002; // orrs r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe1931002); // orrs r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -525,7 +527,7 @@ mod tests {
         cpu.set_register(2, 0x0000_0000);
         cpu.set_register(3, 0x0000_0000);
 
-        cpu.fetched_instruction = 0xe1831002; // orr r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe1831002); // orr r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -545,7 +547,7 @@ mod tests {
         cpu.set_register(2, 0x8001_0002);
         cpu.set_register(3, 0x1000_0010);
 
-        cpu.fetched_instruction = 0xe0331002; // eors r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe0331002); // eors r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -565,7 +567,7 @@ mod tests {
         cpu.set_register(2, 0x8001_0002);
         cpu.set_register(3, 0x1000_0010);
 
-        cpu.fetched_instruction = 0xe1330002; // teq r3, r2;
+        cpu.prefetch[0] = Some(0xe1330002); // teq r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -584,7 +586,7 @@ mod tests {
         cpu.set_register(2, 0x8001_0002);
         cpu.set_register(3, 0x8001_0002);
 
-        cpu.fetched_instruction = 0xe1330002; // teq r3, r2;
+        cpu.prefetch[0] = Some(0xe1330002); // teq r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -603,7 +605,7 @@ mod tests {
         cpu.set_register(2, 0x8001_0002);
         cpu.set_register(3, 0x0110_2224);
 
-        cpu.fetched_instruction = 0xe1130002; // tst r3, r2;
+        cpu.prefetch[0] = Some(0xe1130002); // tst r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -622,7 +624,7 @@ mod tests {
         cpu.set_register(3, 0x8001_0002);
         cpu.set_register(2, 0x80F1_0102);
 
-        cpu.fetched_instruction = 0xe1d31002; // bics r1, r3, r2;
+        cpu.prefetch[0] = Some(0xe1d31002); // bics r1, r3, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -639,7 +641,7 @@ mod tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xe094131f; // adds r1, r3, r15, LSL r3; pc = 0
+        cpu.prefetch[0] = Some(0xe094131f); // adds r1, r3, r15, LSL r3; pc = 0
 
         cpu.set_register(3, 0x01);
         let test_pc = 4; // points at next instruction
@@ -661,7 +663,7 @@ mod tests {
         let memory = Arc::new(Mutex::new(memory));
         let mut cpu = CPU::new(memory);
 
-        cpu.fetched_instruction = 0xe09f1314; //  adds r1, pc, r4, lsl r3; pc = 0
+        cpu.prefetch[0] = Some(0xe09f1314); //  adds r1, pc, r4, lsl r3; pc = 0
 
         cpu.set_register(3, 0x01);
         cpu.set_register(4, 0);
@@ -719,7 +721,7 @@ mod tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        assert_eq!(cpu.decoded_instruction.unwrap().instruction, 0xe25f1008);
+        assert_eq!(cpu.decode_instruction(cpu.prefetch[1].unwrap()).instruction, 0xe25f1008);
     }
 
     #[test]
@@ -730,7 +732,7 @@ mod tests {
 
         cpu.set_register(3, 0x8001_0002);
 
-        cpu.fetched_instruction = 0xe1b04003; // mov r4, r3;
+        cpu.prefetch[0] = Some(0xe1b04003); // mov r4, r3;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -751,7 +753,7 @@ mod tests {
         let input = 0xFFFF_FFFF;
         cpu.set_register(4, input);
 
-        cpu.fetched_instruction = 0xe1f05004; // mvn r5, r4;
+        cpu.prefetch[0] = Some(0xe1f05004); // mvn r5, r4;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -773,7 +775,7 @@ mod tests {
         cpu.set_register(2, 32);
         cpu.set_flag(FlagsRegister::C);
 
-        cpu.fetched_instruction = 0xe0b14002; // adcs r4, r2, r1;
+        cpu.prefetch[0] = Some(0xe0b14002); // adcs r4, r2, r1;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -794,7 +796,7 @@ mod tests {
         cpu.set_register(2, 0x0);
         cpu.set_flag(FlagsRegister::C);
 
-        cpu.fetched_instruction = 0xe0b14002; // adcs r4, r2, r1;
+        cpu.prefetch[0] = Some(0xe0b14002); // adcs r4, r2, r1;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -815,7 +817,7 @@ mod tests {
         cpu.set_register(2, 0x8FFF_FFFF);
         cpu.set_flag(FlagsRegister::C);
 
-        cpu.fetched_instruction = 0xe0b14002; // adcs r4, r2, r1;
+        cpu.prefetch[0] = Some(0xe0b14002); // adcs r4, r2, r1;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -835,7 +837,7 @@ mod tests {
         cpu.set_register(1, 0x7FFF_FFFF);
         cpu.set_register(2, 0xFFFF_FFFF); // twos complement of -1
 
-        cpu.fetched_instruction = 0xe0514002; // subs r4, r1, r2;
+        cpu.prefetch[0] = Some(0xe0514002); // subs r4, r1, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -855,7 +857,7 @@ mod tests {
         cpu.set_register(1, 5);
         cpu.set_register(2, 10);
 
-        cpu.fetched_instruction = 0xe0514002; // subs r4, r1, r2;
+        cpu.prefetch[0] = Some(0xe0514002); // subs r4, r1, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -875,7 +877,7 @@ mod tests {
         cpu.set_register(1, 10);
         cpu.set_register(2, 5);
 
-        cpu.fetched_instruction = 0xe0514002; // subs r4, r1, r2;
+        cpu.prefetch[0] = Some(0xe0514002); // subs r4, r1, r2;
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
@@ -901,7 +903,7 @@ mod tests {
 
         cpu.cpsr = cpsr;
 
-        cpu.fetched_instruction = opcode;
+        cpu.prefetch[0] = Some(opcode);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -931,7 +933,7 @@ mod tests {
         cpu.set_mode(mode);
         cpu.set_register(register, psr_val);
 
-        cpu.fetched_instruction = opcode;
+        cpu.prefetch[0] = Some(opcode);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -956,7 +958,7 @@ mod tests {
         cpu.set_mode(mode);
         cpu.set_register(register, psr_val);
 
-        cpu.fetched_instruction = opcode;
+        cpu.prefetch[0] = Some(opcode);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
@@ -977,7 +979,7 @@ mod tests {
 
         cpu.set_mode(mode);
 
-        cpu.fetched_instruction = opcode;
+        cpu.prefetch[0] = Some(opcode);
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 

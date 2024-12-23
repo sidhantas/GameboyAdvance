@@ -207,6 +207,7 @@ dependencies = [
  "ctrlc",
  "getopts",
  "num-traits",
+ "regex",
  "rstest",
  "sdl2",
  "tui",

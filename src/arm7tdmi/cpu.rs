@@ -1,16 +1,12 @@
 use std::{
-    fmt::Debug,
-    panic,
-    sync::{
+    collections::{HashMap, HashSet}, fmt::Debug, panic, sync::{
         mpsc::{
             Receiver,
             TryRecvError::{Disconnected, Empty},
         },
         Arc, Mutex,
-    },
+    }
 };
-
-use sdl2::libc;
 
 use crate::{
     debugger::debugger::DebugCommands,
@@ -41,9 +37,9 @@ pub enum CPUMode {
 
 #[repr(u8)]
 pub enum FlagsRegister {
-    C = 31,
-    N = 30,
-    Z = 29,
+    N = 31,
+    Z = 30,
+    C = 29,
     V = 28,
 }
 
@@ -55,24 +51,16 @@ pub struct CPU {
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
     pub memory: Arc<Mutex<Memory>>,
-    pub decoded_instruction: Option<ARMDecodedInstruction>,
+    pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
-    pub fetched_instruction: ARMByteCode,
     pub executed_instruction: String,
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
-}
-
-impl Debug for CPU {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = format!("Execute Instruction: {}", self.executed_instruction);
-        write!(f, "{}", s)
-    }
+    pub breakpoints: Vec<WORD>
 }
 
 pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
     let mut instructions_left = 0;
-    let mut breakpoint = false;
     loop {
         loop {
             match rx.try_recv() {
@@ -83,6 +71,12 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
                     DebugCommands::Continue(num) => {
                         instructions_left += num;
                     }
+                    DebugCommands::SetBreakpoint(breakpoint) => {
+                        cpu.lock().unwrap().breakpoints.push(breakpoint);
+                    },
+                    DebugCommands::DeleteBreakpoint(breakpoint_num) => {
+                        cpu.lock().unwrap().breakpoints.remove(breakpoint_num as usize);
+                    },
                 },
                 Err(Disconnected) => return,
                 Err(Empty) => {
@@ -91,42 +85,39 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
             }
         }
         let mut cpu = cpu.lock().unwrap();
-        while cpu.get_pc() != 0x124 && breakpoint == false {
-            cpu.execute_cpu_cycle();
-        }
-        breakpoint = true;
         while instructions_left > 0 {
             cpu.execute_cpu_cycle();
             instructions_left -= 1;
+            if cpu.breakpoints.contains(&cpu.get_pc()) {
+                instructions_left = 0;
+            }
         }
     }
 }
 
 impl CPU {
     pub fn execute_cpu_cycle(&mut self) {
-        if let Some(decoded_instruction) = self.decoded_instruction {
-            self.executed_instruction_hex = decoded_instruction.instruction;
-            self.decoded_instruction = None;
-            (decoded_instruction.executable)(self, decoded_instruction.instruction);
+        if let Some(value) = self.prefetch[1] {
+            let decoded_instruction = self.decode_instruction(value);
+            self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
+            self.prefetch[1] = None;
+            ((decoded_instruction.executable)(self, decoded_instruction.instruction));
         }
 
-        match self.decoded_instruction {
+        if let None = self.prefetch[1] {
             // refill pipeline if decoded instruction doesn't advance the pipeline
-            None => {
-                self.advance_pipeline();
-            }
-            _ => {}
+            self.advance_pipeline();
+
         }
     }
 
     pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
         CPU {
             registers: [0; 16],
-            fetched_instruction: 0,
-            decoded_instruction: None,
             executed_instruction_hex: 0,
             memory,
             executed_instruction: String::from(""),
+            prefetch: [None; 2],
             // start in supervisor mode
             // interrupts are disabled
             // start in arm mode
@@ -137,13 +128,14 @@ impl CPU {
             registers_abt: [0; 2],
             registers_irq: [0; 2],
             registers_und: [0; 2],
+            breakpoints: Vec::new()
         }
     }
 
     pub fn flush_pipeline(&mut self) -> CYCLES {
         let mut cycles = 0;
-        self.decoded_instruction = None;
-        self.fetched_instruction = 0;
+        self.prefetch[0] = None;
+        self.prefetch[1] = None;
 
         cycles += self.advance_pipeline();
         cycles += self.advance_pipeline();
@@ -152,7 +144,7 @@ impl CPU {
     }
 
     pub fn advance_pipeline(&mut self) -> CYCLES {
-        self.decode_instruction(self.fetched_instruction);
+        self.prefetch[1] = self.prefetch[0];
         self.fetch_instruction()
     }
 
@@ -301,7 +293,7 @@ impl CPU {
             }
         };
         cycles += memory_fetch.cycles;
-        self.fetched_instruction = memory_fetch.data;
+        self.prefetch[0] = Some(memory_fetch.data);
         self.increment_pc();
 
         cycles
