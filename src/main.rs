@@ -5,10 +5,9 @@ use std::{
 };
 
 use arm7tdmi::cpu::{cpu_thread, CPU};
-use debugger::debugger::{start_debugger, DebugCommands};
+use debugger::debugger::start_debugger;
 use getopts::Options;
-use graphics::display::start_display;
-use memory::Memory;
+use memory::memory::Memory;
 use std::env;
 mod arm7tdmi;
 mod debugger;

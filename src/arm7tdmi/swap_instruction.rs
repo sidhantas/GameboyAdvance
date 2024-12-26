@@ -1,10 +1,9 @@
 use crate::{
-    memory::{AccessFlags, MemoryFetch},
-    types::{CYCLES, REGISTER, WORD},
-    utils::bits::{sign_extend, Bits},
+    types::{CYCLES, WORD},
+    utils::bits::Bits,
 };
 
-use super::cpu::{CPU};
+use super::cpu::CPU;
 
 impl CPU {
     pub fn single_data_swap(&mut self, instruction: WORD) -> CYCLES {
@@ -15,20 +14,16 @@ impl CPU {
         let rm = instruction & 0x0000_000F;
         let address = self.get_register(rn) as usize;
 
-
         let memory_data = if is_byte_swap {
             let mut memory = self.memory.lock().unwrap();
-            let memory_fetch = memory
-                .read(address, self.get_access_mode());
+            let memory_fetch = memory.read(address, self.get_access_mode());
             cycles += memory_fetch.cycles;
             cycles += memory.write(address, self.get_register(rm) as u8, self.get_access_mode());
 
             memory_fetch.data as u32
-
         } else {
             let mut memory = self.memory.lock().unwrap();
-            let memory_fetch = memory
-                .readu32(address, self.get_access_mode());
+            let memory_fetch = memory.readu32(address, self.get_access_mode());
 
             cycles += memory_fetch.cycles;
             cycles += memory.writeu32(address, self.get_register(rm), self.get_access_mode());
@@ -43,14 +38,15 @@ impl CPU {
     }
 }
 
-
 #[cfg(test)]
 mod single_data_swap_test {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::cpu::CPU, memory::{AccessFlags, Memory}};
+    use crate::{
+        arm7tdmi::cpu::CPU,
+        memory::memory::{AccessFlags, Memory},
+    };
 
-    
     #[test]
     fn swap_instruction_should_store_and_load_at_the_same_time() {
         let memory = Memory::new().unwrap();
@@ -70,8 +66,13 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x3000200, AccessFlags::User).data, 10);
-
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x3000200, AccessFlags::User)
+                .data,
+            10
+        );
     }
 
     #[test]
@@ -94,9 +95,15 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x3000200, AccessFlags::User).data, 0x3000200);
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x3000200, AccessFlags::User)
+                .data,
+            0x3000200
+        );
     }
-    
+
     #[test]
     fn swap_should_work_with_equal_rm_and_rd() {
         let memory = Memory::new().unwrap();
@@ -111,8 +118,7 @@ mod single_data_swap_test {
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, 5, AccessFlags::User)
-            ;
+            .writeu32(address as usize, 5, AccessFlags::User);
 
         cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
 
@@ -120,7 +126,13 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(mem.lock().unwrap().readu32(0x3000200, AccessFlags::User).data, 15);
+        assert_eq!(
+            mem.lock()
+                .unwrap()
+                .readu32(0x3000200, AccessFlags::User)
+                .data,
+            15
+        );
     }
 
     #[test]
@@ -138,8 +150,7 @@ mod single_data_swap_test {
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, 0x7890_DD12, AccessFlags::User)
-            ;
+            .writeu32(address as usize, 0x7890_DD12, AccessFlags::User);
 
         cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
 
@@ -147,6 +158,9 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 0x12);
-        assert_eq!(mem.lock().unwrap().read(0x3000200, AccessFlags::User).data, 0xBC);
+        assert_eq!(
+            mem.lock().unwrap().read(0x3000200, AccessFlags::User).data,
+            0xBC
+        );
     }
 }

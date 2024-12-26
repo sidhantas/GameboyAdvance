@@ -1,0 +1,38 @@
+arm-none-eabi-as -mcpu=arm7tdmi test.s -o test.o
+arm-none-eabi-objcopy -O binary test.o test.bin
+arm-none-eabi-objdump -D test.o
+
+test.o:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+00000000 <_main>:
+   0:	028210c8 	addeq	r1, r2, #200	; 0xc8
+   4:	128210c8 	addne	r1, r2, #200	; 0xc8
+   8:	228210c8 	addcs	r1, r2, #200	; 0xc8
+   c:	328210c8 	addcc	r1, r2, #200	; 0xc8
+  10:	428210c8 	addmi	r1, r2, #200	; 0xc8
+  14:	528210c8 	addpl	r1, r2, #200	; 0xc8
+  18:	628210c8 	addvs	r1, r2, #200	; 0xc8
+  1c:	728210c8 	addvc	r1, r2, #200	; 0xc8
+  20:	728210c8 	addvc	r1, r2, #200	; 0xc8
+  24:	828210c8 	addhi	r1, r2, #200	; 0xc8
+  28:	928210c8 	addls	r1, r2, #200	; 0xc8
+  2c:	a28210c8 	addge	r1, r2, #200	; 0xc8
+  30:	b28210c8 	addlt	r1, r2, #200	; 0xc8
+  34:	c28210c8 	addgt	r1, r2, #200	; 0xc8
+  38:	d28210c8 	addle	r1, r2, #200	; 0xc8
+  3c:	e28210c8 	add	r1, r2, #200	; 0xc8
+
+Disassembly of section .ARM.attributes:
+
+00000000 <.ARM.attributes>:
+   0:	00001f41 	andeq	r1, r0, r1, asr #30
+   4:	61656100 	cmnvs	r5, r0, lsl #2
+   8:	01006962 	tsteq	r0, r2, ror #18
+   c:	00000015 	andeq	r0, r0, r5, lsl r0
+  10:	4d524105 	ldfmie	f4, [r2, #-20]	; 0xffffffec
+  14:	4d445437 	cfstrdmi	mvd5, [r4, #-220]	; 0xffffff24
+  18:	02060049 	andeq	r0, r6, #73	; 0x49
+  1c:	01090108 	tsteq	r9, r8, lsl #2

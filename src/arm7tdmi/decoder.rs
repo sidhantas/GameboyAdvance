@@ -177,6 +177,12 @@ impl CPU {
                     executable: CPU::sdt_imm_offset
                 }
             }
+            _ if thumb_decoders::is_sdt_halfword(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::sdt_halfword_imm
+                }
+            }
             _ if thumb_decoders::is_sdt_sp_imm(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
@@ -234,7 +240,6 @@ impl CPU {
             _ => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::arm_not_implemented,
-                ..Default::default()
             },
         }
     }
@@ -335,6 +340,10 @@ mod thumb_decoders {
         instruction & 0xE000 == 0x6000
     }
 
+    pub fn is_sdt_halfword(instruction: u32) -> bool {
+        instruction & 0xF000 == 0x8000
+    }
+
     pub fn is_sdt_sp_imm(instruction: u32) -> bool {
         instruction & 0xF000 == 0x9000
     }
@@ -403,7 +412,7 @@ mod arm_decoders_tests {
 
     use arm_decoders::*;
 
-    use crate::memory::Memory;
+    use crate::memory::memory::Memory;
 
     use super::*;
 

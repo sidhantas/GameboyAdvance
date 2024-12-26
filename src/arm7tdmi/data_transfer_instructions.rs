@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use crate::{
-    memory::{self, AccessFlags, MemoryFetch},
+    memory::memory::{AccessFlags, MemoryFetch},
     types::{CYCLES, REGISTER, WORD},
     utils::{bits::{sign_extend, Bits}, utils::print_vec},
 };
@@ -376,7 +376,7 @@ mod sdt_tests {
 
     use crate::{
         arm7tdmi::cpu::CPU,
-        memory::{AccessFlags, Memory},
+        memory::memory::{AccessFlags, Memory},
     };
 
     #[test]

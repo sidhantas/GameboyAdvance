@@ -1,8 +1,8 @@
 use std::{fmt::Display, sync::mpsc::SendError};
 
-use crate::utils::utils::try_parse_num;
+use crate::utils::utils::{try_parse_num, ParsingError};
 
-use super::debugger::{DebugCommands, Debugger};
+use super::debugger::{BreakType, DebugCommands, Debugger};
 
 
 pub enum TerminalCommandErrors {
@@ -41,7 +41,7 @@ pub struct TerminalHistoryEntry {
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 5] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 7] = [
     TerminalCommand {
         name: "next",
         arguments: 1,
@@ -71,6 +71,18 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 5] = [
         arguments: 0,
         description: "Lists breakpoints",
         handler: list_breakpoint_handler,
+    },
+    TerminalCommand {
+        name: "watch",
+        arguments: 1,
+        description: "Sets a watch point on a register and a value",
+        handler: set_watchpoint_handler,
+    },
+    TerminalCommand {
+        name: "mem",
+        arguments: 1,
+        description: "Sets start memory address",
+        handler: set_mem_start,
     },
 ];
 
@@ -137,7 +149,7 @@ fn set_breakpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<St
     };
     if let Err(err) = debugger
         .cpu_sender
-        .send(DebugCommands::SetBreakpoint(breakpoint))
+        .send(DebugCommands::SetBreakpoint(BreakType::Break(breakpoint)))
     {
         return Err(TerminalCommandErrors::ChannelError(err));
     }
@@ -175,8 +187,45 @@ fn list_breakpoint_handler(debugger: &mut Debugger, _args: Vec<&str>) -> Result<
         return Ok("No Breakpoints".into());
     }
     for (i, breakpoint) in breakpoints.into_iter().enumerate() {
-        breakpoint_list.push_str(format!("{}: {:#x}\n", i + 1, breakpoint).as_str());
+        match breakpoint {
+            BreakType::Break(bp) => breakpoint_list.push_str(format!("{}: break {:#x}\n", i + 1, bp).as_str()),
+            BreakType::WatchRegister(reg, value) => breakpoint_list.push_str(format!("{}: watch r{reg} {:#x}\n", i + 1, value).as_str()),
+            BreakType::WatchAddressRange(address1, address2) => breakpoint_list.push_str(format!("{}: watch {:#X} {:#X}\n", i + 1, address1, address2).as_str()),
+        }
     }
 
     Ok(breakpoint_list)
+}
+
+impl From<ParsingError> for TerminalCommandErrors {
+    fn from(_value: ParsingError) -> Self {
+        Self::CouldNotParse
+    }
+}
+
+fn set_watchpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
+    if args.len() < 2 {
+        return Err(TerminalCommandErrors::NotEnoughArguments);
+    }
+    let register = try_parse_num(args[0])?;
+    let value = try_parse_num(args[1])?;
+    
+    if let Err(err) = debugger
+        .cpu_sender
+        .send(DebugCommands::SetBreakpoint(BreakType::WatchRegister(register, value)))
+    {
+        return Err(TerminalCommandErrors::ChannelError(err));
+    }
+    Ok(format!("Watchpoint set for register r{register} with value {:#x}", value))
+}
+
+fn set_mem_start(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
+    if args.len() < 1 {
+        return Err(TerminalCommandErrors::NotEnoughArguments);
+    }
+    let mem_start = try_parse_num(args[0])?;
+
+    debugger.memory_start_address = mem_start;
+    
+    Ok(String::new())
 }

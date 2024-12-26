@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::memory::Memory;
+use crate::memory::memory::Memory;
 
 
 struct Pixel {

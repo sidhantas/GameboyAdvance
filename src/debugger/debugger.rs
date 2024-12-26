@@ -22,18 +22,23 @@ use tui::{
 };
 
 use crate::{
-    arm7tdmi::{
-        cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
-        instructions::ARMDecodedInstruction,
-    },
-    memory::AccessFlags,
+    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
+    memory::memory::AccessFlags,
+    types::REGISTER,
 };
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
+#[derive(PartialEq)]
+pub enum BreakType {
+    Break(u32),
+    WatchRegister(REGISTER, u32),
+    WatchAddressRange(u32, u32)
+}
+
 pub enum DebugCommands {
     Continue(u32),
-    SetBreakpoint(u32),
+    SetBreakpoint(BreakType),
     DeleteBreakpoint(u32),
     End,
 }
@@ -44,18 +49,18 @@ pub struct Debugger {
     pub terminal_buffer: String,
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub end_debugger: bool,
-    pub cpu: Arc<Mutex<CPU>>
+    pub cpu: Arc<Mutex<CPU>>,
 }
 
 impl Debugger {
     fn new(cpu: Arc<Mutex<CPU>>, cpu_sender: Sender<DebugCommands>) -> Self {
         Self {
-            memory_start_address: 0,
+            memory_start_address: 0x4000000,
             cpu_sender,
             terminal_buffer: String::new(),
             terminal_history: Vec::new(),
             end_debugger: false,
-            cpu
+            cpu,
         }
     }
 }
@@ -89,7 +94,7 @@ pub fn start_debugger(
                             KeyCode::Char('c') => {
                                 cpu_sender.send(DebugCommands::End).unwrap();
                                 debugger.end_debugger = true;
-                            },
+                            }
                             KeyCode::Char('w') => {
                                 if terminal_enabled {
                                     debugger.terminal_buffer.clear();
@@ -249,9 +254,12 @@ fn draw_cpu(
         .alignment(tui::layout::Alignment::Center)
         .wrap(Wrap { trim: true });
 
-    let instruction = Paragraph::new(format!("fetched inst:\n{:#010x}", cpu.prefetch[0].unwrap_or(0)))
-        .alignment(tui::layout::Alignment::Center)
-        .wrap(Wrap { trim: true });
+    let instruction = Paragraph::new(format!(
+        "fetched inst:\n{:#010x}",
+        cpu.prefetch[0].unwrap_or(0)
+    ))
+    .alignment(tui::layout::Alignment::Center)
+    .wrap(Wrap { trim: true });
 
     let decoded_instruction = Paragraph::new(format!(
         "decoded inst:\n{:#010x}",
@@ -577,7 +585,11 @@ fn draw_terminal(
     let num_lines = output.split("\n").collect::<Vec<&str>>().len();
     let output: Vec<&str> = output
         .split("\n")
-        .skip(max(terminal_sections[0].bottom() as usize, num_lines + 1) - terminal_sections[0].y as usize)
+        .skip(if num_lines + 1 > terminal_sections[0].height as usize {
+            num_lines + 1 - terminal_sections[0].height as usize
+        } else {
+            0
+        })
         .collect();
     let output = Paragraph::new(output.join("\n")).block(border);
 

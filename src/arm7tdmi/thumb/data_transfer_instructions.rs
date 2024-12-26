@@ -99,6 +99,25 @@ impl CPU {
         cycles
     }
 
+    pub fn sdt_halfword_imm(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 1;
+        let opcode = instruction.get_bit(11);
+        let imm = (instruction & 0x07C0) >> 5;
+        let rb = (instruction & 0x0038) >> 3;
+        let rd = instruction & 0x0007;
+
+        let operation = match opcode {
+            0b0 => Self::strh_execution,
+            0b1 => Self::ldrh_execution,
+            _ => panic!()
+        };
+
+        let address = self.get_register(rb) + imm;
+
+        cycles += operation(self, rd, address);
+        cycles
+    }
+
     pub fn thumb_sdt_sp_imm(&mut self, instruction: u32) -> CYCLES {
         let mut cycles = 1;
         let opcode = instruction.get_bit(11);

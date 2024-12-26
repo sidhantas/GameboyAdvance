@@ -30,7 +30,7 @@ impl Into<MemoryFetch<WORD>> for MemoryFetch<BYTE> {
     fn into(self) -> MemoryFetch<WORD> {
         MemoryFetch {
             data: self.data.into(),
-            cycles: self.cycles
+            cycles: self.cycles,
         }
     }
 }
@@ -39,24 +39,24 @@ impl Into<MemoryFetch<WORD>> for MemoryFetch<HWORD> {
     fn into(self) -> MemoryFetch<WORD> {
         MemoryFetch {
             data: self.data.into(),
-            cycles: self.cycles
+            cycles: self.cycles,
         }
     }
 }
 
 #[allow(dead_code)]
 pub struct Memory {
-    bios: Vec<BYTE>,
-    board_wram: Vec<BYTE>,
-    chip_wram: Vec<BYTE>,
-    io_ram: Vec<BYTE>,
-    bg_ram: Vec<BYTE>,
-    vram: Vec<BYTE>,
-    oam: Vec<BYTE>,
-    flash_rom_0: Vec<BYTE>,
-    flash_rom_1: Vec<BYTE>,
-    flash_rom_2: Vec<BYTE>,
-    sram: Vec<BYTE>,
+    pub(super) bios: Vec<BYTE>,
+    pub(super) board_wram: Vec<BYTE>,
+    pub(super) chip_wram: Vec<BYTE>,
+    pub(super) io_ram: Vec<BYTE>,
+    pub(super) bg_ram: Vec<BYTE>,
+    pub(super) vram: Vec<BYTE>,
+    pub(super) oam: Vec<BYTE>,
+    pub(super) flash_rom_0: Vec<BYTE>,
+    pub(super) flash_rom_1: Vec<BYTE>,
+    pub(super) flash_rom_2: Vec<BYTE>,
+    pub(super) sram: Vec<BYTE>,
 }
 
 #[derive(PartialEq)]
@@ -98,7 +98,7 @@ impl Memory {
     const IORAM: MemorySegment = MemorySegment {
         range: std::ops::Range {
             start: 0x04000000,
-            end: 0x05000000,
+            end: 0x040003FE,
         },
         wait_states: [1, 1, 1],
         read_access_widths: [true, true, true],
@@ -182,7 +182,7 @@ impl Memory {
     ];
 
     pub fn new() -> Result<Memory, std::io::Error> {
-        let mem = Memory {
+        let mut mem = Memory {
             bios: vec![0; Memory::BIOS.range.len()],
             board_wram: vec![0; Memory::BOARD_WRAM.range.len()],
             chip_wram: vec![0; Memory::CHIP_WRAM.range.len()],
@@ -196,6 +196,8 @@ impl Memory {
             sram: vec![0; Memory::SRAM.range.len()],
         };
 
+        mem.io_ram[0x202] = 0xff;
+        mem.io_ram[0x203] = 0xff;
         Ok(mem)
     }
 
@@ -224,7 +226,7 @@ impl Memory {
             Memory::FLASHROM1 => &self.flash_rom_1,
             Memory::FLASHROM2 => &self.flash_rom_2,
             Memory::SRAM => &self.sram,
-            _ => panic!("Invalid Region")
+            _ => panic!("Invalid Region"),
         }
     }
 
@@ -241,10 +243,7 @@ impl Memory {
             }
         }
 
-        MemoryFetch {
-            cycles: 1,
-            data: 0,
-        }
+        MemoryFetch { cycles: 1, data: 0 }
     }
 
     pub fn readu16(&self, address: usize, access_flags: AccessFlags) -> MemoryFetch<HWORD> {
@@ -256,18 +255,13 @@ impl Memory {
                 let region = self.memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
                 return MemoryFetch {
-                    data: u16::from_le_bytes(
-                    region[address..address + 2].try_into().unwrap(),
-                ),
+                    data: u16::from_le_bytes(region[address..address + 2].try_into().unwrap()),
                     cycles: segment.wait_states[AddressWidth::SIXTEEN as usize],
                 };
             }
         }
 
-        MemoryFetch {
-            cycles: 1,
-            data: 0,
-        }
+        MemoryFetch { cycles: 1, data: 0 }
     }
 
     pub fn readu32(&self, address: usize, access_flags: AccessFlags) -> MemoryFetch<WORD> {
@@ -279,21 +273,20 @@ impl Memory {
                 let region = self.memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
                 return MemoryFetch {
-                    data: u32::from_le_bytes(
-                    region[address..address + 4].try_into().unwrap(),
-                ),
+                    data: u32::from_le_bytes(region[address..address + 4].try_into().unwrap()),
                     cycles: segment.wait_states[AddressWidth::THIRTYTWO as usize],
                 };
             }
         }
 
-        MemoryFetch {
-            cycles: 1,
-            data: 0,
-        }
+        MemoryFetch { cycles: 1, data: 0 }
     }
 
-    fn can_write(segment: &MemorySegment, _access_flags: &AccessFlags, width: AddressWidth) -> bool {
+    fn can_write(
+        segment: &MemorySegment,
+        _access_flags: &AccessFlags,
+        width: AddressWidth,
+    ) -> bool {
         (*segment).write_access_widths[width as usize]
     }
 
@@ -314,53 +307,46 @@ impl Memory {
         }
     }
 
-    pub fn write(
-        &mut self,
-        address: usize,
-        value: BYTE,
-        access_flags: AccessFlags,
-    ) -> CYCLES {
+    pub fn write(&mut self, address: usize, value: BYTE, access_flags: AccessFlags) -> CYCLES {
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
                 && Self::can_write(&segment, &access_flags, AddressWidth::EIGHT)
             {
-                let region = self.mut_memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
-                region[address] = value;
-                return segment.wait_states[AddressWidth::EIGHT as usize]
+                if segment == Memory::IORAM {
+                    self.io_writeu8(address, value);
+                } else {
+                    let region = self.mut_memory_segment_to_region(&segment);
+                    region[address] = value;
+                }
+                return segment.wait_states[AddressWidth::EIGHT as usize];
             }
         }
 
         1
     }
 
-    pub fn writeu16(
-        &mut self,
-        address: usize,
-        value: HWORD,
-        access_flags: AccessFlags,
-    ) -> CYCLES {
+    pub fn writeu16(&mut self, address: usize, value: HWORD, access_flags: AccessFlags) -> CYCLES {
         assert!(address % 2 == 0);
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
                 && Self::can_write(&segment, &access_flags, AddressWidth::SIXTEEN)
             {
-                let region = self.mut_memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
-                region[address..][..2].copy_from_slice(&value.to_le_bytes());
-                return segment.wait_states[AddressWidth::SIXTEEN as usize]
+                if segment == Memory::IORAM {
+                    self.io_writeu16(address, value);
+                } else {
+                    let region = self.mut_memory_segment_to_region(&segment);
+                    region[address..][..2].copy_from_slice(&value.to_le_bytes());
+                }
+                return segment.wait_states[AddressWidth::SIXTEEN as usize];
             }
         }
 
         1
     }
 
-    pub fn writeu32(
-        &mut self,
-        address: usize,
-        value: WORD,
-        access_flags: AccessFlags,
-    ) -> CYCLES {
+    pub fn writeu32(&mut self, address: usize, value: WORD, access_flags: AccessFlags) -> CYCLES {
         assert!(address % 4 == 0);
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
@@ -369,7 +355,7 @@ impl Memory {
                 let region = self.mut_memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
                 region[address..][..4].copy_from_slice(&value.to_le_bytes());
-                return segment.wait_states[AddressWidth::THIRTYTWO as usize]
+                return segment.wait_states[AddressWidth::THIRTYTWO as usize];
             }
         }
 

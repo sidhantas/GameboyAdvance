@@ -2,7 +2,7 @@ use std::{sync::{Arc, Mutex}, time::Duration};
 
 use sdl2::{event::Event, pixels::Color};
 
-use crate::memory::Memory;
+use crate::memory::memory::Memory;
 
 #[repr(u32)]
 enum DisplayAddresses {

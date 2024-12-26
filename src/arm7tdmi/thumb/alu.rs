@@ -426,7 +426,7 @@ mod thumb_add_and_subtract_tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]

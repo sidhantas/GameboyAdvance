@@ -92,8 +92,8 @@ impl CPU {
     }
 
     pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
         self.set_executed_instruction("NOT IMPLEMENTED".into());
+        return 0;
     }
 }
 

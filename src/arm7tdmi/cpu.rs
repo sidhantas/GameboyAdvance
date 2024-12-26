@@ -1,21 +1,20 @@
-use std::{
-    collections::{HashMap, HashSet}, fmt::Debug, panic, sync::{
+use std::
+    sync::{
         mpsc::{
             Receiver,
             TryRecvError::{Disconnected, Empty},
         },
         Arc, Mutex,
     }
-};
+;
 
 use crate::{
-    debugger::debugger::DebugCommands,
-    memory::{AccessFlags, Memory},
+    debugger::debugger::{BreakType, DebugCommands},
+    memory::memory::{AccessFlags, Memory},
     types::*,
     utils::bits::Bits,
 };
 
-use super::instructions::ARMDecodedInstruction;
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -56,7 +55,7 @@ pub struct CPU {
     pub executed_instruction: String,
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
-    pub breakpoints: Vec<WORD>
+    pub breakpoints: Vec<BreakType>,
 }
 
 pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
@@ -73,10 +72,13 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
                     }
                     DebugCommands::SetBreakpoint(breakpoint) => {
                         cpu.lock().unwrap().breakpoints.push(breakpoint);
-                    },
+                    }
                     DebugCommands::DeleteBreakpoint(breakpoint_num) => {
-                        cpu.lock().unwrap().breakpoints.remove(breakpoint_num as usize);
-                    },
+                        cpu.lock()
+                            .unwrap()
+                            .breakpoints
+                            .remove(breakpoint_num as usize);
+                    }
                 },
                 Err(Disconnected) => return,
                 Err(Empty) => {
@@ -88,8 +90,15 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
         while instructions_left > 0 {
             cpu.execute_cpu_cycle();
             instructions_left -= 1;
-            if cpu.breakpoints.contains(&cpu.get_pc()) {
-                instructions_left = 0;
+            let pc = cpu.get_pc();
+            for breakpoint in &cpu.breakpoints {
+                match *breakpoint {
+                    BreakType::Break(break_pc) if break_pc == pc => instructions_left = 0,
+                    BreakType::WatchRegister(register, value) if cpu.get_register(register) == value => {
+                        instructions_left = 0
+                    }
+                    _ => {}
+                }
             }
         }
     }
@@ -107,7 +116,6 @@ impl CPU {
         if let None = self.prefetch[1] {
             // refill pipeline if decoded instruction doesn't advance the pipeline
             self.advance_pipeline();
-
         }
     }
 
@@ -128,7 +136,7 @@ impl CPU {
             registers_abt: [0; 2],
             registers_irq: [0; 2],
             registers_und: [0; 2],
-            breakpoints: Vec::new()
+            breakpoints: Vec::new(),
         }
     }
 
@@ -157,11 +165,11 @@ impl CPU {
     }
 
     pub fn set_sp(&mut self, address: WORD) {
-        self.registers[13] = address;
+        self.set_register(13, address);
     }
 
     pub fn get_sp(&self) -> u32 {
-        self.registers[13]
+        self.get_register(13)
     }
 
     pub fn increment_pc(&mut self) {
@@ -242,7 +250,6 @@ impl CPU {
         return InstructionMode::ARM;
     }
 
-    #[cfg(test)]
     pub fn set_mode(&mut self, mode: CPUMode) {
         self.cpsr &= !0x1F; // clear bottom 5 bits
         self.cpsr |= mode as u32;
@@ -397,7 +404,7 @@ impl CPU {
 mod cpu_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::cpu::CPUMode, memory::Memory, utils::bits::Bits};
+    use crate::{arm7tdmi::cpu::CPUMode, memory::memory::Memory, utils::bits::Bits};
 
     use super::CPU;
 

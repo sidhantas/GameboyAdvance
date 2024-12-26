@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://mgba.io/
+HostUrl=https://objects.githubusercontent.com/github-production-release-asset-2e65be/27788471/4205139a-ad0e-4c2b-9be0-bb21ad29e3ab?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=releaseassetproduction%2F20241208%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20241208T005813Z&X-Amz-Expires=300&X-Amz-Signature=fedd798eaeb2db8145db431a0e9b8a1e82225a874e5cc62ce3f70950e45733ef&X-Amz-SignedHeaders=host&response-content-disposition=attachment%3B%20filename%3DmGBA-0.10.3-ubuntu64-lunar.tar.xz&response-content-type=application%2Foctet-stream
