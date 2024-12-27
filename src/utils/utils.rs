@@ -44,6 +44,17 @@ pub fn try_parse_num<T: Num + FromStr>(str: &str) -> Result<T, ParsingError> {
     parse_hex::<T>(str)
 }
 
+pub fn try_parse_reg<T: Num + FromStr>(reg: &str) -> Result<T, ParsingError> {
+    let mut reg_iter = reg.chars();
+    if let Some('r') = reg_iter.next() {} else {
+        return Err(ParsingError);
+    }
+    if let Ok(parsed_value) = reg_iter.collect::<String>().parse() {
+        return Ok(parsed_value);
+    } 
+
+    parse_hex::<T>(reg)
+}
 
 #[cfg(test)]
 mod util_tests {

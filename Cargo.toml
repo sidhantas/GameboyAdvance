@@ -5,6 +5,7 @@ edition = "2021"
 [profile.dev]
 overflow-checks = false
 panic = "abort"
+debug = true
 [dependencies]
 crossterm = "0.27.0"
 ctrlc = "3.4.4"

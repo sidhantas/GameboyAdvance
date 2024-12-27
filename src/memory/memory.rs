@@ -182,7 +182,7 @@ impl Memory {
     ];
 
     pub fn new() -> Result<Memory, std::io::Error> {
-        let mut mem = Memory {
+        let mem = Memory {
             bios: vec![0; Memory::BIOS.range.len()],
             board_wram: vec![0; Memory::BOARD_WRAM.range.len()],
             chip_wram: vec![0; Memory::CHIP_WRAM.range.len()],
@@ -196,8 +196,6 @@ impl Memory {
             sram: vec![0; Memory::SRAM.range.len()],
         };
 
-        mem.io_ram[0x202] = 0xff;
-        mem.io_ram[0x203] = 0xff;
         Ok(mem)
     }
 

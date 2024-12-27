@@ -1,4 +1,3 @@
-#![allow(unused)]
 use crate::{
     arm7tdmi::cpu::LINK_REGISTER,
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
@@ -7,7 +6,7 @@ use crate::{
 
 use super::{
     cpu::{FlagsRegister, InstructionMode, CPU},
-    decoder::Instruction,
+    decoder::Instruction, interrupts::Exceptions,
 };
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
 pub type ExecutingInstruction = fn(&mut CPU) -> ();
@@ -37,7 +36,7 @@ impl CPU {
 
     pub fn arm_branch(&mut self, instruction: ARMByteCode) -> CYCLES {
         let mut cycles = 1;
-        if (instruction.bit_is_set(24)) {
+        if instruction.bit_is_set(24) {
             self.set_register(LINK_REGISTER, self.get_pc() - 4);
         }
         let offset = instruction & 0x00FF_FFFF;
@@ -50,7 +49,7 @@ impl CPU {
         cycles
     }
 
-    pub fn arm_nop(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_nop(&mut self, _instruction: ARMByteCode) -> CYCLES {
         self.set_executed_instruction("NOP".into());
         return 1;
     }
@@ -67,9 +66,15 @@ impl CPU {
         return 0;
     }
 
-    pub fn arm_single_data_swap(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
+    pub fn arm_software_interrupt(&mut self, _instruction: ARMByteCode) -> CYCLES {
+        let mut cycles = 1;
+        self.raise_exception(Exceptions::Software);
+        cycles += self.flush_pipeline();
+        self.set_executed_instruction("SWI".into());
+
+        return cycles;
     }
+
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) -> CYCLES {
         let mut destination = self.get_register(instruction & 0x0000_000F);
@@ -87,10 +92,6 @@ impl CPU {
         cycles
     }
 
-    pub fn arm_load_store_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
-    }
-
     pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) -> CYCLES {
         self.set_executed_instruction("NOT IMPLEMENTED".into());
         return 0;
@@ -102,11 +103,9 @@ mod instruction_tests {
     use std::sync::{Arc, Mutex};
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER},
-        memory::Memory,
+        arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU, LINK_REGISTER},
+        memory::memory::Memory,
     };
-
-    use super::ARMDecodedInstruction;
 
     #[test]
     fn branch_ends_up_at_correct_address() {
@@ -160,5 +159,21 @@ mod instruction_tests {
 
         assert!(cpu.get_pc() == expected_destination);
         assert!(cpu.get_register(LINK_REGISTER) == 0x14);
+    }
+
+    #[test]
+    fn software_interrupt_goes_to_the_correct_interrupt_vec() {
+        let memory = Memory::new().unwrap();
+        let memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(memory);
+        cpu.set_mode(CPUMode::USER);
+        cpu.set_pc(0xF8);
+
+        cpu.prefetch[1] = Some(0xef000000); // SWI
+
+        cpu.execute_cpu_cycle();
+        assert_eq!(cpu.get_pc(), 0x10);
+        assert!(cpu.get_cpu_mode() == CPUMode::SVC);
+        assert_eq!(cpu.get_register(LINK_REGISTER), 0xF4);
     }
 }

@@ -4,7 +4,6 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
-    cmp::max,
     io::{self, Stdout},
     sync::{
         mpsc::{Receiver, Sender},

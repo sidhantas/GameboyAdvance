@@ -81,7 +81,7 @@ mod branch_tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]

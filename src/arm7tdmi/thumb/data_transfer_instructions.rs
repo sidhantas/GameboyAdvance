@@ -226,7 +226,7 @@ mod thumb_ldr_str_tests {
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::{AccessFlags, Memory},
+        memory::memory::{AccessFlags, Memory},
     };
 
     #[test]

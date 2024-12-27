@@ -24,6 +24,7 @@ pub enum InstructionMode {
     THUMB,
 }
 
+#[derive(PartialEq)]
 pub enum CPUMode {
     USER = 0b10000,
     FIQ = 0b10001, // Fast Interrupt

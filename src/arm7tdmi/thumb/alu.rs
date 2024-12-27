@@ -652,7 +652,7 @@ mod thumb_move_shifted_register_tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]
@@ -809,7 +809,7 @@ mod thumb_move_compare_add_subtract_tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]
@@ -906,7 +906,7 @@ mod thumb_alu_operations_tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]
@@ -990,7 +990,7 @@ mod thumb_hi_reg_operations {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]
@@ -1056,7 +1056,7 @@ mod thumb_bx_tests {
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]
@@ -1098,7 +1098,7 @@ mod get_relative_address_tests {
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::Memory,
+        memory::memory::Memory,
     };
 
     #[test]

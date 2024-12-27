@@ -374,7 +374,7 @@ mod tests {
 
     use crate::{
         arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU},
-        memory::{AccessFlags, Memory},
+        memory::memory::{AccessFlags, Memory},
         types::REGISTER,
     };
 

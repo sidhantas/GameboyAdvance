@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use gameboy_advance::{arm7tdmi::cpu::CPU, memory::Memory};
+use gameboy_advance::{arm7tdmi::cpu::CPU, memory::memory::Memory};
 
 #[test]
 fn test_thumb_long_branch() {

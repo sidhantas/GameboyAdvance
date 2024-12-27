@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::mpsc::SendError};
 
-use crate::utils::utils::{try_parse_num, ParsingError};
+use crate::utils::utils::{try_parse_num, try_parse_reg, ParsingError};
 
 use super::debugger::{BreakType, DebugCommands, Debugger};
 
@@ -41,7 +41,7 @@ pub struct TerminalHistoryEntry {
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 7] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 8] = [
     TerminalCommand {
         name: "next",
         arguments: 1,
@@ -73,10 +73,16 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 7] = [
         handler: list_breakpoint_handler,
     },
     TerminalCommand {
-        name: "watch",
-        arguments: 1,
+        name: "watchr",
+        arguments: 2,
         description: "Sets a watch point on a register and a value",
         handler: set_watchpoint_handler,
+    },
+    TerminalCommand {
+        name: "watcha",
+        arguments: 2,
+        description: "Sets a watch point on an address range",
+        handler: set_watch_address_range_handler,
     },
     TerminalCommand {
         name: "mem",
@@ -207,7 +213,7 @@ fn set_watchpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<St
     if args.len() < 2 {
         return Err(TerminalCommandErrors::NotEnoughArguments);
     }
-    let register = try_parse_num(args[0])?;
+    let register = try_parse_reg(args[0])?;
     let value = try_parse_num(args[1])?;
     
     if let Err(err) = debugger
@@ -217,6 +223,26 @@ fn set_watchpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<St
         return Err(TerminalCommandErrors::ChannelError(err));
     }
     Ok(format!("Watchpoint set for register r{register} with value {:#x}", value))
+}
+
+fn set_watch_address_range_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
+    if args.len() < 1 {
+        return Err(TerminalCommandErrors::NotEnoughArguments);
+    }
+    let address1 = try_parse_num(args[0])?;
+    let address2 = if args.len() >= 2 {
+        try_parse_num(args[1]).unwrap_or(address1)
+    } else {
+        address1
+    };
+    
+    if let Err(err) = debugger
+        .cpu_sender
+        .send(DebugCommands::SetBreakpoint(BreakType::WatchAddressRange(address1, address2)))
+    {
+        return Err(TerminalCommandErrors::ChannelError(err));
+    }
+    Ok(format!("Watchpoint set for range {:#x}-{:#x}", address1, address2))
 }
 
 fn set_mem_start(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {

@@ -2,6 +2,7 @@ use super::memory::Memory;
 
 struct IORegisterOffsets;
 impl IORegisterOffsets {
+    pub const DISPCNT: usize = 0x000;
     pub const IE: usize = 0x200;
     pub const IF: usize = 0x202;
     pub const IME: usize = 0x208;
@@ -12,6 +13,7 @@ impl Memory {
         assert!(address % 2 == 0);
         let write_value = match address {
 
+            IORegisterOffsets::DISPCNT => hword,
             // TODO: Figure out if write8 should only affect the address selected or the entire
             // byte MGBA affects the entire byte, but this seems wrong
             IORegisterOffsets::IE => hword & 0x3FFF,

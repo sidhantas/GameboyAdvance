@@ -107,6 +107,12 @@ impl CPU {
                     executable: CPU::sdt_instruction_execution,
                 }
             }
+            _ if arm_decoders::is_software_interrupt(instruction) => {
+                ARMDecodedInstruction {
+                    instruction,
+                    executable: CPU::arm_software_interrupt,
+                }
+            }
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
                 instruction,
@@ -519,13 +525,24 @@ mod arm_decoders_tests {
         let instruction = 0xe12fff10;
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange)
     }
+
+    #[test]
+    fn it_finds_swi_instruction() {
+        let memory = Memory::new().unwrap();
+        let cpu_memory = Arc::new(Mutex::new(memory));
+        let mut cpu = CPU::new(cpu_memory);
+        let instruction = 0xef001234;
+
+        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt);
+
+    }
 }
 
 #[cfg(test)]
 mod sub_decoder_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::decoder::*, memory::Memory};
+    use crate::{arm7tdmi::decoder::*, memory::memory::Memory};
 
     #[test]
     fn it_decodes_an_instruction_if_eq_satisfied() {
@@ -959,7 +976,7 @@ mod sub_decoder_tests {
 mod thumb_decoder_tests {
     use std::sync::{Arc, Mutex};
 
-    use crate::{arm7tdmi::cpu::{InstructionMode, CPU}, memory::Memory};
+    use crate::{arm7tdmi::cpu::{InstructionMode, CPU}, memory::memory::Memory};
 
     #[test]
     fn it_recognizes_sdt_imm_offset() {
