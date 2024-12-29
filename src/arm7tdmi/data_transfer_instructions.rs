@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use crate::{
-    memory::memory::{AccessFlags, MemoryFetch},
+    memory::memory::{ MemoryFetch},
     types::{CYCLES, REGISTER, WORD},
     utils::{bits::{sign_extend, Bits}, utils::print_vec},
 };
@@ -23,7 +23,7 @@ impl CPU {
             pre_indexed_addressing && instruction.bit_is_set(21);
         let is_byte_transfer: bool = instruction.bit_is_set(22);
 
-        let access_mode: AccessFlags = if force_non_privileged_access {
+        if force_non_privileged_access {
             AccessFlags::User
         } else {
             self.get_access_mode()
@@ -78,7 +78,7 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        access_flag: AccessFlags,
+        access_flag: 
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
         let cycles = {
@@ -86,7 +86,7 @@ impl CPU {
             if byte_transfer {
                 memory.write(address as usize, data as u8, access_flag)
             } else {
-                memory.writeu32(address as usize, data, access_flag)
+                memory.writeu32(address as usize, data)
             }
         };
         self.set_executed_instruction(format!("STR {} [{:#x}]", rd, address));
@@ -98,15 +98,15 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        access_flag: AccessFlags,
+        access_flag: 
     ) -> CYCLES {
         let mut cycles = 0;
         let data = {
             let memory = self.memory.lock().unwrap();
             let memory_fetch = if byte_transfer {
-                memory.read(address as usize, access_flag).into()
+                memory.read(address as usize)
             } else {
-                let memory_fetch = memory.readu32(address as usize, access_flag);
+                let memory_fetch = memory.readu32(address as usize);
                 MemoryFetch {
                     data: memory_fetch.data.rotate_right(8 * address & 0b11),
                     ..memory_fetch
@@ -184,7 +184,7 @@ impl CPU {
         let data: WORD = self.get_register(rd);
         let cycles = {
             let mut memory = self.memory.lock().unwrap();
-            memory.writeu16(address as usize, data as u16, self.get_access_mode())
+            memory.writeu16(address as usize, data as u16)
         };
         self.set_executed_instruction(format!("STRH {} [{:#x}]", rd, address));
 
@@ -195,7 +195,7 @@ impl CPU {
         let mut cycles = 0;
         let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            memory.readu16(address as usize, self.get_access_mode())
+            memory.readu16(address as usize)
         };
 
         cycles += memory_fetch.cycles;
@@ -214,7 +214,7 @@ impl CPU {
         let mut cycles = 0;
         let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            memory.read(address as usize, self.get_access_mode())
+            memory.read(address as usize)
         };
 
         cycles += memory_fetch.cycles;
@@ -233,7 +233,7 @@ impl CPU {
         let mut cycles = 0;
         let memory_fetch = {
             let memory = self.memory.lock().unwrap();
-            memory.readu16(address as usize, self.get_access_mode())
+            memory.readu16(address as usize)
         };
 
         cycles += memory_fetch.cycles;
@@ -325,7 +325,7 @@ impl CPU {
             let data = self.get_register(register_list[i] as u32);
             cycles += {
                 let mut memory = self.memory.lock().unwrap();
-                memory.writeu32(curr_address, data, self.get_access_mode())
+                memory.writeu32(curr_address, data)
             };
             if !pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
@@ -356,7 +356,7 @@ impl CPU {
             }
             let memory_fetch = {
                 let memory = self.memory.lock().unwrap();
-                memory.readu32(curr_address, self.get_access_mode())
+                memory.readu32(curr_address)
             };
             cycles += memory_fetch.cycles;
             let data = memory_fetch.data;
@@ -376,7 +376,7 @@ mod sdt_tests {
 
     use crate::{
         arm7tdmi::cpu::CPU,
-        memory::memory::{AccessFlags, Memory},
+        memory::memory::{ Memory},
     };
 
     #[test]
@@ -392,7 +392,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         cpu.set_register(1, address);
 
@@ -417,7 +417,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize + 8, value, AccessFlags::User);
+            .writeu32(address as usize + 8, value);
 
         cpu.set_register(1, address);
 
@@ -442,7 +442,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize - 8, value, AccessFlags::User);
+            .writeu32(address as usize - 8, value);
 
         cpu.set_register(1, address);
 
@@ -467,7 +467,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize + 8, value, AccessFlags::User);
+            .writeu32(address as usize + 8, value);
 
         cpu.set_register(1, address);
         cpu.set_register(3, 4);
@@ -493,7 +493,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         cpu.set_register(1, address);
 
@@ -525,11 +525,11 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000200, value, AccessFlags::User);
+            .writeu32(0x3000200, value);
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000204, 0xABABABAB, AccessFlags::User);
+            .writeu32(0x3000204, 0xABABABAB);
 
         cpu.set_register(1, address);
 
@@ -562,7 +562,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         cpu.set_register(1, address);
 
@@ -596,7 +596,7 @@ mod sdt_tests {
         let stored_value = mem
             .lock()
             .unwrap()
-            .readu32(address as usize, AccessFlags::User)
+            .readu32(address as usize)
             .data;
 
         assert_eq!(value, stored_value);
@@ -623,7 +623,7 @@ mod sdt_tests {
         let stored_value = mem
             .lock()
             .unwrap()
-            .read(address as usize, AccessFlags::User)
+            .read(address as usize)
             .data;
 
         assert_eq!(value, stored_value);
@@ -650,7 +650,7 @@ mod sdt_tests {
         let stored_value = mem
             .lock()
             .unwrap()
-            .readu16(address as usize, AccessFlags::User)
+            .readu16(address as usize)
             .data;
 
         assert_eq!(value as u16, stored_value);
@@ -677,7 +677,7 @@ mod sdt_tests {
         let stored_value = mem
             .lock()
             .unwrap()
-            .readu32(address as usize, AccessFlags::User)
+            .readu32(address as usize)
             .data;
 
         assert_eq!(value & 0x0000_FFFF, stored_value);
@@ -696,7 +696,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         cpu.set_register(1, address);
         cpu.prefetch[0] = Some(0xe1d130b0); // ldrh r3, [r1]
@@ -720,7 +720,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         cpu.set_register(1, address);
         cpu.prefetch[0] = Some(0xe1d130f0); // ldrsh r3, [r1]
@@ -744,7 +744,7 @@ mod sdt_tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         cpu.set_register(1, address);
         cpu.prefetch[0] = Some(0xe1d130d0); // ldrsb r3, [r1]
@@ -769,11 +769,11 @@ mod sdt_tests {
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize + 4, 0x55, AccessFlags::User);
+            .writeu32(address as usize + 4, 0x55);
 
         cpu.prefetch[0] = Some(0xe8950003); // ldmia r5, {r0, r1}
 
@@ -798,11 +798,11 @@ mod sdt_tests {
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize + 4, value, AccessFlags::User);
+            .writeu32(address as usize + 4, value);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize + 8, 0x55, AccessFlags::User);
+            .writeu32(address as usize + 8, 0x55);
 
         cpu.prefetch[0] = Some(0xe9b500c0); // ldmib r5!, {r6, r7}
 
@@ -828,11 +828,11 @@ mod sdt_tests {
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, value, AccessFlags::User);
+            .writeu32(address as usize, value);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize - 4, 0x55, AccessFlags::User);
+            .writeu32(address as usize - 4, 0x55);
 
         cpu.prefetch[0] = Some(0xe83500c0); // ldmda r5!, {r6, r7}
 
@@ -858,11 +858,11 @@ mod sdt_tests {
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize - 4, value, AccessFlags::User);
+            .writeu32(address as usize - 4, value);
 
         mem.lock()
             .unwrap()
-            .writeu32(address as usize - 8, 0x55, AccessFlags::User);
+            .writeu32(address as usize - 8, 0x55);
 
         cpu.prefetch[0] = Some(0xe93500c0); // ldmdb r5!, {r6, r7}
 
@@ -895,14 +895,14 @@ mod sdt_tests {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(address as usize, AccessFlags::User)
+                .readu32(address as usize)
                 .data,
             123
         );
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(address as usize + 4, AccessFlags::User)
+                .readu32(address as usize + 4)
                 .data,
             456
         );
@@ -929,14 +929,14 @@ mod sdt_tests {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(address as usize + 4, AccessFlags::User)
+                .readu32(address as usize + 4)
                 .data,
             123
         );
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(address as usize + 8, AccessFlags::User)
+                .readu32(address as usize + 8)
                 .data,
             456
         );
@@ -964,14 +964,14 @@ mod sdt_tests {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32((address - 4) as usize, AccessFlags::User)
+                .readu32((address - 4) as usize)
                 .data,
             456
         );
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32((address - 8) as usize, AccessFlags::User)
+                .readu32((address - 8) as usize)
                 .data,
             123
         );
@@ -999,14 +999,14 @@ mod sdt_tests {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32((address) as usize, AccessFlags::User)
+                .readu32((address) as usize)
                 .data,
             456
         );
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32((address - 4) as usize, AccessFlags::User)
+                .readu32((address - 4) as usize)
                 .data,
             123
         );

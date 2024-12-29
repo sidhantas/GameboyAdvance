@@ -16,17 +16,17 @@ impl CPU {
 
         let memory_data = if is_byte_swap {
             let mut memory = self.memory.lock().unwrap();
-            let memory_fetch = memory.read(address, self.get_access_mode());
+            let memory_fetch = memory.read(address);
             cycles += memory_fetch.cycles;
-            cycles += memory.write(address, self.get_register(rm) as u8, self.get_access_mode());
+            cycles += memory.write(address, self.get_register(rm) as u8);
 
             memory_fetch.data as u32
         } else {
             let mut memory = self.memory.lock().unwrap();
-            let memory_fetch = memory.readu32(address, self.get_access_mode());
+            let memory_fetch = memory.readu32(address);
 
             cycles += memory_fetch.cycles;
-            cycles += memory.writeu32(address, self.get_register(rm), self.get_access_mode());
+            cycles += memory.writeu32(address, self.get_register(rm));
 
             memory_fetch.data
         };
@@ -44,7 +44,7 @@ mod single_data_swap_test {
 
     use crate::{
         arm7tdmi::cpu::CPU,
-        memory::memory::{AccessFlags, Memory},
+        memory::memory::{ Memory},
     };
 
     #[test]
@@ -58,7 +58,7 @@ mod single_data_swap_test {
         cpu.set_register(3, 10);
         mem.lock()
             .unwrap()
-            .writeu32(0x3000200, 5, AccessFlags::User);
+            .writeu32(0x3000200, 5);
 
         cpu.prefetch[0] = Some(0xe1014093); // swp r4, r3, [r1]
 
@@ -69,7 +69,7 @@ mod single_data_swap_test {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(0x3000200, AccessFlags::User)
+                .readu32(0x3000200)
                 .data,
             10
         );
@@ -87,7 +87,7 @@ mod single_data_swap_test {
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, 5, AccessFlags::User);
+            .writeu32(address as usize, 5);
 
         cpu.prefetch[0] = Some(0xe1014091); // swp r4, r1, [r1]
 
@@ -98,7 +98,7 @@ mod single_data_swap_test {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(0x3000200, AccessFlags::User)
+                .readu32(0x3000200)
                 .data,
             0x3000200
         );
@@ -118,7 +118,7 @@ mod single_data_swap_test {
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, 5, AccessFlags::User);
+            .writeu32(address as usize, 5);
 
         cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
 
@@ -129,7 +129,7 @@ mod single_data_swap_test {
         assert_eq!(
             mem.lock()
                 .unwrap()
-                .readu32(0x3000200, AccessFlags::User)
+                .readu32(0x3000200)
                 .data,
             15
         );
@@ -150,7 +150,7 @@ mod single_data_swap_test {
         cpu.set_register(1, address);
         mem.lock()
             .unwrap()
-            .writeu32(address as usize, 0x7890_DD12, AccessFlags::User);
+            .writeu32(address as usize, 0x7890_DD12);
 
         cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
 
@@ -159,7 +159,7 @@ mod single_data_swap_test {
 
         assert_eq!(cpu.get_register(4), 0x12);
         assert_eq!(
-            mem.lock().unwrap().read(0x3000200, AccessFlags::User).data,
+            mem.lock().unwrap().read(0x3000200).data,
             0xBC
         );
     }

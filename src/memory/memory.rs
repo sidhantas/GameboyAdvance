@@ -16,11 +16,6 @@ enum AddressWidth {
     THIRTYTWO = 2,
 }
 
-pub enum AccessFlags {
-    User = (1 << 0),
-    Privileged = (1 << 1),
-}
-
 pub struct MemoryFetch<T> {
     pub cycles: CYCLES,
     pub data: T,
@@ -71,7 +66,7 @@ impl Memory {
     const BIOS: MemorySegment = MemorySegment {
         range: std::ops::Range {
             start: 0x00000000,
-            end: 0x00003FFF,
+            end: 0x00004000,
         },
         wait_states: [1, 1, 1],
         read_access_widths: [true, true, true],
@@ -98,7 +93,7 @@ impl Memory {
     const IORAM: MemorySegment = MemorySegment {
         range: std::ops::Range {
             start: 0x04000000,
-            end: 0x040003FE,
+            end: 0x040003FF,
         },
         wait_states: [1, 1, 1],
         read_access_widths: [true, true, true],
@@ -207,7 +202,7 @@ impl Memory {
         Ok(())
     }
 
-    fn can_read(segment: &MemorySegment, access_flags: &AccessFlags, width: AddressWidth) -> bool {
+    fn can_read(segment: &MemorySegment, width: AddressWidth) -> bool {
         (*segment).read_access_widths[width as usize]
     }
 
@@ -228,10 +223,10 @@ impl Memory {
         }
     }
 
-    pub fn read(&self, address: usize, access_flags: AccessFlags) -> MemoryFetch<BYTE> {
+    pub fn read(&self, address: usize) -> MemoryFetch<BYTE> {
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
-                && Self::can_read(&segment, &access_flags, AddressWidth::EIGHT)
+                && Self::can_read(&segment, AddressWidth::EIGHT)
             {
                 let region = self.memory_segment_to_region(&segment);
                 return MemoryFetch {
@@ -244,11 +239,11 @@ impl Memory {
         MemoryFetch { cycles: 1, data: 0 }
     }
 
-    pub fn readu16(&self, address: usize, access_flags: AccessFlags) -> MemoryFetch<HWORD> {
+    pub fn readu16(&self, address: usize) -> MemoryFetch<HWORD> {
         // assert!(address % 4 == 0);
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
-                && Self::can_read(&segment, &access_flags, AddressWidth::SIXTEEN)
+                && Self::can_read(&segment, AddressWidth::SIXTEEN)
             {
                 let region = self.memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
@@ -262,11 +257,11 @@ impl Memory {
         MemoryFetch { cycles: 1, data: 0 }
     }
 
-    pub fn readu32(&self, address: usize, access_flags: AccessFlags) -> MemoryFetch<WORD> {
+    pub fn readu32(&self, address: usize) -> MemoryFetch<WORD> {
         // assert!(address % 4 == 0);
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
-                && Self::can_read(&segment, &access_flags, AddressWidth::THIRTYTWO)
+                && Self::can_read(&segment, AddressWidth::THIRTYTWO)
             {
                 let region = self.memory_segment_to_region(&segment);
                 let address = address - segment.range.start;
@@ -282,7 +277,6 @@ impl Memory {
 
     fn can_write(
         segment: &MemorySegment,
-        _access_flags: &AccessFlags,
         width: AddressWidth,
     ) -> bool {
         (*segment).write_access_widths[width as usize]
@@ -305,10 +299,10 @@ impl Memory {
         }
     }
 
-    pub fn write(&mut self, address: usize, value: BYTE, access_flags: AccessFlags) -> CYCLES {
+    pub fn write(&mut self, address: usize, value: BYTE) -> CYCLES {
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
-                && Self::can_write(&segment, &access_flags, AddressWidth::EIGHT)
+                && Self::can_write(&segment, AddressWidth::EIGHT)
             {
                 let address = address - segment.range.start;
                 if segment == Memory::IORAM {
@@ -324,11 +318,11 @@ impl Memory {
         1
     }
 
-    pub fn writeu16(&mut self, address: usize, value: HWORD, access_flags: AccessFlags) -> CYCLES {
+    pub fn writeu16(&mut self, address: usize, value: HWORD) -> CYCLES {
         assert!(address % 2 == 0);
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
-                && Self::can_write(&segment, &access_flags, AddressWidth::SIXTEEN)
+                && Self::can_write(&segment, AddressWidth::SIXTEEN)
             {
                 let address = address - segment.range.start;
                 if segment == Memory::IORAM {
@@ -344,11 +338,11 @@ impl Memory {
         1
     }
 
-    pub fn writeu32(&mut self, address: usize, value: WORD, access_flags: AccessFlags) -> CYCLES {
+    pub fn writeu32(&mut self, address: usize, value: WORD) -> CYCLES {
         assert!(address % 4 == 0);
         for segment in Memory::SEGMENTS {
             if segment.range.contains(&address)
-                && Self::can_write(&segment, &access_flags, AddressWidth::THIRTYTWO)
+                && Self::can_write(&segment, AddressWidth::THIRTYTWO)
             {
                 let region = self.mut_memory_segment_to_region(&segment);
                 let address = address - segment.range.start;

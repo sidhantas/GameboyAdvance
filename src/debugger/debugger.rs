@@ -22,7 +22,6 @@ use tui::{
 
 use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
-    memory::memory::AccessFlags,
     types::REGISTER,
 };
 
@@ -527,7 +526,6 @@ fn draw_memory(
             let value = memory
                 .read(
                     (start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize,
-                    AccessFlags::Privileged,
                 )
                 .data;
 

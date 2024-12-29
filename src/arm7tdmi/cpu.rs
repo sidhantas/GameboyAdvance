@@ -10,7 +10,7 @@ use std::
 
 use crate::{
     debugger::debugger::{BreakType, DebugCommands},
-    memory::memory::{AccessFlags, Memory},
+    memory::memory::{ Memory},
     types::*,
     utils::bits::Bits,
 };
@@ -294,9 +294,9 @@ impl CPU {
         let memory_fetch = {
             let memory = self.memory.lock().unwrap();
             match self.get_instruction_mode() {
-                InstructionMode::ARM => memory.readu32(self.get_pc() as usize, AccessFlags::User),
+                InstructionMode::ARM => memory.readu32(self.get_pc() as usize),
                 InstructionMode::THUMB => memory
-                    .readu16(self.get_pc() as usize, AccessFlags::User)
+                    .readu16(self.get_pc() as usize)
                     .into(),
             }
         };
@@ -305,13 +305,6 @@ impl CPU {
         self.increment_pc();
 
         cycles
-    }
-
-    pub fn get_access_mode(&self) -> AccessFlags {
-        match self.get_cpu_mode() {
-            CPUMode::USER => AccessFlags::User,
-            _ => AccessFlags::Privileged,
-        }
     }
 
     pub fn decode_shifted_register(

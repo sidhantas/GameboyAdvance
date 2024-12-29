@@ -374,7 +374,7 @@ mod tests {
 
     use crate::{
         arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU},
-        memory::memory::{AccessFlags, Memory},
+        memory::memory::{ Memory},
         types::REGISTER,
     };
 
@@ -690,27 +690,27 @@ mod tests {
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000000, 0xe25f1008, AccessFlags::User);
+            .writeu32(0x3000000, 0xe25f1008);
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000004, 0xe1a00000, AccessFlags::User);
+            .writeu32(0x3000004, 0xe1a00000);
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000008, 0xe1a00000, AccessFlags::User); // nop
+            .writeu32(0x3000008, 0xe1a00000); // nop
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x300000C, 0xe1a00000, AccessFlags::User); // nop
+            .writeu32(0x300000C, 0xe1a00000); // nop
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000010, 0xe1a00000, AccessFlags::User); // nop
+            .writeu32(0x3000010, 0xe1a00000); // nop
         let _res = mem
             .lock()
             .unwrap()
-            .writeu32(0x3000014, 0xe281f000, AccessFlags::User);
+            .writeu32(0x3000014, 0xe281f000);
 
         cpu.set_pc(0x3000000);
         cpu.execute_cpu_cycle();

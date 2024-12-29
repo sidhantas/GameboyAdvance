@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{InstructionMode, CPU, LINK_REGISTER, PC_REGISTER},
+    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER},
     types::{CYCLES, REGISTER, WORD},
     utils::bits::Bits,
 };
@@ -15,7 +15,7 @@ impl CPU {
         let memory_fetch = {
             let memory = self.memory.lock().unwrap();
             memory
-                .readu32(address as usize, self.get_access_mode())
+                .readu32(address as usize)
         };
 
         cycles += memory_fetch.cycles;
@@ -226,7 +226,7 @@ mod thumb_ldr_str_tests {
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::{AccessFlags, Memory},
+        memory::memory::{ Memory},
     };
 
     #[test]
@@ -236,7 +236,7 @@ mod thumb_ldr_str_tests {
         let mem = memory.clone();
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
-        mem.lock().unwrap().writeu32(0x3000024, 0x55, AccessFlags::User);
+        mem.lock().unwrap().writeu32(0x3000024, 0x55);
 
         cpu.set_pc(0x3000016);
         cpu.prefetch[0] = Some(0x4d03); // ldr r5, [pc, 12]
