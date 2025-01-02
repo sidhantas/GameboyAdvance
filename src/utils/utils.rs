@@ -1,9 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
-use num_traits::{Num, Unsigned};
+use num_traits::{Num};
 use regex::Regex;
 
-use crate::debugger::terminal_commands::TerminalCommandErrors;
 
 pub fn print_vec<T: Display>(vec: &Vec<T>) -> String {
     let mut s = String::new();

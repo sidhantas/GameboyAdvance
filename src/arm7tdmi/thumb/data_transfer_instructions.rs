@@ -12,11 +12,7 @@ impl CPU {
         let rd = (instruction & 0x0700) >> 8;
         let offset = (instruction & 0x00FF) * 4;
         let address = (self.get_pc() & !2) + offset;
-        let memory_fetch = {
-            let memory = self.memory.lock().unwrap();
-            memory
-                .readu32(address as usize)
-        };
+        let memory_fetch = self.memory.readu32(address as usize);
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
@@ -45,7 +41,7 @@ impl CPU {
         let address = self.get_register(rb) + self.get_register(ro);
         let is_byte_transfer = opcode.bit_is_set(0);
 
-        cycles += operation(self, rd, address, is_byte_transfer, self.get_access_mode());
+        cycles += operation(self, rd, address, is_byte_transfer);
 
         cycles
     }
@@ -94,7 +90,7 @@ impl CPU {
             base_address + imm * 4
         };
 
-        cycles += operation(self, rd, address, is_byte_transfer, self.get_access_mode());
+        cycles += operation(self, rd, address, is_byte_transfer);
 
         cycles
     }
@@ -109,7 +105,7 @@ impl CPU {
         let operation = match opcode {
             0b0 => Self::strh_execution,
             0b1 => Self::ldrh_execution,
-            _ => panic!()
+            _ => panic!(),
         };
 
         let address = self.get_register(rb) + imm;
@@ -131,7 +127,7 @@ impl CPU {
 
         let address = self.get_sp() + imm * 4;
 
-        cycles += operation(self, rd, address, false, self.get_access_mode());
+        cycles += operation(self, rd, address, false);
 
         cycles
     }
@@ -222,21 +218,20 @@ impl CPU {
 
 #[cfg(test)]
 mod thumb_ldr_str_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::{ Memory},
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_load_data_relative_to_pc() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
-        let mem = memory.clone();
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
-        mem.lock().unwrap().writeu32(0x3000024, 0x55);
+        cpu.memory.writeu32(0x3000024, 0x55);
 
         cpu.set_pc(0x3000016);
         cpu.prefetch[0] = Some(0x4d03); // ldr r5, [pc, 12]

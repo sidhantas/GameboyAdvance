@@ -422,17 +422,17 @@ impl CPU {
 
 #[cfg(test)]
 mod thumb_add_and_subtract_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_add_two_registers_together() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -451,8 +451,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_two_registers_together_and_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -471,8 +471,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_two_registers_together_and_set_z_and_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -491,8 +491,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_two_registers_together_and_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -511,8 +511,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_two_registers_together_and_set_v_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -531,8 +531,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_register_and_immediate_and_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -550,8 +550,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_register_and_immediate_and_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -569,8 +569,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_register_and_immediate_and_set_v_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -588,8 +588,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_add_register_and_immediate_and_set_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -607,8 +607,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_sub_two_registers() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -627,8 +627,8 @@ mod thumb_add_and_subtract_tests {
 
     #[test]
     fn should_sub_two_registers_and_reset_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -648,17 +648,17 @@ mod thumb_add_and_subtract_tests {
 
 #[cfg(test)]
 mod thumb_move_shifted_register_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_left_shift_a_register_and_set_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -675,8 +675,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_not_left_shift_register_and_not_change_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -694,8 +694,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_lsl_register_and_not_affect_v_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -714,8 +714,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_asr_register_and_set_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -732,8 +732,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_asr_register_and_maintain_sign() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -750,8 +750,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_asr_register_and_set_all_ones() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -768,8 +768,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_lsr_register() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -786,8 +786,8 @@ mod thumb_move_shifted_register_tests {
 
     #[test]
     fn should_lsr_register_and_clear_register() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -805,17 +805,17 @@ mod thumb_move_shifted_register_tests {
 
 #[cfg(test)]
 mod thumb_move_compare_add_subtract_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_move_immediate_into_r0() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -831,8 +831,8 @@ mod thumb_move_compare_add_subtract_tests {
 
     #[test]
     fn should_move_immediate_into_r0_and_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -848,8 +848,8 @@ mod thumb_move_compare_add_subtract_tests {
 
     #[test]
     fn should_move_immediate_into_r0_and_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -865,8 +865,8 @@ mod thumb_move_compare_add_subtract_tests {
 
     #[test]
     fn should_sub_imm_from_r0_and_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -883,8 +883,8 @@ mod thumb_move_compare_add_subtract_tests {
 
     #[test]
     fn should_add_imm_to_r0_and_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -902,17 +902,17 @@ mod thumb_move_compare_add_subtract_tests {
 
 #[cfg(test)]
 mod thumb_alu_operations_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_and_two_numbers_together() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -929,8 +929,8 @@ mod thumb_alu_operations_tests {
 
     #[test]
     fn should_eor_two_numbers_together() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -947,8 +947,8 @@ mod thumb_alu_operations_tests {
 
     #[test]
     fn should_lsl_rd_by_5() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -966,8 +966,8 @@ mod thumb_alu_operations_tests {
 
     #[test]
     fn should_lsr_rd_by_0() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -986,17 +986,17 @@ mod thumb_alu_operations_tests {
 
 #[cfg(test)]
 mod thumb_hi_reg_operations {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_add_two_regs_together_and_not_affect_flags() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1014,8 +1014,8 @@ mod thumb_hi_reg_operations {
 
     #[test]
     fn should_cmp_registers_and_set_flags() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1034,8 +1034,8 @@ mod thumb_hi_reg_operations {
 
     #[test]
     fn should_mov_register() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1052,17 +1052,17 @@ mod thumb_hi_reg_operations {
 
 #[cfg(test)]
 mod thumb_bx_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_switch_to_arm_mode_and_align_address() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1077,8 +1077,8 @@ mod thumb_bx_tests {
 
     #[test]
     fn should_switch_to_arm_mode_when_pc_operand() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1094,17 +1094,17 @@ mod thumb_bx_tests {
 
 #[cfg(test)]
 mod get_relative_address_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_add_12_to_pc() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1119,8 +1119,8 @@ mod get_relative_address_tests {
 
     #[test]
     fn should_add_16_to_sp_and_store_in_r5() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1134,8 +1134,8 @@ mod get_relative_address_tests {
 
     #[test]
     fn should_add_500_to_sp() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1149,8 +1149,8 @@ mod get_relative_address_tests {
 
     #[test]
     fn should_sub_500_to_sp() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 

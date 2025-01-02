@@ -368,20 +368,20 @@ impl CPU {
 }
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use rstest::rstest;
 
     use crate::{
         arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU},
-        memory::memory::{ Memory},
+        memory::memory::{ GBAMemory},
         types::REGISTER,
     };
 
     #[test]
     fn add_instruction_should_set_carry_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, u32::MAX);
@@ -400,8 +400,8 @@ mod tests {
 
     #[test]
     fn add_instruction_should_set_overflow_and_carry_flags() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_0000);
@@ -420,8 +420,8 @@ mod tests {
 
     #[test]
     fn add_instruction_should_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_0000);
@@ -440,8 +440,8 @@ mod tests {
 
     #[test]
     fn and_instruction_should_set_c_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x0000_FFFF);
@@ -460,8 +460,8 @@ mod tests {
 
     #[test]
     fn and_instruction_should_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_FFFF);
@@ -480,8 +480,8 @@ mod tests {
 
     #[test]
     fn and_instruction_should_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_FFFF);
@@ -500,8 +500,8 @@ mod tests {
 
     #[test]
     fn orr_instruction_should_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x0000_0000);
@@ -520,8 +520,8 @@ mod tests {
 
     #[test]
     fn orr_instruction_should_not_set_any_flags() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x0000_0000);
@@ -540,8 +540,8 @@ mod tests {
 
     #[test]
     fn eor_instruction_should_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -560,8 +560,8 @@ mod tests {
 
     #[test]
     fn teq_instruction_should_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -579,8 +579,8 @@ mod tests {
 
     #[test]
     fn teq_instruction_should_set_z_flag_when_equal() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -598,8 +598,8 @@ mod tests {
 
     #[test]
     fn tst_instruction_should_set_z_flag_when_no_bits_match() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -617,8 +617,8 @@ mod tests {
 
     #[test]
     fn bic_instruction_should_reset_all_bits() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(3, 0x8001_0002);
@@ -637,8 +637,8 @@ mod tests {
 
     #[test]
     fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xe094131f); // adds r1, r3, r15, LSL r3; pc = 0
@@ -659,8 +659,8 @@ mod tests {
 
     #[test]
     fn data_processing_with_pc_as_operand1_and_register_shift_delays_pc() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xe09f1314); //  adds r1, pc, r4, lsl r3; pc = 0
@@ -682,34 +682,22 @@ mod tests {
 
     #[test]
     fn data_processing_with_pc_as_destination_should_start_from_result() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        
+        let mut cpu = CPU::new(memory);
 
-        let _res = mem
-            .lock()
-            .unwrap()
+        let _res = cpu.memory
             .writeu32(0x3000000, 0xe25f1008);
-        let _res = mem
-            .lock()
-            .unwrap()
+        let _res = cpu.memory
             .writeu32(0x3000004, 0xe1a00000);
-        let _res = mem
-            .lock()
-            .unwrap()
+        let _res = cpu.memory
             .writeu32(0x3000008, 0xe1a00000); // nop
-        let _res = mem
-            .lock()
-            .unwrap()
+        let _res = cpu.memory
             .writeu32(0x300000C, 0xe1a00000); // nop
-        let _res = mem
-            .lock()
-            .unwrap()
+        let _res = cpu.memory
             .writeu32(0x3000010, 0xe1a00000); // nop
-        let _res = mem
-            .lock()
-            .unwrap()
+        let _res = cpu.memory
             .writeu32(0x3000014, 0xe281f000);
 
         cpu.set_pc(0x3000000);
@@ -726,9 +714,9 @@ mod tests {
 
     #[test]
     fn mov_instruction_should_set_n_flag() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(3, 0x8001_0002);
 
@@ -746,9 +734,9 @@ mod tests {
 
     #[test]
     fn mvn_instruction_should_set_z_flag() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         let input = 0xFFFF_FFFF;
         cpu.set_register(4, input);
@@ -767,9 +755,9 @@ mod tests {
 
     #[test]
     fn adc_instruction_should_add_2_registers_and_carry() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 25);
         cpu.set_register(2, 32);
@@ -788,9 +776,9 @@ mod tests {
 
     #[test]
     fn adc_instruction_should_set_carry_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0xFFFF_FFFF);
         cpu.set_register(2, 0x0);
@@ -809,9 +797,9 @@ mod tests {
 
     #[test]
     fn adc_instruction_should_set_v_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0x8000_0000);
         cpu.set_register(2, 0x8FFF_FFFF);
@@ -830,9 +818,9 @@ mod tests {
 
     #[test]
     fn sub_instruction_should_set_v_flag() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0x7FFF_FFFF);
         cpu.set_register(2, 0xFFFF_FFFF); // twos complement of -1
@@ -850,9 +838,9 @@ mod tests {
 
     #[test]
     fn sub_instruction_should_reset_c_flag() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 5);
         cpu.set_register(2, 10);
@@ -870,9 +858,9 @@ mod tests {
 
     #[test]
     fn sub_instruction_should_set_c_flag() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 10);
         cpu.set_register(2, 5);
@@ -897,9 +885,9 @@ mod tests {
         #[case] expected_dst: REGISTER,
         #[case] expected_val: u32,
     ) {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.cpsr = cpsr;
 
@@ -926,9 +914,9 @@ mod tests {
         #[case] register: u32,
         #[case] expected_val: u32,
     ) {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_mode(mode);
         cpu.set_register(register, psr_val);
@@ -951,9 +939,9 @@ mod tests {
         #[case] register: u32,
         #[case] expected_val: u32,
     ) {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_mode(mode);
         cpu.set_register(register, psr_val);
@@ -973,9 +961,9 @@ mod tests {
         #[case] mode: CPUMode,
         #[case] expected_val: u32,
     ) {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_mode(mode);
 

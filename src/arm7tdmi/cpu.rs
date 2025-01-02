@@ -9,8 +9,8 @@ use std::
 ;
 
 use crate::{
-    debugger::debugger::{BreakType, DebugCommands},
-    memory::memory::{ Memory},
+    debugger::{breakpoints::BreakType, debugger::DebugCommands},
+    memory::memory::GBAMemory,
     types::*,
     utils::bits::Bits,
 };
@@ -50,7 +50,7 @@ pub struct CPU {
     registers_abt: [WORD; 2],
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
-    pub memory: Arc<Mutex<Memory>>,
+    pub memory: GBAMemory,
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
@@ -90,7 +90,6 @@ pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
         let mut cpu = cpu.lock().unwrap();
         while instructions_left > 0 {
             cpu.execute_cpu_cycle();
-            instructions_left -= 1;
             let pc = cpu.get_pc();
             for breakpoint in &cpu.breakpoints {
                 match *breakpoint {
@@ -120,7 +119,7 @@ impl CPU {
         }
     }
 
-    pub fn new(memory: Arc<Mutex<Memory>>) -> CPU {
+    pub fn new(memory: GBAMemory) -> CPU {
         CPU {
             registers: [0; 16],
             executed_instruction_hex: 0,
@@ -292,10 +291,9 @@ impl CPU {
     fn fetch_instruction(&mut self) -> CYCLES {
         let mut cycles = 0;
         let memory_fetch = {
-            let memory = self.memory.lock().unwrap();
             match self.get_instruction_mode() {
-                InstructionMode::ARM => memory.readu32(self.get_pc() as usize),
-                InstructionMode::THUMB => memory
+                InstructionMode::ARM => self.memory.readu32(self.get_pc() as usize),
+                InstructionMode::THUMB => self.memory
                     .readu16(self.get_pc() as usize)
                     .into(),
             }
@@ -396,16 +394,16 @@ impl CPU {
 
 #[cfg(test)]
 mod cpu_tests {
-    use std::sync::{Arc, Mutex};
+    
 
-    use crate::{arm7tdmi::cpu::CPUMode, memory::memory::Memory, utils::bits::Bits};
+    use crate::{arm7tdmi::cpu::CPUMode, memory::memory::GBAMemory, utils::bits::Bits};
 
     use super::CPU;
 
     #[test]
     fn it_sets_and_resets_the_corrects_flags() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.set_flag(super::FlagsRegister::C);
@@ -425,8 +423,8 @@ mod cpu_tests {
 
     #[test]
     fn cpu_starts_in_svc_mode() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let cpu = CPU::new(memory);
 
         assert!(matches!(cpu.get_cpu_mode(), CPUMode::SVC));

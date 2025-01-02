@@ -414,11 +414,11 @@ mod sub_decoders {
 
 #[cfg(test)]
 mod arm_decoders_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use arm_decoders::*;
 
-    use crate::memory::memory::Memory;
+    use crate::memory::memory::GBAMemory;
 
     use super::*;
 
@@ -502,35 +502,35 @@ mod arm_decoders_tests {
 
     #[test]
     fn it_finds_single_data_swap() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
         let instruction = 0xe1014093;
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
     }
 
     #[test]
     fn it_finds_block_data_transfer() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
         let instruction = 0xe895001f;
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
     }
     #[test]
     fn it_finds_a_branch_and_exchange_instruction() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
         let instruction = 0xe12fff10;
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange)
     }
 
     #[test]
     fn it_finds_swi_instruction() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+        
+        let mut cpu = CPU::new(memory);
         let instruction = 0xef001234;
 
         assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt);
@@ -540,14 +540,14 @@ mod arm_decoders_tests {
 
 #[cfg(test)]
 mod sub_decoder_tests {
-    use std::sync::{Arc, Mutex};
+    
 
-    use crate::{arm7tdmi::decoder::*, memory::memory::Memory};
+    use crate::{arm7tdmi::decoder::*, memory::memory::GBAMemory};
 
     #[test]
     fn it_decodes_an_instruction_if_eq_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x028210c8; // addeq r1, r2, 200
         cpu.set_flag(FlagsRegister::Z);
@@ -558,8 +558,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_not_decode_an_instruction_if_eq_not_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x028210c8; // addeq r1, r2, 200
         cpu.reset_flag(FlagsRegister::Z);
@@ -570,8 +570,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_decode_an_instruction_if_ne_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x128210c8; // addne r1, r2, 200
         cpu.reset_flag(FlagsRegister::Z);
@@ -582,8 +582,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_not_decode_an_instruction_if_ne_not_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x128210c8; // addne r1, r2, 200
         cpu.set_flag(FlagsRegister::Z);
@@ -594,8 +594,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_decode_an_instruction_if_cs_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x228210c8; // addcs r1, r2, 200
         cpu.set_flag(FlagsRegister::C);
@@ -605,8 +605,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_cc_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x328210c8; // addcc r1, r2, 200
         cpu.reset_flag(FlagsRegister::C);
@@ -616,8 +616,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_mi_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x428210c8; // addmi r1, r2, 200
         cpu.set_flag(FlagsRegister::N);
@@ -627,8 +627,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_pl_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x528210c8; // addpl r1, r2, 200
         cpu.reset_flag(FlagsRegister::C);
@@ -638,8 +638,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_vs_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x628210c8; // addvs r1, r2, 200
         cpu.set_flag(FlagsRegister::V);
@@ -649,8 +649,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_vc_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x728210c8; // addvc r1, r2, 200
         cpu.reset_flag(FlagsRegister::V);
@@ -660,8 +660,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_hi_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x828210c8; // addhi r1, r2, 200
         cpu.set_flag(FlagsRegister::C);
@@ -672,8 +672,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_ls_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0x928210c8; // addls r1, r2, 200
         cpu.reset_flag(FlagsRegister::C);
@@ -697,8 +697,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_decode_an_instruction_if_ge_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0xa28210c8; // addge r1, r2, 200
         cpu.set_flag(FlagsRegister::N);
@@ -715,8 +715,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_lt_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0xb28210c8; // addlt r1, r2, 200
         cpu.reset_flag(FlagsRegister::N);
@@ -734,8 +734,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_decode_an_instruction_if_gt_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0xc28210c8; // addgt r1, r2, 200
         cpu.reset_flag(FlagsRegister::Z);
@@ -755,8 +755,8 @@ mod sub_decoder_tests {
 
     #[test]
     fn it_does_decode_an_instruction_if_le_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0xd28210c8; // addle r1, r2, 200
 
@@ -783,8 +783,8 @@ mod sub_decoder_tests {
     }
     #[test]
     fn it_does_decode_an_instruction_if_al_satisfied() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         let instruction: ARMByteCode = 0xe28210c8; // addal r1, r2, 200
         let decoded_instruction = cpu.decode_instruction(instruction);
@@ -795,7 +795,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_a_multiply_instruction() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xE0230192;
@@ -809,7 +809,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_a_branch_instruction() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xea000005;
@@ -820,7 +820,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_a_cmp_instruction() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe1530312; //  cmp r3, r2, lsl r3
@@ -836,7 +836,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_imm_op2() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe2812020; // add r
@@ -850,7 +850,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_an_lsl_operand2() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0831102; // add r1, r3, r2 LSL 2
@@ -865,7 +865,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_ror_10() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0831562; // add r1, r3, r2 ROR#10
@@ -880,7 +880,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_asr_10() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0831542; // add r1, r3, r2 ASR#10
@@ -895,7 +895,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_lsr_10() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0831522; // add r1, r3, r2 LSR#10
@@ -910,7 +910,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_lsr_32() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0931022; // adds r1, r3, r2 LSR#32
@@ -926,7 +926,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_asr_32_negative() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0931042; // adds r1, r3, r2 ASR#32
@@ -942,7 +942,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_asr_32_positive() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0831042; // add r1, r3, r2 ASR#32
@@ -958,7 +958,7 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_op2_shifted_by_register() {
     //        let memory = Memory::new().unwrap();
-    //        let memory = Arc::new(Mutex::new(memory));
+    //        
     //        let mut cpu = CPU::new(memory);
     //
     //        let instruction: ARMByteCode = 0xe0831412; // add r1, r3, r2 LSL r4
@@ -974,16 +974,16 @@ mod sub_decoder_tests {
 
 #[cfg(test)]
 mod thumb_decoder_tests {
-    use std::sync::{Arc, Mutex};
+    
 
-    use crate::{arm7tdmi::cpu::{InstructionMode, CPU}, memory::memory::Memory};
+    use crate::{arm7tdmi::cpu::{InstructionMode, CPU}, memory::memory::GBAMemory};
 
     #[test]
     fn it_recognizes_sdt_imm_offset() {
 
         let instruction = 0x68cd; // ldr r5, [r1, 12]
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -997,8 +997,8 @@ mod thumb_decoder_tests {
     fn it_recognizes_sdt_sp_imm_offset() {
 
         let instruction = 0x9d03; // ldr r5, [sp, 12]
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1012,8 +1012,8 @@ mod thumb_decoder_tests {
     fn it_recognizes_add_offset_to_sp() {
 
         let instruction = 0xb07d; // add sp, 500
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1026,8 +1026,8 @@ mod thumb_decoder_tests {
     fn it_recognizes_thumb_push() {
 
         let instruction = 0xb503; // push {r0-r1, lr}
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -1040,8 +1040,8 @@ mod thumb_decoder_tests {
     fn it_recognizes_thumb_bdt() {
 
         let instruction = 0xc107; // stmia r1 {r0-r2}
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 

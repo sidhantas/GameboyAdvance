@@ -1,15 +1,13 @@
 use crate::{
     arm7tdmi::cpu::LINK_REGISTER,
-    types::{ARMByteCode, CYCLES, REGISTER, WORD},
+    types::{ARMByteCode, CYCLES, REGISTER},
     utils::bits::{sign_extend, Bits},
 };
 
 use super::{
-    cpu::{FlagsRegister, InstructionMode, CPU},
-    decoder::Instruction, interrupts::Exceptions,
+    cpu::{InstructionMode, CPU}, interrupts::Exceptions,
 };
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
-pub type ExecutingInstruction = fn(&mut CPU) -> ();
 pub type InternalOperation = fn(&mut CPU) -> CYCLES;
 pub type ALUOperation =
     fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
@@ -100,17 +98,16 @@ impl CPU {
 
 #[cfg(test)]
 mod instruction_tests {
-    use std::sync::{Arc, Mutex};
 
     use crate::{
-        arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU, LINK_REGISTER},
-        memory::memory::Memory,
+        arm7tdmi::cpu::{CPUMode, CPU, LINK_REGISTER},
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn branch_ends_up_at_correct_address() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xea000002); // b 0x10
@@ -126,8 +123,8 @@ mod instruction_tests {
 
     #[test]
     fn branch_can_go_backwards() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xeafffffa); // b 0x0
@@ -145,8 +142,8 @@ mod instruction_tests {
 
     #[test]
     fn branch_with_link_stores_the_instruction_correctly() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xebfffffa); // b 0
@@ -163,8 +160,8 @@ mod instruction_tests {
 
     #[test]
     fn software_interrupt_goes_to_the_correct_interrupt_vec() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_mode(CPUMode::USER);
         cpu.set_pc(0xF8);

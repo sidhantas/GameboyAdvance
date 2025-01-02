@@ -1,4 +1,4 @@
-use crate::{arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, types::CYCLES, utils::bits::{sign_extend, Bits}};
+use crate::{arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, types::CYCLES, utils::bits::{sign_extend}};
 
 impl CPU {
     pub fn thumb_conditional_branch(&mut self, instruction: u32) -> CYCLES {
@@ -77,17 +77,17 @@ impl CPU {
 
 #[cfg(test)]
 mod branch_tests {
-    use std::sync::{Arc, Mutex};
+    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
-        memory::memory::Memory,
+        memory::memory::GBAMemory,
     };
 
     #[test]
     fn should_branch_ahead() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -103,8 +103,8 @@ mod branch_tests {
 
     #[test]
     fn should_branch_behind() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -120,8 +120,8 @@ mod branch_tests {
 
     #[test]
     fn should_set_link_register_and_branch() {
-        let memory = Memory::new().unwrap();
-        let memory = Arc::new(Mutex::new(memory));
+        let memory = GBAMemory::new();
+        
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 

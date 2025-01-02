@@ -7,7 +7,7 @@ use std::{
 use arm7tdmi::cpu::{cpu_thread, CPU};
 use debugger::debugger::start_debugger;
 use getopts::Options;
-use memory::memory::Memory;
+use memory::memory::GBAMemory;
 use std::env;
 mod arm7tdmi;
 mod debugger;
@@ -30,12 +30,10 @@ fn main() -> Result<(), std::io::Error> {
 
     let bios = matches.opt_str("b").unwrap_or(String::from("gba_bios.bin"));
 
-    let mut memory = Memory::new().expect("Unable to initialize memory for CPU");
+    let mut memory = GBAMemory::new();
     memory
         .initialize_bios(bios)
         .expect("Unable to initialize bios for CPU");
-
-    let memory = Arc::new(Mutex::new(memory));
 
     //let display_memory = memory.clone();
     let cpu = Arc::new(Mutex::new(CPU::new(memory)));

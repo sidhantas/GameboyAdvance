@@ -1,16 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use gameboy_advance::{arm7tdmi::cpu::CPU, memory::memory::Memory};
+use gameboy_advance::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
 #[test]
 fn test_thumb_long_branch() {
     let bios = String::from("test_files/thumb_long_branch.bin");
-    let mut memory = Memory::new().expect("Unable to initialize memory for CPU");
+    let mut memory = GBAMemory::new();
     memory
         .initialize_bios(bios)
         .expect("Unable to initialize bios for CPU");
-
-    let memory = Arc::new(Mutex::new(memory));
 
     let cpu = Arc::new(Mutex::new(CPU::new(memory)));
 

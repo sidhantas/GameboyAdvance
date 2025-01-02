@@ -1,3 +1,4 @@
+use super::breakpoints::{Breakpoint, BreakType};
 use crossterm::{
     event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -20,19 +21,9 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::{
-    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
-    types::REGISTER,
-};
+use crate::arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU};
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
-
-#[derive(PartialEq)]
-pub enum BreakType {
-    Break(u32),
-    WatchRegister(REGISTER, u32),
-    WatchAddressRange(u32, u32)
-}
 
 pub enum DebugCommands {
     Continue(u32),
@@ -48,17 +39,19 @@ pub struct Debugger {
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub end_debugger: bool,
     pub cpu: Arc<Mutex<CPU>>,
+    pub breakpoints: Vec<Breakpoint>,
 }
 
 impl Debugger {
     fn new(cpu: Arc<Mutex<CPU>>, cpu_sender: Sender<DebugCommands>) -> Self {
         Self {
-            memory_start_address: 0x4000000,
+            memory_start_address: 0x0000000,
             cpu_sender,
             terminal_buffer: String::new(),
             terminal_history: Vec::new(),
             end_debugger: false,
             cpu,
+            breakpoints: Vec::new(),
         }
     }
 }
@@ -129,12 +122,6 @@ pub fn start_debugger(
                         }
                     } else {
                         match event.code {
-                            KeyCode::Char('n') => {
-                                cpu_sender.send(DebugCommands::Continue(1)).unwrap()
-                            }
-                            KeyCode::Char('N') => {
-                                cpu_sender.send(DebugCommands::Continue(0x80)).unwrap()
-                            }
                             KeyCode::Char('M') => debugger.memory_start_address -= 0x100,
                             KeyCode::Char('m') => debugger.memory_start_address += 0x100,
                             _ => {}
@@ -520,13 +507,10 @@ fn draw_memory(
         );
     }
 
-    let memory = cpu.memory.lock().unwrap();
     for column in 1..memory_grid.len() {
         for row in 2..memory_grid[column].len() {
-            let value = memory
-                .read(
-                    (start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize,
-                )
+            let value = cpu.memory
+                .read((start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize)
                 .data;
 
             let widget = Paragraph::new(format!("0x{:0>2x}", value))

@@ -1,8 +1,6 @@
 use std::{fmt::Display, sync::mpsc::SendError};
-
 use crate::utils::utils::{try_parse_num, try_parse_reg, ParsingError};
-
-use super::debugger::{BreakType, DebugCommands, Debugger};
+use super::{breakpoints::{BreakType, Breakpoint}, debugger::{DebugCommands, Debugger}};
 
 
 pub enum TerminalCommandErrors {
@@ -31,8 +29,8 @@ impl Display for TerminalCommandErrors {
 
 pub struct TerminalCommand {
     pub name: &'static str,
-    pub arguments: u8,
-    pub description: &'static str,
+    pub _arguments: u8,
+    pub _description: &'static str,
     pub handler: fn(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors>,
 }
 
@@ -44,50 +42,50 @@ pub struct TerminalHistoryEntry {
 pub const TERMINAL_COMMANDS: [TerminalCommand; 8] = [
     TerminalCommand {
         name: "next",
-        arguments: 1,
-        description: "Goes to the next instruction",
+        _arguments: 1,
+        _description: "Goes to the next instruction",
         handler: next_handler,
     },
     TerminalCommand {
         name: "quit",
-        arguments: 0,
-        description: "Closes the program",
+        _arguments: 0,
+        _description: "Closes the program",
         handler: quit_handler,
     },
     TerminalCommand {
         name: "break",
-        arguments: 1,
-        description: "Sets a breakpoint at specified address",
+        _arguments: 1,
+        _description: "Sets a breakpoint at specified address",
         handler: set_breakpoint_handler,
     },
     TerminalCommand {
         name: "delete",
-        arguments: 1,
-        description: "Deletes a breakpoint",
+        _arguments: 1,
+        _description: "Deletes a breakpoint",
         handler: delete_breakpoint_handler,
     },
     TerminalCommand {
         name: "listb",
-        arguments: 0,
-        description: "Lists breakpoints",
+        _arguments: 0,
+        _description: "Lists breakpoints",
         handler: list_breakpoint_handler,
     },
     TerminalCommand {
         name: "watchr",
-        arguments: 2,
-        description: "Sets a watch point on a register and a value",
+        _arguments: 2,
+        _description: "Sets a watch point on a register and a value",
         handler: set_watchpoint_handler,
     },
     TerminalCommand {
         name: "watcha",
-        arguments: 2,
-        description: "Sets a watch point on an address range",
+        _arguments: 2,
+        _description: "Sets a watch point on an address range",
         handler: set_watch_address_range_handler,
     },
     TerminalCommand {
         name: "mem",
-        arguments: 1,
-        description: "Sets start memory address",
+        _arguments: 1,
+        _description: "Sets start memory address",
         handler: set_mem_start,
     },
 ];
@@ -122,11 +120,30 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
         }
         None => 1,
     };
-    if let Err(err) = debugger
-        .cpu_sender
-        .send(DebugCommands::Continue(num_executions))
-    {
-        return Err(TerminalCommandErrors::ChannelError(err));
+
+    let cpu = &mut debugger.cpu.lock().unwrap();
+    for _ in 0..num_executions {
+        cpu.execute_cpu_cycle();
+        for breakpoint in &debugger.breakpoints {
+            match breakpoint.break_type {
+                BreakType::Break(break_pc) => {
+                    if cpu.get_pc() == break_pc {
+                        return Ok(String::from("Breakpoint encountered "));
+                    }
+                }
+                BreakType::WatchRegister(register, value) => {
+                    if cpu.get_register(register) == value {
+                        return Ok(format!("Watchpoint encountered {}", breakpoint.break_type));
+                    }
+                }
+                BreakType::WatchAddress(address) => {
+                    if cpu.memory.readu32(address).data != breakpoint.prev_value {
+                        return Ok(format!("Watchpoint encountered {}", breakpoint.break_type));
+                    }
+                } 
+            }
+        }
+        
     }
 
     Ok(String::new())
@@ -153,12 +170,7 @@ fn set_breakpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<St
         }
         None => return Err(TerminalCommandErrors::NotEnoughArguments),
     };
-    if let Err(err) = debugger
-        .cpu_sender
-        .send(DebugCommands::SetBreakpoint(BreakType::Break(breakpoint)))
-    {
-        return Err(TerminalCommandErrors::ChannelError(err));
-    }
+    debugger.breakpoints.push(Breakpoint::new(BreakType::Break(breakpoint), debugger.cpu.clone()));
     Ok(format!("Breakpoint set at address {:#x}", breakpoint))
 }
 
@@ -196,7 +208,7 @@ fn list_breakpoint_handler(debugger: &mut Debugger, _args: Vec<&str>) -> Result<
         match breakpoint {
             BreakType::Break(bp) => breakpoint_list.push_str(format!("{}: break {:#x}\n", i + 1, bp).as_str()),
             BreakType::WatchRegister(reg, value) => breakpoint_list.push_str(format!("{}: watch r{reg} {:#x}\n", i + 1, value).as_str()),
-            BreakType::WatchAddressRange(address1, address2) => breakpoint_list.push_str(format!("{}: watch {:#X} {:#X}\n", i + 1, address1, address2).as_str()),
+            _ => {}
         }
     }
 
@@ -215,13 +227,9 @@ fn set_watchpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<St
     }
     let register = try_parse_reg(args[0])?;
     let value = try_parse_num(args[1])?;
+
+    debugger.breakpoints.push(Breakpoint::new(BreakType::WatchRegister(register, value), debugger.cpu.clone()));
     
-    if let Err(err) = debugger
-        .cpu_sender
-        .send(DebugCommands::SetBreakpoint(BreakType::WatchRegister(register, value)))
-    {
-        return Err(TerminalCommandErrors::ChannelError(err));
-    }
     Ok(format!("Watchpoint set for register r{register} with value {:#x}", value))
 }
 
@@ -236,12 +244,7 @@ fn set_watch_address_range_handler(debugger: &mut Debugger, args: Vec<&str>) -> 
         address1
     };
     
-    if let Err(err) = debugger
-        .cpu_sender
-        .send(DebugCommands::SetBreakpoint(BreakType::WatchAddressRange(address1, address2)))
-    {
-        return Err(TerminalCommandErrors::ChannelError(err));
-    }
+    debugger.breakpoints.push(Breakpoint::new(BreakType::WatchAddress(address1), debugger.cpu.clone()));
     Ok(format!("Watchpoint set for range {:#x}-{:#x}", address1, address2))
 }
 

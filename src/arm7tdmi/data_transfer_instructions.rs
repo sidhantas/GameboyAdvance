@@ -1,12 +1,14 @@
 use std::mem::size_of;
 
 use crate::{
-    memory::memory::{ MemoryFetch},
     types::{CYCLES, REGISTER, WORD},
-    utils::{bits::{sign_extend, Bits}, utils::print_vec},
+    utils::{
+        bits::{sign_extend, Bits},
+        utils::print_vec,
+    },
 };
 
-use super::cpu::{CPU, PC_REGISTER};
+use super::cpu::{CPUMode, CPU, PC_REGISTER};
 
 impl CPU {
     pub fn sdt_instruction_execution(&mut self, instruction: u32) -> CYCLES {
@@ -22,12 +24,6 @@ impl CPU {
         let force_non_privileged_access: bool =
             pre_indexed_addressing && instruction.bit_is_set(21);
         let is_byte_transfer: bool = instruction.bit_is_set(22);
-
-        if force_non_privileged_access {
-            AccessFlags::User
-        } else {
-            self.get_access_mode()
-        };
 
         if use_register_offset {
             let offset_register = instruction & 0x0000_000F;
@@ -60,11 +56,18 @@ impl CPU {
             base_register_address
         };
 
+        let old_cpu_mode = self.get_cpu_mode();
+        if force_non_privileged_access {
+            self.set_mode(CPUMode::USER);
+        }
+
         cycles += if instruction.bit_is_set(20) {
-            self.ldr_instruction_execution(rd, access_address, is_byte_transfer, access_mode)
+            self.ldr_instruction_execution(rd, access_address, is_byte_transfer)
         } else {
-            self.str_instruction_execution(rd, access_address, is_byte_transfer, access_mode)
+            self.str_instruction_execution(rd, access_address, is_byte_transfer)
         };
+
+        self.set_mode(old_cpu_mode);
 
         if write_back_address {
             self.set_register(base_register, offset_address);
@@ -78,15 +81,13 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        access_flag: 
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
         let cycles = {
-            let mut memory = self.memory.lock().unwrap();
             if byte_transfer {
-                memory.write(address as usize, data as u8, access_flag)
+                self.memory.write(address as usize, data as u8)
             } else {
-                memory.writeu32(address as usize, data)
+                self.memory.writeu32(address as usize, data)
             }
         };
         self.set_executed_instruction(format!("STR {} [{:#x}]", rd, address));
@@ -98,19 +99,13 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        access_flag: 
     ) -> CYCLES {
         let mut cycles = 0;
         let data = {
-            let memory = self.memory.lock().unwrap();
             let memory_fetch = if byte_transfer {
-                memory.read(address as usize)
+                self.memory.read(address as usize).into()
             } else {
-                let memory_fetch = memory.readu32(address as usize);
-                MemoryFetch {
-                    data: memory_fetch.data.rotate_right(8 * address & 0b11),
-                    ..memory_fetch
-                }
+                self.memory.readu32(address as usize)
             };
             cycles += memory_fetch.cycles;
 
@@ -182,10 +177,7 @@ impl CPU {
 
     pub fn strh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let data: WORD = self.get_register(rd);
-        let cycles = {
-            let mut memory = self.memory.lock().unwrap();
-            memory.writeu16(address as usize, data as u16)
-        };
+        let cycles = { self.memory.writeu16(address as usize, data as u16) };
         self.set_executed_instruction(format!("STRH {} [{:#x}]", rd, address));
 
         cycles
@@ -193,10 +185,7 @@ impl CPU {
 
     pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 0;
-        let memory_fetch = {
-            let memory = self.memory.lock().unwrap();
-            memory.readu16(address as usize)
-        };
+        let memory_fetch = { self.memory.readu16(address as usize) };
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
@@ -212,10 +201,7 @@ impl CPU {
 
     pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 0;
-        let memory_fetch = {
-            let memory = self.memory.lock().unwrap();
-            memory.read(address as usize)
-        };
+        let memory_fetch = { self.memory.read(address as usize) };
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
@@ -232,8 +218,7 @@ impl CPU {
     pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let mut cycles = 0;
         let memory_fetch = {
-            let memory = self.memory.lock().unwrap();
-            memory.readu16(address as usize)
+            self.memory.readu16(address as usize)
         };
 
         cycles += memory_fetch.cycles;
@@ -323,10 +308,7 @@ impl CPU {
                 curr_address += size_of::<WORD>()
             }
             let data = self.get_register(register_list[i] as u32);
-            cycles += {
-                let mut memory = self.memory.lock().unwrap();
-                memory.writeu32(curr_address, data)
-            };
+            cycles += self.memory.writeu32(curr_address, data);
             if !pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
             }
@@ -354,10 +336,7 @@ impl CPU {
             if pre_indexed_addressing {
                 curr_address += size_of::<WORD>()
             }
-            let memory_fetch = {
-                let memory = self.memory.lock().unwrap();
-                memory.readu32(curr_address)
-            };
+            let memory_fetch = { self.memory.readu32(curr_address) };
             cycles += memory_fetch.cycles;
             let data = memory_fetch.data;
             if !pre_indexed_addressing {
@@ -372,27 +351,18 @@ impl CPU {
 
 #[cfg(test)]
 mod sdt_tests {
-    use std::sync::{Arc, Mutex};
-
-    use crate::{
-        arm7tdmi::cpu::CPU,
-        memory::memory::{ Memory},
-    };
+    use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
     #[test]
     fn ldr_should_return_data_at_specified_address() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        let _res = cpu.memory.writeu32(address as usize, value);
 
         cpu.set_register(1, address);
 
@@ -406,18 +376,14 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_data_at_specified_address_plus_offset() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize + 8, value);
+        let _res = cpu.memory.writeu32(address as usize + 8, value);
 
         cpu.set_register(1, address);
 
@@ -431,18 +397,14 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_data_at_specified_address_minus_offset() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000208;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize - 8, value);
+        let _res = cpu.memory.writeu32(address as usize - 8, value);
 
         cpu.set_register(1, address);
 
@@ -456,18 +418,14 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_data_at_lsl_shifted_address() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize + 8, value);
+        let _res = cpu.memory.writeu32(address as usize + 8, value);
 
         cpu.set_register(1, address);
         cpu.set_register(3, 4);
@@ -482,18 +440,14 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_a_byte_at_address() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        let _res = cpu.memory.writeu32(address as usize, value);
 
         cpu.set_register(1, address);
 
@@ -514,22 +468,14 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_rotate_value_when_not_word_aligned() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000202;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(0x3000200, value);
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(0x3000204, 0xABABABAB);
+        let _res = cpu.memory.writeu32(0x3000200, value);
 
         cpu.set_register(1, address);
 
@@ -538,7 +484,7 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        assert_eq!(cpu.get_register(2), 0xABABFABC);
+        assert_eq!(cpu.get_register(2), 0xD321FABC);
 
         cpu.set_register(1, 0x3000203);
 
@@ -546,23 +492,19 @@ mod sdt_tests {
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        assert_eq!(cpu.get_register(2), 0xABABABFA);
+        assert_eq!(cpu.get_register(2), 0xBCD321FA);
     }
 
     #[test]
     fn ldr_should_writeback_when_post_indexed() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        let _res = cpu.memory.writeu32(address as usize, value);
 
         cpu.set_register(1, address);
 
@@ -577,10 +519,9 @@ mod sdt_tests {
 
     #[test]
     fn str_should_store_word_at_memory_address() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
@@ -593,21 +534,16 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        let stored_value = mem
-            .lock()
-            .unwrap()
-            .readu32(address as usize)
-            .data;
+        let stored_value = cpu.memory.readu32(address as usize).data;
 
         assert_eq!(value, stored_value);
     }
 
     #[test]
     fn str_should_store_byte_at_address() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value: u8 = 0x21;
         let address: u32 = 0x3000203;
@@ -620,21 +556,16 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        let stored_value = mem
-            .lock()
-            .unwrap()
-            .read(address as usize)
-            .data;
+        let stored_value = cpu.memory.read(address as usize).data;
 
         assert_eq!(value, stored_value);
     }
 
     #[test]
     fn strh_should_store_hw_at_address() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value: u16 = 0x21;
         let address: u32 = 0x3000200;
@@ -647,21 +578,16 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        let stored_value = mem
-            .lock()
-            .unwrap()
-            .readu16(address as usize)
-            .data;
+        let stored_value = cpu.memory.readu16(address as usize).data;
 
         assert_eq!(value as u16, stored_value);
     }
 
     #[test]
     fn strh_should_only_store_bottom_half_of_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value: u32 = 0x1234_5678;
         let address: u32 = 0x3000200;
@@ -674,29 +600,21 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        let stored_value = mem
-            .lock()
-            .unwrap()
-            .readu32(address as usize)
-            .data;
+        let stored_value = cpu.memory.readu32(address as usize).data;
 
         assert_eq!(value & 0x0000_FFFF, stored_value);
     }
 
     #[test]
     fn ldrh_should_only_load_bottom_half_of_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        let _res = cpu.memory.writeu32(address as usize, value);
 
         cpu.set_register(1, address);
         cpu.prefetch[0] = Some(0xe1d130b0); // ldrh r3, [r1]
@@ -709,18 +627,14 @@ mod sdt_tests {
 
     #[test]
     fn ldrsh_should_return_a_signed_hw() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0x0000_FABC;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        let _res = cpu.memory.writeu32(address as usize, value);
 
         cpu.set_register(1, address);
         cpu.prefetch[0] = Some(0xe1d130f0); // ldrsh r3, [r1]
@@ -733,18 +647,14 @@ mod sdt_tests {
 
     #[test]
     fn ldrsh_should_return_a_signed_byte() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
-        let _res = mem
-            .lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        let _res = cpu.memory.writeu32(address as usize, value);
 
         cpu.set_register(1, address);
         cpu.prefetch[0] = Some(0xe1d130d0); // ldrsb r3, [r1]
@@ -757,23 +667,18 @@ mod sdt_tests {
 
     #[test]
     fn ldm_should_load_multiple_registers() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        cpu.memory.writeu32(address as usize, value);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize + 4, 0x55);
+        cpu.memory.writeu32(address as usize + 4, 0x55);
 
         cpu.prefetch[0] = Some(0xe8950003); // ldmia r5, {r0, r1}
 
@@ -786,23 +691,18 @@ mod sdt_tests {
 
     #[test]
     fn ldmib_should_load_multiple_registers_and_modify_base_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize + 4, value);
+        cpu.memory.writeu32(address as usize + 4, value);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize + 8, 0x55);
+        cpu.memory.writeu32(address as usize + 8, 0x55);
 
         cpu.prefetch[0] = Some(0xe9b500c0); // ldmib r5!, {r6, r7}
 
@@ -816,23 +716,18 @@ mod sdt_tests {
 
     #[test]
     fn ldmda_should_load_multiple_registers_and_modify_base_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize, value);
+        cpu.memory.writeu32(address as usize, value);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize - 4, 0x55);
+        cpu.memory.writeu32(address as usize - 4, 0x55);
 
         cpu.prefetch[0] = Some(0xe83500c0); // ldmda r5!, {r6, r7}
 
@@ -846,23 +741,18 @@ mod sdt_tests {
 
     #[test]
     fn ldmdb_should_load_multiple_registers_and_modify_base_register() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
         cpu.set_register(5, address);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize - 4, value);
+        cpu.memory.writeu32(address as usize - 4, value);
 
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize - 8, 0x55);
+        cpu.memory.writeu32(address as usize - 8, 0x55);
 
         cpu.prefetch[0] = Some(0xe93500c0); // ldmdb r5!, {r6, r7}
 
@@ -876,10 +766,9 @@ mod sdt_tests {
 
     #[test]
     fn stm_should_store_multiple_registers() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let address: u32 = 0x3000200;
 
@@ -892,28 +781,15 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(address as usize)
-                .data,
-            123
-        );
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(address as usize + 4)
-                .data,
-            456
-        );
+        assert_eq!(cpu.memory.readu32(address as usize).data, 123);
+        assert_eq!(cpu.memory.readu32(address as usize + 4).data, 456);
     }
 
     #[test]
     fn stmib_should_store_multiple_registers_and_writeback() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let address: u32 = 0x3000200;
 
@@ -926,29 +802,16 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(address as usize + 4)
-                .data,
-            123
-        );
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(address as usize + 8)
-                .data,
-            456
-        );
+        assert_eq!(cpu.memory.readu32(address as usize + 4).data, 123);
+        assert_eq!(cpu.memory.readu32(address as usize + 8).data, 456);
         assert_eq!(cpu.get_register(5), address + 8);
     }
 
     #[test]
     fn stmdb_should_store_multiple_registers_and_writeback() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let address: u32 = 0x3000200;
 
@@ -961,29 +824,16 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32((address - 4) as usize)
-                .data,
-            456
-        );
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32((address - 8) as usize)
-                .data,
-            123
-        );
+        assert_eq!(cpu.memory.readu32((address - 4) as usize).data, 456);
+        assert_eq!(cpu.memory.readu32((address - 8) as usize).data, 123);
         assert_eq!(cpu.get_register(5), address - 8);
     }
 
     #[test]
     fn stmda_should_store_multiple_registers_and_writeback() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        let mut cpu = CPU::new(memory);
 
         let address: u32 = 0x3000200;
 
@@ -996,20 +846,8 @@ mod sdt_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32((address) as usize)
-                .data,
-            456
-        );
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32((address - 4) as usize)
-                .data,
-            123
-        );
+        assert_eq!(cpu.memory.readu32((address) as usize).data, 456);
+        assert_eq!(cpu.memory.readu32((address - 4) as usize).data, 123);
         assert_eq!(cpu.get_register(5), address - 8);
     }
 }

@@ -15,18 +15,15 @@ impl CPU {
         let address = self.get_register(rn) as usize;
 
         let memory_data = if is_byte_swap {
-            let mut memory = self.memory.lock().unwrap();
-            let memory_fetch = memory.read(address);
+            let memory_fetch = self.memory.read(address);
             cycles += memory_fetch.cycles;
-            cycles += memory.write(address, self.get_register(rm) as u8);
+            cycles += self.memory.write(address, self.get_register(rm) as u8);
 
             memory_fetch.data as u32
         } else {
-            let mut memory = self.memory.lock().unwrap();
-            let memory_fetch = memory.readu32(address);
-
+            let memory_fetch = self.memory.readu32(address);
             cycles += memory_fetch.cycles;
-            cycles += memory.writeu32(address, self.get_register(rm));
+            cycles += self.memory.writeu32(address, self.get_register(rm));
 
             memory_fetch.data
         };
@@ -40,25 +37,18 @@ impl CPU {
 
 #[cfg(test)]
 mod single_data_swap_test {
-    use std::sync::{Arc, Mutex};
-
-    use crate::{
-        arm7tdmi::cpu::CPU,
-        memory::memory::{ Memory},
-    };
+    use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
     #[test]
     fn swap_instruction_should_store_and_load_at_the_same_time() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        
+        let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0x3000200);
         cpu.set_register(3, 10);
-        mem.lock()
-            .unwrap()
-            .writeu32(0x3000200, 5);
+        cpu.memory.writeu32(0x3000200, 5);
 
         cpu.prefetch[0] = Some(0xe1014093); // swp r4, r3, [r1]
 
@@ -66,28 +56,20 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x3000200)
-                .data,
-            10
-        );
+        assert_eq!(cpu.memory.readu32(0x3000200).data, 10);
     }
 
     #[test]
     fn swap_instruction_should_work_with_equal_rn_and_rm() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        
+        let mut cpu = CPU::new(memory);
 
         let address = 0x3000200;
 
         cpu.set_register(1, address);
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize, 5);
+        cpu.memory.writeu32(address as usize, 5);
 
         cpu.prefetch[0] = Some(0xe1014091); // swp r4, r1, [r1]
 
@@ -95,30 +77,22 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x3000200)
-                .data,
-            0x3000200
-        );
+        assert_eq!(cpu.memory.readu32(0x3000200).data, 0x3000200);
     }
 
     #[test]
     fn swap_should_work_with_equal_rm_and_rd() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        
+        let mut cpu = CPU::new(memory);
 
         let address = 0x3000200;
 
         cpu.set_register(4, 15);
 
         cpu.set_register(1, address);
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize, 5);
+        cpu.memory.writeu32(address as usize, 5);
 
         cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
 
@@ -126,21 +100,15 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(
-            mem.lock()
-                .unwrap()
-                .readu32(0x3000200)
-                .data,
-            15
-        );
+        assert_eq!(cpu.memory.readu32(0x3000200).data, 15);
     }
 
     #[test]
     fn swpb_should_only_store_and_load_a_byte_and_clear_upper_rd() {
-        let memory = Memory::new().unwrap();
-        let cpu_memory = Arc::new(Mutex::new(memory));
-        let mem = Arc::clone(&cpu_memory);
-        let mut cpu = CPU::new(cpu_memory);
+        let memory = GBAMemory::new();
+
+        
+        let mut cpu = CPU::new(memory);
 
         let address = 0x3000200;
 
@@ -148,9 +116,7 @@ mod single_data_swap_test {
         cpu.set_register(4, 0xFFFF_FFFF);
 
         cpu.set_register(1, address);
-        mem.lock()
-            .unwrap()
-            .writeu32(address as usize, 0x7890_DD12);
+        cpu.memory.writeu32(address as usize, 0x7890_DD12);
 
         cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
 
@@ -158,9 +124,6 @@ mod single_data_swap_test {
         cpu.execute_cpu_cycle();
 
         assert_eq!(cpu.get_register(4), 0x12);
-        assert_eq!(
-            mem.lock().unwrap().read(0x3000200).data,
-            0xBC
-        );
+        assert_eq!(cpu.memory.read(0x3000200).data, 0xBC);
     }
 }

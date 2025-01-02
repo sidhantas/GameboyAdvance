@@ -1,8 +1,9 @@
+#![allow(unused)]
 use std::{sync::{Arc, Mutex}, time::Duration};
 
 use sdl2::{event::Event, pixels::Color};
 
-use crate::memory::memory::Memory;
+use crate::memory::memory::GBAMemory;
 
 #[repr(u32)]
 enum DisplayAddresses {
@@ -12,7 +13,7 @@ enum DisplayAddresses {
     BG0CNT = 0x4000_0008
 }
 
-pub fn start_display(memory: Arc<Mutex<Memory>>) {
+pub fn start_display(memory: Arc<Mutex<GBAMemory>>) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 

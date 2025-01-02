@@ -1,6 +1,7 @@
+#![allow(unused)]
 use std::sync::{Arc, Mutex};
 
-use crate::memory::memory::Memory;
+use crate::memory::memory::GBAMemory;
 
 
 struct Pixel {
@@ -11,7 +12,7 @@ struct Pixel {
 }
 
 impl Pixel {
-    pub fn new(memory: &Memory) {
+    pub fn new(memory: &GBAMemory) {
 
     }
 }
@@ -25,7 +26,7 @@ enum DisplayAddresses {
 }
 
 pub struct PPU {
-    memory: Arc<Mutex<Memory>>,
+    memory: Arc<Mutex<GBAMemory>>,
     frame_buffer: Vec<u8>
 }
 
