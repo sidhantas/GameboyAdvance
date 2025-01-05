@@ -5,7 +5,7 @@ use std::{
 
 use crate::{arm7tdmi::cpu::CPU, memory::memory::MemoryBus, types::REGISTER};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum BreakType {
     Break(u32),
     WatchRegister(REGISTER, u32),

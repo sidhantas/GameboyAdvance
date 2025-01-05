@@ -1,11 +1,14 @@
 use super::breakpoints::{BreakType, Breakpoint};
 use crossterm::{
-    event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{
+        self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
     io::{self, Stdout},
+    rc::Rc,
     sync::{
         mpsc::{Receiver, Sender},
         Arc, Mutex,
@@ -21,37 +24,27 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::{arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU}, memory::{debugger_memory::DebuggerMemory, memory::{GBAMemory, MemoryBus}}};
+use crate::arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU};
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
-pub enum DebugCommands {
-    Continue(u32),
-    SetBreakpoint(BreakType),
-    DeleteBreakpoint(u32),
-    End,
-}
-
 pub struct Debugger {
     pub memory_start_address: u32,
-    pub cpu_sender: Sender<DebugCommands>,
     pub terminal_buffer: String,
     pub terminal_history: Vec<TerminalHistoryEntry>,
+    pub terminal_enabled: bool,
     pub end_debugger: bool,
     pub cpu: Arc<Mutex<CPU>>,
     pub breakpoints: Vec<Breakpoint>,
 }
 
 impl Debugger {
-    fn new(cpu: Arc<Mutex<CPU>>, cpu_sender: Sender<DebugCommands>) -> Self {
-        let mut gba_memory = GBAMemory::new();
-        let debugger_memory = DebuggerMemory::new(&mut gba_memory);
-
+    fn new(cpu: Arc<Mutex<CPU>>) -> Self {
         Self {
             memory_start_address: 0x0000000,
-            cpu_sender,
             terminal_buffer: String::new(),
             terminal_history: Vec::new(),
+            terminal_enabled: true,
             end_debugger: false,
             cpu,
             breakpoints: Vec::new(),
@@ -59,76 +52,27 @@ impl Debugger {
     }
 }
 
-pub fn start_debugger(
-    cpu: Arc<Mutex<CPU>>,
-    cpu_sender: Sender<DebugCommands>,
-    debug_receiver: Receiver<DebugCommands>,
-) -> Result<(), std::io::Error> {
 
+pub fn start_debugger(cpu: Arc<Mutex<CPU>>) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
-    let mut terminal_enabled = false;
 
-    let mut debugger = Debugger::new(cpu.clone(), cpu_sender.clone());
+    let mut debugger = Debugger::new(cpu.clone());
+
     while !debugger.end_debugger {
-        if let Ok(DebugCommands::End) = debug_receiver.try_recv() {
-            debugger.end_debugger = true;
-        }
         loop {
             if event::poll(Duration::from_millis(10))? {
                 if let Event::Key(event) = read()? {
                     if event.modifiers == KeyModifiers::CONTROL {
-                        match event.code {
-                            KeyCode::Char('t') => {
-                                terminal_enabled = !terminal_enabled;
-                            }
-                            KeyCode::Char('c') => {
-                                cpu_sender.send(DebugCommands::End).unwrap();
-                                debugger.end_debugger = true;
-                            }
-                            KeyCode::Char('w') => {
-                                if terminal_enabled {
-                                    debugger.terminal_buffer.clear();
-                                }
-                            }
-                            _ => (),
-                        }
-                        continue;
+                        handle_control_events(&mut debugger, event);
                     }
-                    if terminal_enabled {
-                        match event.code {
-                            KeyCode::Backspace => {
-                                debugger.terminal_buffer.pop();
-                            }
-                            KeyCode::Char(c) => debugger.terminal_buffer.push(c),
-                            KeyCode::Enter => {
-                                match parse_command(&mut debugger) {
-                                    Ok(res) => {
-                                        debugger.terminal_history.push(TerminalHistoryEntry {
-                                            command: debugger.terminal_buffer.clone(),
-                                            result: res,
-                                        })
-                                    }
-                                    Err(err) => {
-                                        debugger.terminal_history.push(TerminalHistoryEntry {
-                                            command: debugger.terminal_buffer.clone(),
-                                            result: err.to_string(),
-                                        })
-                                    }
-                                };
-                                debugger.terminal_buffer.clear();
-                            }
-                            _ => {}
-                        }
+                    if debugger.terminal_enabled {
+                        handle_terminal_events(&mut debugger, event);
                     } else {
-                        match event.code {
-                            KeyCode::Char('M') => debugger.memory_start_address -= 0x100,
-                            KeyCode::Char('m') => debugger.memory_start_address += 0x100,
-                            _ => {}
-                        }
+                        handle_normal_mode_events(&mut debugger, event);
                     }
                 }
             } else {
@@ -192,7 +136,7 @@ pub fn start_debugger(
                 draw_registers(f, register_chunk_2, 10, cpu).unwrap();
                 draw_cpsr(f, flags_chunk, cpu).unwrap();
                 draw_memory(f, memory_chunk, cpu, &debugger).unwrap();
-                draw_terminal(f, terminal_chunk, terminal_enabled, &debugger).unwrap();
+                draw_terminal(f, terminal_chunk, &debugger).unwrap();
             }
         }) else {
             break;
@@ -274,6 +218,55 @@ fn draw_cpu(
     f.render_widget(inst_mode, sections[6]);
 
     Ok(())
+}
+
+fn handle_control_events(debugger: &mut Debugger, event: KeyEvent) {
+    match event.code {
+        KeyCode::Char('t') => {
+            debugger.terminal_enabled = !debugger.terminal_enabled;
+        }
+        KeyCode::Char('c') => {
+            debugger.end_debugger = true;
+        }
+        KeyCode::Char('w') => {
+            if debugger.terminal_enabled {
+                debugger.terminal_buffer.clear();
+            }
+        }
+        _ => (),
+    }
+}
+
+fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
+    match event.code {
+        KeyCode::Backspace => {
+            debugger.terminal_buffer.pop();
+        }
+        KeyCode::Char(c) => debugger.terminal_buffer.push(c),
+        KeyCode::Enter => {
+            match parse_command(debugger) {
+                Ok(res) => debugger.terminal_history.push(TerminalHistoryEntry {
+                    command: debugger.terminal_buffer.clone(),
+                    result: res,
+                }),
+                Err(err) => debugger.terminal_history.push(TerminalHistoryEntry {
+                    command: debugger.terminal_buffer.clone(),
+                    result: err.to_string(),
+                }),
+            };
+            debugger.terminal_buffer.clear();
+        }
+        _ => {}
+    }
+}
+
+fn handle_normal_mode_events(debugger: &mut Debugger, event: KeyEvent) {
+    match event.code {
+        KeyCode::Char('n') => debugger.cpu.lock().unwrap().execute_cpu_cycle(),
+        KeyCode::Char('M') => debugger.memory_start_address -= 0x100,
+        KeyCode::Char('m') => debugger.memory_start_address += 0x100,
+        _ => {}
+    }
 }
 
 fn draw_registers(
@@ -538,7 +531,6 @@ fn draw_memory(
 fn draw_terminal(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,
     terminal_chunk: Rect,
-    terminal_enabled: bool,
     debugger: &Debugger,
 ) -> Result<(), std::io::Error> {
     let block = Block::default()
@@ -552,7 +544,7 @@ fn draw_terminal(
         .split(terminal_chunk);
 
     let border = Block::default().borders(Borders::ALL);
-    if terminal_enabled {
+    if debugger.terminal_enabled {
         let input = Paragraph::new(format!(" > {}", debugger.terminal_buffer));
         f.render_widget(input, terminal_sections[1]);
     }

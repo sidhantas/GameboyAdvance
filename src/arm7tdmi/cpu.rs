@@ -1,20 +1,17 @@
-use std::
-    sync::{
-        mpsc::{
-            Receiver,
-            TryRecvError::{Disconnected, Empty},
-        },
-        Arc, Mutex,
-    }
-;
+use std::sync::{
+    mpsc::{
+        Receiver,
+        TryRecvError::{Disconnected, Empty},
+    },
+    Arc, Mutex,
+};
 
 use crate::{
-    debugger::{breakpoints::BreakType, debugger::DebugCommands},
-    memory::memory::{GBAMemory, MemoryBus},
+    debugger::{breakpoints::BreakType},
+    memory::memory::MemoryBus,
     types::*,
     utils::bits::Bits,
 };
-
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -50,7 +47,7 @@ pub struct CPU {
     registers_abt: [WORD; 2],
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
-    pub memory: GBAMemory,
+    pub memory: Box<dyn MemoryBus>,
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
@@ -59,67 +56,9 @@ pub struct CPU {
     pub breakpoints: Vec<BreakType>,
 }
 
-pub fn cpu_thread(cpu: Arc<Mutex<CPU>>, rx: Receiver<DebugCommands>) {
-    let mut instructions_left = 0;
-    loop {
-        loop {
-            match rx.try_recv() {
-                Ok(data) => match data {
-                    DebugCommands::End => {
-                        return;
-                    }
-                    DebugCommands::Continue(num) => {
-                        instructions_left += num;
-                    }
-                    DebugCommands::SetBreakpoint(breakpoint) => {
-                        cpu.lock().unwrap().breakpoints.push(breakpoint);
-                    }
-                    DebugCommands::DeleteBreakpoint(breakpoint_num) => {
-                        cpu.lock()
-                            .unwrap()
-                            .breakpoints
-                            .remove(breakpoint_num as usize);
-                    }
-                },
-                Err(Disconnected) => return,
-                Err(Empty) => {
-                    break;
-                }
-            }
-        }
-        let mut cpu = cpu.lock().unwrap();
-        while instructions_left > 0 {
-            cpu.execute_cpu_cycle();
-            let pc = cpu.get_pc();
-            for breakpoint in &cpu.breakpoints {
-                match *breakpoint {
-                    BreakType::Break(break_pc) if break_pc == pc => instructions_left = 0,
-                    BreakType::WatchRegister(register, value) if cpu.get_register(register) == value => {
-                        instructions_left = 0
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-}
 
 impl CPU {
-    pub fn execute_cpu_cycle(&mut self) {
-        if let Some(value) = self.prefetch[1] {
-            let decoded_instruction = self.decode_instruction(value);
-            self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
-            self.prefetch[1] = None;
-            ((decoded_instruction.executable)(self, decoded_instruction.instruction));
-        }
-
-        if let None = self.prefetch[1] {
-            // refill pipeline if decoded instruction doesn't advance the pipeline
-            self.advance_pipeline();
-        }
-    }
-
-    pub fn new(memory: GBAMemory) -> CPU {
+    pub fn new(memory: Box<dyn MemoryBus>) -> CPU {
         CPU {
             registers: [0; 16],
             executed_instruction_hex: 0,
@@ -137,6 +76,20 @@ impl CPU {
             registers_irq: [0; 2],
             registers_und: [0; 2],
             breakpoints: Vec::new(),
+        }
+    }
+
+    pub fn execute_cpu_cycle(&mut self) {
+        if let Some(value) = self.prefetch[1] {
+            let decoded_instruction = self.decode_instruction(value);
+            self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
+            self.prefetch[1] = None;
+            ((decoded_instruction.executable)(self, decoded_instruction.instruction));
+        }
+
+        if let None = self.prefetch[1] {
+            // refill pipeline if decoded instruction doesn't advance the pipeline
+            self.advance_pipeline();
         }
     }
 
@@ -293,9 +246,7 @@ impl CPU {
         let memory_fetch = {
             match self.get_instruction_mode() {
                 InstructionMode::ARM => self.memory.readu32(self.get_pc() as usize),
-                InstructionMode::THUMB => self.memory
-                    .readu16(self.get_pc() as usize)
-                    .into(),
+                InstructionMode::THUMB => self.memory.readu16(self.get_pc() as usize).into(),
             }
         };
         cycles += memory_fetch.cycles;
@@ -394,7 +345,6 @@ impl CPU {
 
 #[cfg(test)]
 mod cpu_tests {
-    
 
     use crate::{arm7tdmi::cpu::CPUMode, memory::memory::GBAMemory, utils::bits::Bits};
 
@@ -403,7 +353,7 @@ mod cpu_tests {
     #[test]
     fn it_sets_and_resets_the_corrects_flags() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_flag(super::FlagsRegister::C);
@@ -424,7 +374,7 @@ mod cpu_tests {
     #[test]
     fn cpu_starts_in_svc_mode() {
         let memory = GBAMemory::new();
-        
+
         let cpu = CPU::new(memory);
 
         assert!(matches!(cpu.get_cpu_mode(), CPUMode::SVC));

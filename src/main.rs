@@ -1,10 +1,10 @@
 use std::panic;
 use std::{
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex},
     thread,
 };
 
-use arm7tdmi::cpu::{cpu_thread, CPU};
+use arm7tdmi::cpu::CPU;
 use debugger::debugger::start_debugger;
 use getopts::Options;
 use memory::memory::{GBAMemory, MemoryBus};
@@ -36,15 +36,11 @@ fn main() -> Result<(), std::io::Error> {
         .expect("Unable to initialize bios for CPU");
 
     //let display_memory = memory.clone();
-    let cpu = Arc::new(Mutex::new(CPU::new(&mut memory)));
-    let (cpu_tx, cpu_rx) = mpsc::channel();
-    let (_debug_tx, debug_rx) = mpsc::channel();
+    let cpu = Arc::new(Mutex::new(CPU::new(memory)));
 
     thread::scope(move |scope| {
         let debug_cpu = Arc::clone(&cpu);
-        let debug_cpu_sender = cpu_tx.clone();
-        scope.spawn(move || cpu_thread(cpu, cpu_rx));
-        scope.spawn(move || start_debugger(debug_cpu, debug_cpu_sender, debug_rx));
+        scope.spawn(move || start_debugger(debug_cpu));
         //start_display(display_memory);
     });
 

@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::mpsc::SendError};
 use crate::{memory::memory::MemoryBus, utils::utils::{try_parse_num, try_parse_reg, ParsingError}};
-use super::{breakpoints::{BreakType, Breakpoint}, debugger::{DebugCommands, Debugger}};
+use super::{breakpoints::{BreakType, Breakpoint}, debugger::{Debugger}};
 
 
 pub enum TerminalCommandErrors {
@@ -9,7 +9,6 @@ pub enum TerminalCommandErrors {
     CouldNotParse,
     NoCommandProvided,
     InvalidArgument(String),
-    ChannelError(SendError<DebugCommands>),
 }
 
 impl Display for TerminalCommandErrors {
@@ -20,9 +19,6 @@ impl Display for TerminalCommandErrors {
             TerminalCommandErrors::CouldNotParse => "Unable to parse command".fmt(f),
             TerminalCommandErrors::NoCommandProvided => "No Command Provided".fmt(f),
             TerminalCommandErrors::InvalidArgument(arg) => write!(f, "Invalid argument provided: {}", arg),
-            TerminalCommandErrors::ChannelError(err) => {
-                write!(f, "Experienced an error with the channel: {}", err)
-            }
         }
     }
 }
@@ -107,7 +103,6 @@ pub fn parse_command(debugger: &mut Debugger) -> Result<String, TerminalCommandE
     };
     let command = find_command(command_name)?;
     Ok((command.handler)(debugger, split_command.collect())?)
-
 }
 
 fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
@@ -150,12 +145,6 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
 }
 
 fn quit_handler(debugger: &mut Debugger, _args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
-    if let Err(err) = debugger
-        .cpu_sender
-        .send(DebugCommands::End)
-    {
-        return Err(TerminalCommandErrors::ChannelError(err));
-    }
     debugger.end_debugger = true;
     Ok(String::new())
 }
@@ -188,13 +177,8 @@ fn delete_breakpoint_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result
     if breakpoint < 1 {
         return Err(TerminalCommandErrors::InvalidArgument(breakpoint.to_string()));
     }
+    debugger.breakpoints.remove(breakpoint as usize - 1);
 
-    if let Err(err) = debugger
-        .cpu_sender
-        .send(DebugCommands::DeleteBreakpoint(breakpoint - 1))
-    {
-        return Err(TerminalCommandErrors::ChannelError(err));
-    }
     Ok(format!("Breakpoint number {} removed", breakpoint))
 }
 

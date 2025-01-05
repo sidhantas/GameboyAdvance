@@ -78,7 +78,7 @@ fn memory_store(region: &mut Vec<u32>, address: usize, value: u32) {
     }
 }
 
-pub trait MemoryBus {
+pub trait MemoryBus: Send + Sync {
      fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error>;
 
      fn read(&self, address: usize) -> MemoryFetch<u8>;
@@ -94,7 +94,7 @@ pub trait MemoryBus {
      fn writeu32(&mut self, address: usize, value: u32) -> CYCLES;
 }
 impl GBAMemory {
-     pub fn new() -> Self {
+     pub fn new() -> Box<Self> {
         let mut wait_cycles_u16 = [0; 15];
         wait_cycles_u16[BIOS_REGION] = 1;
         wait_cycles_u16[IWRAM_REGION] = 1;
@@ -126,7 +126,7 @@ impl GBAMemory {
         wait_cycles_u32[ROM2A_REGION] = 8;
         wait_cycles_u32[ROM2B_REGION] = 8;
 
-        Self {
+        Box::new(Self {
             bios: vec![0; BIOS_SIZE >> 2],
             exwram: vec![0; EXWRAM_SIZE >> 2],
             iwram: vec![0; IWRAM_SIZE >> 2],
@@ -138,7 +138,7 @@ impl GBAMemory {
             sram: vec![0; SRAM_SIZE >> 2],
             wait_cycles_u16,
             wait_cycles_u32,
-        }
+        })
     }
 
 }
