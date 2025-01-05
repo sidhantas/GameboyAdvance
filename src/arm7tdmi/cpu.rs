@@ -10,7 +10,7 @@ use std::
 
 use crate::{
     debugger::{breakpoints::BreakType, debugger::DebugCommands},
-    memory::memory::GBAMemory,
+    memory::memory::{GBAMemory, MemoryBus},
     types::*,
     utils::bits::Bits,
 };

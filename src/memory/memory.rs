@@ -53,7 +53,7 @@ pub struct GBAMemory {
     bios: Vec<u32>,
     exwram: Vec<u32>,
     iwram: Vec<u32>,
-    ioram: Vec<u32>,
+    pub(super)ioram: Vec<u16>,
     bgram: Vec<u32>,
     vram: Vec<u32>,
     oam: Vec<u32>,
@@ -65,16 +65,36 @@ pub struct GBAMemory {
 
 #[inline(always)]
 fn memory_load(region: &Vec<u32>, address: usize) -> u32 {
-    region[address >> 2]
+    *region
+        .get(address >> 2)
+        .unwrap_or(&0)
 }
 
 #[inline(always)]
 fn memory_store(region: &mut Vec<u32>, address: usize, value: u32) {
-    region[address >> 2] = value;
+    let store_address = address >> 2;
+    if store_address < region.len() {
+        region[store_address] = value;
+    }
 }
 
+pub trait MemoryBus {
+     fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error>;
+
+     fn read(&self, address: usize) -> MemoryFetch<u8>;
+
+     fn readu16(&self, address: usize) -> MemoryFetch<u16>;
+
+     fn readu32(&self, address: usize) -> MemoryFetch<u32>;
+
+     fn write(&mut self, address: usize, value: u8) -> CYCLES;
+
+     fn writeu16(&mut self, address: usize, value: u16) -> CYCLES;
+
+     fn writeu32(&mut self, address: usize, value: u32) -> CYCLES;
+}
 impl GBAMemory {
-    pub fn new() -> Self {
+     pub fn new() -> Self {
         let mut wait_cycles_u16 = [0; 15];
         wait_cycles_u16[BIOS_REGION] = 1;
         wait_cycles_u16[IWRAM_REGION] = 1;
@@ -110,7 +130,7 @@ impl GBAMemory {
             bios: vec![0; BIOS_SIZE >> 2],
             exwram: vec![0; EXWRAM_SIZE >> 2],
             iwram: vec![0; IWRAM_SIZE >> 2],
-            ioram: vec![0; IORAM_SIZE >> 2],
+            ioram: vec![0; IORAM_SIZE >> 1],
             bgram: vec![0; BGRAM_SIZE >> 2],
             vram: vec![0; VRAM_SIZE >> 2],
             oam: vec![0; OAM_SIZE >> 2],
@@ -121,7 +141,10 @@ impl GBAMemory {
         }
     }
 
-    pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
+}
+
+impl MemoryBus for GBAMemory {
+     fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
         let mut index = 0;
         let mut bios_file = File::options().read(true).open(filename)?;
         let mut buffer = [0; 4];
@@ -136,31 +159,31 @@ impl GBAMemory {
         Ok(())
     }
 
-    pub fn read(&self, address: usize) -> MemoryFetch<u8> {
+     fn read(&self, address: usize) -> MemoryFetch<u8> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address).to_le_bytes()[address & 0b11],
             EXWRAM_REGION => {
-                memory_load(&self.exwram, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.exwram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             IWRAM_REGION => {
-                memory_load(&self.iwram, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.iwram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             IORAM_REGION => {0},
             BGRAM_REGION => {
-                memory_load(&self.bgram, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.bgram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             VRAM_REGION => {
-                memory_load(&self.vram, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.vram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             OAM_REGION => {
-                memory_load(&self.oam, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.oam, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             ROM0A_REGION..=ROM2B_REGION => {
-                memory_load(&self.rom, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.rom, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             SRAM_REGION => {
-                memory_load(&self.sram, (address & 0xFFFFFF)).to_le_bytes()[address & 0b11]
+                memory_load(&self.sram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             _ => panic!(),
         };
@@ -171,7 +194,7 @@ impl GBAMemory {
         }
     }
 
-    pub fn readu16(&self, address: usize) -> MemoryFetch<u16> {
+     fn readu16(&self, address: usize) -> MemoryFetch<u16> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
@@ -195,18 +218,18 @@ impl GBAMemory {
         }
     }
 
-    pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
+     fn readu32(&self, address: usize) -> MemoryFetch<u32> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
-            EXWRAM_REGION => memory_load(&self.exwram, (address & 0xFFFFFF)),
-            IWRAM_REGION => memory_load(&self.iwram, (address & 0xFFFFFF)),
+            EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
+            IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
             IORAM_REGION => {0},
-            BGRAM_REGION => memory_load(&self.bgram, (address & 0xFFFFFF)),
-            VRAM_REGION => memory_load(&self.vram, (address & 0xFFFFFF)),
-            OAM_REGION => memory_load(&self.oam, (address & 0xFFFFFF)),
-            ROM0A_REGION..=ROM2B_REGION => memory_load(&self.rom, (address & 0xFFFFFF)),
-            SRAM_REGION => memory_load(&self.sram, (address & 0xFFFFFF)),
+            BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
+            VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
+            OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
+            ROM0A_REGION..=ROM2B_REGION => memory_load(&self.rom, address & 0xFFFFFF),
+            SRAM_REGION => memory_load(&self.sram, address & 0xFFFFFF),
             _ => panic!("address: {address}"),
         };
 
@@ -216,7 +239,7 @@ impl GBAMemory {
         }
     }
 
-    pub fn write(&mut self, address: usize, value: u8) -> CYCLES {
+     fn write(&mut self, address: usize, value: u8) -> CYCLES {
         let region = address >> 24;
         match region {
             BIOS_REGION => {}
@@ -232,7 +255,7 @@ impl GBAMemory {
                 let value = current_value | ((value as u32) << 8 * (address & 0b11));
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
-            IORAM_REGION => {},
+            IORAM_REGION => self.io_writeu8(address, value),
             BGRAM_REGION => {
                 let mut current_value = memory_load(&self.bgram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
@@ -264,7 +287,7 @@ impl GBAMemory {
         self.wait_cycles_u16[region]
     }
 
-    pub fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
+     fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
         let region = address >> 24;
         match region {
             BIOS_REGION => {}
@@ -280,7 +303,7 @@ impl GBAMemory {
                 let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
-            IORAM_REGION => {},
+            IORAM_REGION => self.io_writeu16(address, value),
             BGRAM_REGION => {
                 let mut current_value = memory_load(&self.bgram, address & 0xFFFFFE);
                 current_value &= !(0xFFFF << 16 * (address & 0b11));
@@ -312,7 +335,7 @@ impl GBAMemory {
         self.wait_cycles_u16[region]
     }
 
-    pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
+     fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         let region = address >> 24;
         match region {
             BIOS_REGION => {}
@@ -322,7 +345,7 @@ impl GBAMemory {
             IWRAM_REGION => {
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
-            IORAM_REGION => {},
+            IORAM_REGION => self.io_writeu32(address, value),
             BGRAM_REGION => {
                 memory_store(&mut self.bgram, address & 0xFFFFFF, value);
             }
@@ -345,6 +368,8 @@ impl GBAMemory {
 
 #[cfg(test)]
 mod tests {
+    use crate::memory::memory::MemoryBus;
+
     use super::GBAMemory;
 
     #[test]

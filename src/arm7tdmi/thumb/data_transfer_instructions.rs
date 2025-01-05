@@ -2,6 +2,7 @@ use std::mem::size_of;
 
 use crate::{
     arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER},
+    memory::memory::MemoryBus,
     types::{CYCLES, REGISTER, WORD},
     utils::bits::Bits,
 };
@@ -218,17 +219,16 @@ impl CPU {
 
 #[cfg(test)]
 mod thumb_ldr_str_tests {
-    
 
     use crate::{
         arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        memory::memory::{GBAMemory, MemoryBus},
     };
 
     #[test]
     fn should_load_data_relative_to_pc() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
         cpu.memory.writeu32(0x3000024, 0x55);

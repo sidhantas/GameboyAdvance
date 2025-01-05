@@ -1,6 +1,5 @@
 use crate::{
-    types::{CYCLES, WORD},
-    utils::bits::Bits,
+    memory::memory::MemoryBus, types::{CYCLES, WORD}, utils::bits::Bits
 };
 
 use super::cpu::CPU;
@@ -37,7 +36,7 @@ impl CPU {
 
 #[cfg(test)]
 mod single_data_swap_test {
-    use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
+    use crate::{arm7tdmi::cpu::CPU, memory::memory::{GBAMemory, MemoryBus}};
 
     #[test]
     fn swap_instruction_should_store_and_load_at_the_same_time() {

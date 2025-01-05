@@ -7,7 +7,7 @@ use std::{
 use arm7tdmi::cpu::{cpu_thread, CPU};
 use debugger::debugger::start_debugger;
 use getopts::Options;
-use memory::memory::GBAMemory;
+use memory::memory::{GBAMemory, MemoryBus};
 use std::env;
 mod arm7tdmi;
 mod debugger;
@@ -36,9 +36,9 @@ fn main() -> Result<(), std::io::Error> {
         .expect("Unable to initialize bios for CPU");
 
     //let display_memory = memory.clone();
-    let cpu = Arc::new(Mutex::new(CPU::new(memory)));
+    let cpu = Arc::new(Mutex::new(CPU::new(&mut memory)));
     let (cpu_tx, cpu_rx) = mpsc::channel();
-    let (debug_tx, debug_rx) = mpsc::channel();
+    let (_debug_tx, debug_rx) = mpsc::channel();
 
     thread::scope(move |scope| {
         let debug_cpu = Arc::clone(&cpu);

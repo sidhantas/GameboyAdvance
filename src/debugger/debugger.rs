@@ -1,4 +1,4 @@
-use super::breakpoints::{Breakpoint, BreakType};
+use super::breakpoints::{BreakType, Breakpoint};
 use crossterm::{
     event::{self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -21,7 +21,7 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU};
+use crate::{arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU}, memory::{debugger_memory::DebuggerMemory, memory::{GBAMemory, MemoryBus}}};
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
@@ -44,6 +44,9 @@ pub struct Debugger {
 
 impl Debugger {
     fn new(cpu: Arc<Mutex<CPU>>, cpu_sender: Sender<DebugCommands>) -> Self {
+        let mut gba_memory = GBAMemory::new();
+        let debugger_memory = DebuggerMemory::new(&mut gba_memory);
+
         Self {
             memory_start_address: 0x0000000,
             cpu_sender,
@@ -61,6 +64,7 @@ pub fn start_debugger(
     cpu_sender: Sender<DebugCommands>,
     debug_receiver: Receiver<DebugCommands>,
 ) -> Result<(), std::io::Error> {
+
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(io::stdout());
@@ -69,7 +73,6 @@ pub fn start_debugger(
     let mut terminal_enabled = false;
 
     let mut debugger = Debugger::new(cpu.clone(), cpu_sender.clone());
-
     while !debugger.end_debugger {
         if let Ok(DebugCommands::End) = debug_receiver.try_recv() {
             debugger.end_debugger = true;
@@ -509,7 +512,8 @@ fn draw_memory(
 
     for column in 1..memory_grid.len() {
         for row in 2..memory_grid[column].len() {
-            let value = cpu.memory
+            let value = cpu
+                .memory
                 .read((start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize)
                 .data;
 

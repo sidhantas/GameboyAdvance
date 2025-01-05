@@ -1,11 +1,10 @@
 use std::mem::size_of;
 
 use crate::{
-    types::{CYCLES, REGISTER, WORD},
-    utils::{
+    memory::memory::MemoryBus, types::{CYCLES, REGISTER, WORD}, utils::{
         bits::{sign_extend, Bits},
         utils::print_vec,
-    },
+    }
 };
 
 use super::cpu::{CPUMode, CPU, PC_REGISTER};
@@ -351,7 +350,7 @@ impl CPU {
 
 #[cfg(test)]
 mod sdt_tests {
-    use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
+    use crate::{arm7tdmi::cpu::CPU, memory::memory::{GBAMemory, MemoryBus}};
 
     #[test]
     fn ldr_should_return_data_at_specified_address() {

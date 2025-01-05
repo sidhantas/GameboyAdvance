@@ -1,5 +1,5 @@
 use std::{fmt::Display, sync::mpsc::SendError};
-use crate::utils::utils::{try_parse_num, try_parse_reg, ParsingError};
+use crate::{memory::memory::MemoryBus, utils::utils::{try_parse_num, try_parse_reg, ParsingError}};
 use super::{breakpoints::{BreakType, Breakpoint}, debugger::{DebugCommands, Debugger}};
 
 

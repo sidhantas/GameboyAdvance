@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{arm7tdmi::cpu::CPU, types::REGISTER};
+use crate::{arm7tdmi::cpu::CPU, memory::memory::MemoryBus, types::REGISTER};
 
 #[derive(PartialEq)]
 pub enum BreakType {
