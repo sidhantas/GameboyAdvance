@@ -78,9 +78,7 @@ fn memory_store(region: &mut Vec<u32>, address: usize, value: u32) {
     }
 }
 
-pub trait MemoryBus: Send + Sync {
-     fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error>;
-
+pub trait MemoryBus {
      fn read(&self, address: usize) -> MemoryFetch<u8>;
 
      fn readu16(&self, address: usize) -> MemoryFetch<u16>;
@@ -141,10 +139,7 @@ impl GBAMemory {
         })
     }
 
-}
-
-impl MemoryBus for GBAMemory {
-     fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
+     pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
         let mut index = 0;
         let mut bios_file = File::options().read(true).open(filename)?;
         let mut buffer = [0; 4];
@@ -158,6 +153,10 @@ impl MemoryBus for GBAMemory {
         };
         Ok(())
     }
+
+}
+
+impl MemoryBus for GBAMemory {
 
      fn read(&self, address: usize) -> MemoryFetch<u8> {
         let region = address >> 24;

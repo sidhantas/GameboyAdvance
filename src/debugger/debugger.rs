@@ -1,4 +1,4 @@
-use super::breakpoints::{BreakType, Breakpoint};
+use super::breakpoints::{BreakType, Breakpoint, TriggeredWatchpoint};
 use crossterm::{
     event::{
         self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
@@ -7,12 +7,10 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
+    cell::RefCell,
     io::{self, Stdout},
     rc::Rc,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -24,7 +22,10 @@ use tui::{
     Frame, Terminal,
 };
 
-use crate::arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU};
+use crate::{
+    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
+    memory::{debugger_memory::DebuggerMemory, memory::GBAMemory},
+};
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
@@ -35,11 +36,40 @@ pub struct Debugger {
     pub terminal_enabled: bool,
     pub end_debugger: bool,
     pub cpu: Arc<Mutex<CPU>>,
-    pub breakpoints: Vec<Breakpoint>,
+    pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
+    pub triggered_watchpoints: Rc<RefCell<Vec<Breakpoint>>>,
 }
 
 impl Debugger {
-    fn new(cpu: Arc<Mutex<CPU>>) -> Self {
+    pub fn new(bios: String) -> Self {
+        let mut memory = GBAMemory::new();
+        memory.initialize_bios(bios).unwrap();
+        let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
+        let triggered_watchpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
+
+
+        let memory = {
+            let breakpoints = breakpoints.clone();
+            let triggered_watchpoints = triggered_watchpoints.clone();
+
+            DebuggerMemory::new(
+                memory,
+                Box::new(move |address| {
+                    for bp in breakpoints.borrow().iter() {
+                        if let BreakType::WatchAddress(adr) = bp.break_type {
+                            if address == adr {
+                                triggered_watchpoints
+                                    .borrow_mut()
+                                    .push((*bp).clone());
+                            }
+                        }
+                    }
+                }),
+            )
+        };
+
+        let cpu = Arc::new(Mutex::new(CPU::new(memory)));
+
         Self {
             memory_start_address: 0x0000000,
             terminal_buffer: String::new(),
@@ -47,32 +77,31 @@ impl Debugger {
             terminal_enabled: true,
             end_debugger: false,
             cpu,
-            breakpoints: Vec::new(),
+            breakpoints,
+            triggered_watchpoints,
         }
     }
 }
 
-
-pub fn start_debugger(cpu: Arc<Mutex<CPU>>) -> Result<(), std::io::Error> {
+pub fn start_debugger(bios: String) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut debugger = Debugger::new(cpu.clone());
+    let debugger = &mut Debugger::new(bios);
 
     while !debugger.end_debugger {
         loop {
             if event::poll(Duration::from_millis(10))? {
                 if let Event::Key(event) = read()? {
                     if event.modifiers == KeyModifiers::CONTROL {
-                        handle_control_events(&mut debugger, event);
-                    }
-                    if debugger.terminal_enabled {
-                        handle_terminal_events(&mut debugger, event);
+                        handle_control_events(debugger, event);
+                    } else if debugger.terminal_enabled {
+                        handle_terminal_events(debugger, event);
                     } else {
-                        handle_normal_mode_events(&mut debugger, event);
+                        handle_normal_mode_events(debugger, event);
                     }
                 }
             } else {
@@ -130,7 +159,7 @@ pub fn start_debugger(cpu: Arc<Mutex<CPU>>) -> Result<(), std::io::Error> {
             let terminal_chunk = horizontal_chunks_1[1];
 
             {
-                let cpu = &cpu.lock().unwrap();
+                let cpu = &debugger.cpu.lock().unwrap();
                 draw_cpu(f, cpu_chunk, cpu).unwrap();
                 draw_registers(f, register_chunk, 0, cpu).unwrap();
                 draw_registers(f, register_chunk_2, 10, cpu).unwrap();

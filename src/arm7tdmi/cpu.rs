@@ -1,11 +1,3 @@
-use std::sync::{
-    mpsc::{
-        Receiver,
-        TryRecvError::{Disconnected, Empty},
-    },
-    Arc, Mutex,
-};
-
 use crate::{
     debugger::{breakpoints::BreakType},
     memory::memory::MemoryBus,
@@ -53,7 +45,6 @@ pub struct CPU {
     pub executed_instruction: String,
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
-    pub breakpoints: Vec<BreakType>,
 }
 
 
@@ -75,7 +66,6 @@ impl CPU {
             registers_abt: [0; 2],
             registers_irq: [0; 2],
             registers_und: [0; 2],
-            breakpoints: Vec::new(),
         }
     }
 
