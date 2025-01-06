@@ -1,5 +1,5 @@
 use super::{
-    breakpoints::{BreakType, Breakpoint},
+    breakpoints::{BreakType, Breakpoint, TriggeredWatchpoints},
     debugger::Debugger,
 };
 use crate::utils::utils::{try_parse_num, try_parse_reg, ParsingError};
@@ -139,13 +139,16 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
                 _ => {}
             }
         }
-        for breakpoint in debugger.triggered_watchpoints.borrow().iter() {
-            match breakpoint.break_type {
-                BreakType::WatchAddress(address) => {
-                    return Ok(format!("Watchpoint encountered {:#x}", address));
+        let mut encountered_watchpoints = String::new();
+        for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
+            match watchpoint {
+                TriggeredWatchpoints::Address(address) => {
+                    encountered_watchpoints.push_str(&format!("Watchpoint encountered {:#x}", address));
                 }
-                _ => {}
             }
+        }
+        if !encountered_watchpoints.is_empty() {
+            return Ok(encountered_watchpoints);
         }
     }
 
@@ -224,8 +227,8 @@ fn list_breakpoint_handler(
             BreakType::WatchRegister(reg, value) => {
                 breakpoint_list.push_str(format!("{}: watch r{reg} {:#x}\n", i + 1, value).as_str())
             }
-            BreakType::WatchAddress(address) => breakpoint_list
-                .push_str(format!("{}: watch address: {:#x}\n", i + 1, address).as_str()),
+            BreakType::WatchAddress(address, address2) => breakpoint_list
+                .push_str(format!("{}: watch address: {:#x}-{:#x}\n", i + 1, address, address2).as_str()),
         }
     }
 
@@ -276,7 +279,7 @@ fn set_watch_address_range_handler(
     debugger
         .breakpoints
         .borrow_mut()
-        .push(Breakpoint::new(BreakType::WatchAddress(address1)));
+        .push(Breakpoint::new(BreakType::WatchAddress(address1, address2)));
     Ok(format!(
         "Watchpoint set for range {:#x}-{:#x}",
         address1, address2

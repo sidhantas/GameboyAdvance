@@ -6,6 +6,15 @@ pub struct MemoryFetch<T> {
     pub data: T,
 }
 
+impl<T> MemoryFetch<T> {
+    pub fn new(data: T, cycles: CYCLES) -> Self {
+        Self {
+            cycles,
+            data
+        }
+    }
+}
+
 impl Into<MemoryFetch<WORD>> for MemoryFetch<BYTE> {
     fn into(self) -> MemoryFetch<WORD> {
         MemoryFetch {
@@ -168,7 +177,7 @@ impl MemoryBus for GBAMemory {
             IWRAM_REGION => {
                 memory_load(&self.iwram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
-            IORAM_REGION => {0},
+            IORAM_REGION => self.io_readu8(address),
             BGRAM_REGION => {
                 memory_load(&self.bgram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
@@ -187,10 +196,7 @@ impl MemoryBus for GBAMemory {
             _ => panic!(),
         };
 
-        MemoryFetch {
-            data,
-            cycles: self.wait_cycles_u16[region],
-        }
+        MemoryFetch::new(data, self.wait_cycles_u16[region])
     }
 
      fn readu16(&self, address: usize) -> MemoryFetch<u16> {
@@ -199,7 +205,10 @@ impl MemoryBus for GBAMemory {
             BIOS_REGION => memory_load(&self.bios, address),
             EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
             IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
-            IORAM_REGION => {0},
+            IORAM_REGION => return MemoryFetch {
+                data: self.io_readu16(address),
+                cycles: self.wait_cycles_u16[region]
+            },
             BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
             OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
@@ -211,10 +220,7 @@ impl MemoryBus for GBAMemory {
         let shift_amount = 16 * ((address >> 1) & 0x1);
         let data = data >> shift_amount;
 
-        MemoryFetch {
-            data: data as u16,
-            cycles: self.wait_cycles_u16[region],
-        }
+        MemoryFetch::new(data as u16, self.wait_cycles_u16[region])
     }
 
      fn readu32(&self, address: usize) -> MemoryFetch<u32> {
@@ -223,7 +229,7 @@ impl MemoryBus for GBAMemory {
             BIOS_REGION => memory_load(&self.bios, address),
             EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
             IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
-            IORAM_REGION => {0},
+            IORAM_REGION => self.io_readu32(address),
             BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
             OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
@@ -232,10 +238,10 @@ impl MemoryBus for GBAMemory {
             _ => panic!("address: {address}"),
         };
 
-        MemoryFetch {
-            data: data.rotate_right(8 * (address as u32 & 0b11)),
-            cycles: self.wait_cycles_u32[region],
-        }
+        MemoryFetch::new(
+            data.rotate_right(8 * (address as u32 & 0b11)),
+            self.wait_cycles_u32[region],
+        )
     }
 
      fn write(&mut self, address: usize, value: u8) -> CYCLES {

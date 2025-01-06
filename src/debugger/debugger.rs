@@ -1,4 +1,4 @@
-use super::breakpoints::{BreakType, Breakpoint, TriggeredWatchpoint};
+use super::breakpoints::{BreakType, Breakpoint,  TriggeredWatchpoints};
 use crossterm::{
     event::{
         self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
@@ -37,7 +37,7 @@ pub struct Debugger {
     pub end_debugger: bool,
     pub cpu: Arc<Mutex<CPU>>,
     pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
-    pub triggered_watchpoints: Rc<RefCell<Vec<Breakpoint>>>,
+    pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
 
 impl Debugger {
@@ -45,7 +45,7 @@ impl Debugger {
         let mut memory = GBAMemory::new();
         memory.initialize_bios(bios).unwrap();
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
-        let triggered_watchpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
+        let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
 
         let memory = {
@@ -56,11 +56,11 @@ impl Debugger {
                 memory,
                 Box::new(move |address| {
                     for bp in breakpoints.borrow().iter() {
-                        if let BreakType::WatchAddress(adr) = bp.break_type {
-                            if address == adr {
+                        if let BreakType::WatchAddress(adr1, adr2) = bp.break_type {
+                            if adr1 <= address && address <= adr2 {
                                 triggered_watchpoints
                                     .borrow_mut()
-                                    .push((*bp).clone());
+                                    .push(TriggeredWatchpoints::Address(address));
                             }
                         }
                     }

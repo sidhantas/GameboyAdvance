@@ -3,6 +3,8 @@ use super::memory::GBAMemory;
 const DISPCNT: usize = 0x000;
 const IME: usize = 0x208;
 const IE: usize = 0x200;
+const IF: usize = 0x202;
+const POSTFLG: usize = 0x300;
 
 #[inline(always)]
 fn io_load(region: &Vec<u16>, address: usize) -> u16 {
@@ -20,6 +22,36 @@ fn io_store(region: &mut Vec<u16>, address: usize, value: u16) {
 }
 
 impl GBAMemory {
+    pub(super) fn io_readu8(&self, address: usize) -> u8 {
+        let offset = address & 0xFFE;
+        let current_value = self.io_readu16(offset);
+
+        if address & 1 == 1 {
+            (current_value >> 8) as u8
+        } else {
+            (current_value & 0xFF) as u8
+        }
+
+    }
+
+    pub(super) fn io_readu16(&self, address: usize) -> u16 {
+        let offset = address & 0xFFE;
+        let data = io_load(&self.ioram, offset);
+        match address {
+            IME => data,
+            IF => data,
+            POSTFLG => data,
+            _ => panic!()
+        }
+    }
+
+    pub(super) fn io_readu32(&self, address: usize) -> u32 {
+        let lower = self.io_readu16(address) as u32;
+        let upper = self.io_readu16(address + 2) as u32;
+
+        return upper << 16 | lower;
+    }
+
     pub(super) fn io_writeu8(&mut self, address: usize, value: u8) {
         let offset = address & 0xFFE;
         let mut current_value = io_load(&self.ioram, offset);

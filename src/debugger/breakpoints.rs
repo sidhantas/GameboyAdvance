@@ -8,12 +8,11 @@ use crate::types::REGISTER;
 pub enum BreakType {
     Break(u32),
     WatchRegister(REGISTER, u32),
-    WatchAddress(usize),
+    WatchAddress(usize, usize),
 }
 
-pub struct TriggeredWatchpoint {
-    address: usize,
-    value: u32
+pub enum TriggeredWatchpoints {
+    Address(usize)
 }
 
 #[derive(Clone)]
@@ -36,7 +35,7 @@ impl Display for BreakType {
             BreakType::WatchRegister(register, value) => {
                 write!(f, "r{} == {}", register, value)
             }
-            BreakType::WatchAddress(address) => write!(f, "address == {}", address),
+            BreakType::WatchAddress(address, address1) => write!(f, "address == {}", address),
         }
     }
 }
