@@ -1,6 +1,6 @@
 use crate::{
-    debugger::{breakpoints::BreakType},
-    memory::memory::MemoryBus,
+    debugger::breakpoints::BreakType,
+    memory::memory::{DebuggerMemoryBus, MemoryBus},
     types::*,
     utils::bits::Bits,
 };

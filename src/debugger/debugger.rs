@@ -1,4 +1,4 @@
-use super::breakpoints::{BreakType, Breakpoint,  TriggeredWatchpoints};
+use super::breakpoints::{BreakType, Breakpoint, TriggeredWatchpoints};
 use crossterm::{
     event::{
         self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
@@ -9,6 +9,7 @@ use crossterm::{
 use std::{
     cell::RefCell,
     io::{self, Stdout},
+    mem,
     rc::Rc,
     sync::{Arc, Mutex},
     thread,
@@ -24,7 +25,13 @@ use tui::{
 
 use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
-    memory::{debugger_memory::DebuggerMemory, memory::GBAMemory},
+    memory::{
+        debugger_memory::DebuggerMemory,
+        memory::{
+            GBAMemory,
+            MemoryError::{ReadError, WriteError},
+        },
+    },
 };
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
@@ -47,10 +54,10 @@ impl Debugger {
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
-
         let memory = {
             let breakpoints = breakpoints.clone();
             let triggered_watchpoints = triggered_watchpoints.clone();
+            let triggered_watchpoints_mem = triggered_watchpoints.clone();
 
             DebuggerMemory::new(
                 memory,
@@ -64,6 +71,11 @@ impl Debugger {
                             }
                         }
                     }
+                }),
+                Box::new(move |memory_error| {
+                    triggered_watchpoints_mem
+                        .borrow_mut()
+                        .push(TriggeredWatchpoints::Error(memory_error))
                 }),
             )
         };
@@ -234,7 +246,7 @@ fn draw_cpu(
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
 
-    let inst_mode = Paragraph::new(format!("{:#x}", cpu.executed_instruction_hex))
+    let inst_mode = Paragraph::new(format!("{:#X}", cpu.executed_instruction_hex))
         .alignment(tui::layout::Alignment::Center)
         .wrap(Wrap { trim: true });
 
@@ -274,14 +286,18 @@ fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
         KeyCode::Char(c) => debugger.terminal_buffer.push(c),
         KeyCode::Enter => {
             match parse_command(debugger) {
-                Ok(res) => debugger.terminal_history.push(TerminalHistoryEntry {
-                    command: debugger.terminal_buffer.clone(),
-                    result: res,
-                }),
-                Err(err) => debugger.terminal_history.push(TerminalHistoryEntry {
-                    command: debugger.terminal_buffer.clone(),
-                    result: err.to_string(),
-                }),
+                Ok(res) => debugger
+                    .terminal_history
+                    .push(TerminalHistoryEntry {
+                        command: debugger.terminal_buffer.clone(),
+                        result: res,
+                    }),
+                Err(err) => debugger
+                    .terminal_history
+                    .push(TerminalHistoryEntry {
+                        command: debugger.terminal_buffer.clone(),
+                        result: err.to_string(),
+                    }),
             };
             debugger.terminal_buffer.clear();
         }
@@ -352,7 +368,7 @@ fn draw_registers(
         .wrap(Wrap { trim: true });
         f.render_widget(register_name, register_names[i - start]);
 
-        let register_value = Paragraph::new(format!("{:#x}", cpu.get_register(i as u32 - 1)))
+        let register_value = Paragraph::new(format!("{:#X}", cpu.get_register(i as u32 - 1)))
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
         f.render_widget(register_value, register_values[i - start]);
@@ -579,7 +595,7 @@ fn draw_terminal(
     }
 
     let mut output = String::new();
-    for entry in &debugger.terminal_history {
+    for entry in debugger.terminal_history.iter() {
         output.push_str(&format!("> {}", entry.command));
         output.push_str("\n");
         if !&entry.result.is_empty() {

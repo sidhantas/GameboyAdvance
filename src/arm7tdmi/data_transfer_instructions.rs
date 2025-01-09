@@ -89,7 +89,7 @@ impl CPU {
                 self.memory.writeu32(address as usize, data)
             }
         };
-        self.set_executed_instruction(format!("STR {} [{:#x}]", rd, address));
+        self.set_executed_instruction(format!("STR {} [{:#X}]", rd, address));
         cycles
     }
 
@@ -115,7 +115,7 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
-        self.set_executed_instruction(format!("LDR {} [{:#x}]", rd, address));
+        self.set_executed_instruction(format!("LDR {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -177,7 +177,7 @@ impl CPU {
     pub fn strh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
         let data: WORD = self.get_register(rd);
         let cycles = { self.memory.writeu16(address as usize, data as u16) };
-        self.set_executed_instruction(format!("STRH {} [{:#x}]", rd, address));
+        self.set_executed_instruction(format!("STRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -193,7 +193,7 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
-        self.set_executed_instruction(format!("LDRH {} [{:#x}]", rd, address));
+        self.set_executed_instruction(format!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -209,7 +209,7 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
-        self.set_executed_instruction(format!("LDRH {} [{:#x}]", rd, address));
+        self.set_executed_instruction(format!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -227,7 +227,7 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
-        self.set_executed_instruction(format!("LDRH {} [{:#x}]", rd, address));
+        self.set_executed_instruction(format!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -314,7 +314,7 @@ impl CPU {
         }
 
         self.set_executed_instruction(format!(
-            "STM{} {:#x}\n{}",
+            "STM{} {:#X}\n{}",
             if pre_indexed_addressing { "IB" } else { "IA" },
             base_address,
             print_vec(register_list)

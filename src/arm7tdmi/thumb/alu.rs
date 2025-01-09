@@ -50,7 +50,7 @@ impl CPU {
             }
         }
 
-        self.set_executed_instruction(format!("LSL {rd} {:#x} {:#x}", rs_val, offset));
+        self.set_executed_instruction(format!("LSL {rd} {:#X} {:#X}", rs_val, offset));
     }
 
     fn thumb_lsr(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
@@ -88,7 +88,7 @@ impl CPU {
         }
 
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("LSR {rd} {:#x} {:#x}", rs_val, offset));
+        self.set_executed_instruction(format!("LSR {rd} {:#X} {:#X}", rs_val, offset));
     }
 
     fn thumb_asr(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
@@ -134,7 +134,7 @@ impl CPU {
             }
         }
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("ASR {rd} {:#x} {:#x}", rs_val, offset));
+        self.set_executed_instruction(format!("ASR {rd} {:#X} {:#X}", rs_val, offset));
     }
 
     pub fn thumb_add_or_subtract_instruction(&mut self, instruction: u32) -> CYCLES {
@@ -196,7 +196,7 @@ impl CPU {
             self.reset_flag(FlagsRegister::Z);
         }
         self.set_register(rd, imm.into());
-        self.set_executed_instruction(format!("MOV {} {:#x}", rd, imm));
+        self.set_executed_instruction(format!("MOV {} {:#X}", rd, imm));
     }
 
     fn thumb_cmp_imm(&mut self, rd: REGISTER, imm: u8) {
@@ -204,7 +204,7 @@ impl CPU {
         let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
         let result = minuend + imm;
         self.set_arithmetic_flags(result, minuend, imm, 0, true);
-        self.set_executed_instruction(format!("CMP {} {:#x}", rd, imm));
+        self.set_executed_instruction(format!("CMP {} {:#X}", rd, imm));
     }
 
     fn thumb_add_imm(&mut self, rd: REGISTER, imm: u8) {
@@ -212,7 +212,7 @@ impl CPU {
         let result = addend1 + imm as u32;
         self.set_arithmetic_flags(result, addend1, imm as u32, 0, true);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("ADD {} {:#x}", rd, imm));
+        self.set_executed_instruction(format!("ADD {} {:#X}", rd, imm));
     }
 
     fn thumb_sub_imm(&mut self, rd: REGISTER, imm: u8) {
@@ -221,7 +221,7 @@ impl CPU {
         let result = minuend + imm;
         self.set_arithmetic_flags(result, minuend, imm, 0, true);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("SUB {} {:#x}", rd, imm));
+        self.set_executed_instruction(format!("SUB {} {:#X}", rd, imm));
     }
 
     pub fn thumb_alu_instructions(&mut self, instruction: u32) -> CYCLES {

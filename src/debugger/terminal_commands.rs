@@ -128,7 +128,7 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
             match breakpoint.break_type {
                 BreakType::Break(break_pc) => {
                     if cpu.get_pc() == break_pc {
-                        return Ok(String::from("Breakpoint encountered "));
+                        return Ok(String::from("Breakpoint encountered"));
                     }
                 }
                 BreakType::WatchRegister(register, value) => {
@@ -143,10 +143,14 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
         for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
             match watchpoint {
                 TriggeredWatchpoints::Address(address) => {
-                    encountered_watchpoints.push_str(&format!("Watchpoint encountered {:#x}", address));
+                    encountered_watchpoints.push_str(&format!("Watchpoint encountered {:#X}\n", address));
                 }
+                TriggeredWatchpoints::Error(memory_error) =>{
+                    encountered_watchpoints.push_str(&format!("Memory Error encountered\n{}\n", memory_error));
+                },
             }
         }
+
         if !encountered_watchpoints.is_empty() {
             return Ok(encountered_watchpoints);
         }
@@ -180,7 +184,7 @@ fn set_breakpoint_handler(
         .breakpoints
         .borrow_mut()
         .push(Breakpoint::new(BreakType::Break(breakpoint)));
-    Ok(format!("Breakpoint set at address {:#x}", breakpoint))
+    Ok(format!("Breakpoint set at address {:#X}", breakpoint))
 }
 
 fn delete_breakpoint_handler(
@@ -222,13 +226,13 @@ fn list_breakpoint_handler(
     for (i, breakpoint) in breakpoints.iter().enumerate() {
         match breakpoint.break_type {
             BreakType::Break(bp) => {
-                breakpoint_list.push_str(format!("{}: break {:#x}\n", i + 1, bp).as_str())
+                breakpoint_list.push_str(format!("{}: break {:#X}\n", i + 1, bp).as_str())
             }
             BreakType::WatchRegister(reg, value) => {
-                breakpoint_list.push_str(format!("{}: watch r{reg} {:#x}\n", i + 1, value).as_str())
+                breakpoint_list.push_str(format!("{}: watch r{reg} {:#X}\n", i + 1, value).as_str())
             }
             BreakType::WatchAddress(address, address2) => breakpoint_list
-                .push_str(format!("{}: watch address: {:#x}-{:#x}\n", i + 1, address, address2).as_str()),
+                .push_str(format!("{}: watch address: {:#X}-{:#X}\n", i + 1, address, address2).as_str()),
         }
     }
 
@@ -257,7 +261,7 @@ fn set_watchpoint_handler(
         .push(Breakpoint::new(BreakType::WatchRegister(register, value)));
 
     Ok(format!(
-        "Watchpoint set for register r{register} with value {:#x}",
+        "Watchpoint set for register r{register} with value {:#X}",
         value
     ))
 }
@@ -281,7 +285,7 @@ fn set_watch_address_range_handler(
         .borrow_mut()
         .push(Breakpoint::new(BreakType::WatchAddress(address1, address2)));
     Ok(format!(
-        "Watchpoint set for range {:#x}-{:#x}",
+        "Watchpoint set for range {:#X}-{:#X}",
         address1, address2
     ))
 }

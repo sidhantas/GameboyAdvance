@@ -115,7 +115,7 @@ impl CPU {
         let result = operand1 + operand2;
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("ADD {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("ADD {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     pub fn arm_and(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -123,7 +123,7 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("AND {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("AND {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     pub fn arm_eor(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -131,7 +131,7 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("EOR {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("EOR {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -141,7 +141,7 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, 1, set_flags);
         self.set_register(rd, result);
 
-        self.set_executed_instruction(format!("SUB {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("SUB {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     pub fn arm_rsb(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -151,7 +151,7 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
 
-        self.set_executed_instruction(format!("RSB {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("RSB {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     pub fn arm_adc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -161,7 +161,7 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
         self.set_register(rd, result);
         self.set_executed_instruction(format!(
-            "ADC {:#x} {:#x} {:#x} {:#x}",
+            "ADC {:#X} {:#X} {:#X} {:#X}",
             rd, operand1, operand2, carry
         ));
     }
@@ -175,7 +175,7 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
         self.set_register(rd, result);
         self.set_executed_instruction(format!(
-            "SBC {:#x} {:#x} {:#x} {:#x}",
+            "SBC {:#X} {:#X} {:#X} {:#X}",
             rd, operand1, operand2, carry
         ));
     }
@@ -189,7 +189,7 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
         self.set_register(rd, result);
         self.set_executed_instruction(format!(
-            "RSC {:#x} {:#x} {:#x} {:#x}",
+            "RSC {:#X} {:#X} {:#X} {:#X}",
             rd, operand1, operand2, carry
         ));
     }
@@ -199,7 +199,7 @@ impl CPU {
         let result = operand1 & operand2;
 
         self.set_logical_flags(result, true);
-        self.set_executed_instruction(format!("TST {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("TST {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     #[allow(unused)]
@@ -207,12 +207,12 @@ impl CPU {
         let result = operand1 ^ operand2;
 
         self.set_logical_flags(result, true);
-        self.set_executed_instruction(format!("TEQ {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("TEQ {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     #[allow(unused)]
     pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        self.set_executed_instruction(format!("CMP {:#x} {:#x}", operand1, operand2));
+        self.set_executed_instruction(format!("CMP {:#X} {:#X}", operand1, operand2));
         let operand2 = !operand2 + 1;
         let result = operand1 + operand2; // use two's complement to make setting flags easier
 
@@ -223,7 +223,7 @@ impl CPU {
     pub fn arm_cmn(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 + operand2;
         self.set_arithmetic_flags(result, operand1, operand2, 0, true);
-        self.set_executed_instruction(format!("CMN {:#x} {:#x}", operand1, operand2));
+        self.set_executed_instruction(format!("CMN {:#X} {:#X}", operand1, operand2));
     }
 
     pub fn arm_orr(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -231,14 +231,14 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("ORR {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("ORR {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     #[allow(unused)]
     pub fn arm_mov(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         self.set_register(rd, operand2);
         self.set_logical_flags(operand2, set_flags);
-        self.set_executed_instruction(format!("MOV {:#x} {:#x}", rd, operand2));
+        self.set_executed_instruction(format!("MOV {:#X} {:#X}", rd, operand2));
     }
 
     pub fn arm_bic(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -246,7 +246,7 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("BIC {:#x} {:#x} {:#x}", rd, operand1, operand2));
+        self.set_executed_instruction(format!("BIC {:#X} {:#X} {:#X}", rd, operand1, operand2));
     }
 
     #[allow(unused)]
@@ -254,7 +254,7 @@ impl CPU {
         let result = !operand2;
         self.set_register(rd, result);
         self.set_logical_flags(result, set_flags);
-        self.set_executed_instruction(format!("MVN {:#x} {:#x}", rd, operand2));
+        self.set_executed_instruction(format!("MVN {:#X} {:#X}", rd, operand2));
     }
 
     pub fn arm_mrs(&mut self, instruction: ARMByteCode) -> CYCLES {
@@ -320,7 +320,7 @@ impl CPU {
             "CPSR"
         };
 
-        self.set_executed_instruction(format!("MSR {} {:#x}", updated_psr, operand));
+        self.set_executed_instruction(format!("MSR {} {:#X}", updated_psr, operand));
 
         1
     }

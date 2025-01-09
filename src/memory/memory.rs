@@ -1,5 +1,9 @@
-use std::{fs::File, io::{Read, Seek}};
 use crate::types::{BYTE, CYCLES, HWORD, WORD};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{Read, Seek},
+};
 
 pub struct MemoryFetch<T> {
     pub cycles: CYCLES,
@@ -8,10 +12,7 @@ pub struct MemoryFetch<T> {
 
 impl<T> MemoryFetch<T> {
     pub fn new(data: T, cycles: CYCLES) -> Self {
-        Self {
-            cycles,
-            data
-        }
+        Self { cycles, data }
     }
 }
 
@@ -62,7 +63,7 @@ pub struct GBAMemory {
     bios: Vec<u32>,
     exwram: Vec<u32>,
     iwram: Vec<u32>,
-    pub(super)ioram: Vec<u16>,
+    pub(super) ioram: Vec<u16>,
     bgram: Vec<u32>,
     vram: Vec<u32>,
     oam: Vec<u32>,
@@ -74,9 +75,7 @@ pub struct GBAMemory {
 
 #[inline(always)]
 fn memory_load(region: &Vec<u32>, address: usize) -> u32 {
-    *region
-        .get(address >> 2)
-        .unwrap_or(&0)
+    *region.get(address >> 2).unwrap_or(&0)
 }
 
 #[inline(always)]
@@ -87,21 +86,60 @@ fn memory_store(region: &mut Vec<u32>, address: usize, value: u32) {
     }
 }
 
-pub trait MemoryBus {
-     fn read(&self, address: usize) -> MemoryFetch<u8>;
-
-     fn readu16(&self, address: usize) -> MemoryFetch<u16>;
-
-     fn readu32(&self, address: usize) -> MemoryFetch<u32>;
-
-     fn write(&mut self, address: usize, value: u8) -> CYCLES;
-
-     fn writeu16(&mut self, address: usize, value: u16) -> CYCLES;
-
-     fn writeu32(&mut self, address: usize, value: u32) -> CYCLES;
+#[derive(Debug)]
+pub enum MemoryError {
+    NoIODefinition(usize),
+    ReadError(usize),
+    WriteError(usize, u32),
 }
+
+impl Display for MemoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MemoryError::ReadError(address) => write!(f, "Read Error: {:#X}", address),
+            MemoryError::WriteError(address, value) => {
+                write!(f, "Write Error: {:#X} <- {:#X}", address, value)
+            }
+            MemoryError::NoIODefinition(address) => {
+                write!(f, "No IO Definition Provided: {:#X}", address)
+            }
+        }
+    }
+}
+
+pub trait DebuggerMemoryBus: MemoryBusNoPanic + MemoryBus {}
+impl DebuggerMemoryBus for GBAMemory {}
+
+pub trait MemoryBusNoPanic {
+    fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError>;
+
+    fn try_readu16(&self, address: usize) -> Result<MemoryFetch<u16>, MemoryError>;
+
+    fn try_readu32(&self, address: usize) -> Result<MemoryFetch<u32>, MemoryError>;
+
+    fn try_write(&mut self, address: usize, value: u8) -> Result<CYCLES, MemoryError>;
+
+    fn try_writeu16(&mut self, address: usize, value: u16) -> Result<CYCLES, MemoryError>;
+
+    fn try_writeu32(&mut self, address: usize, value: u32) -> Result<CYCLES, MemoryError>;
+}
+
+pub trait MemoryBus {
+    fn read(&self, address: usize) -> MemoryFetch<u8>;
+
+    fn readu16(&self, address: usize) -> MemoryFetch<u16>;
+
+    fn readu32(&self, address: usize) -> MemoryFetch<u32>;
+
+    fn write(&mut self, address: usize, value: u8) -> CYCLES;
+
+    fn writeu16(&mut self, address: usize, value: u16) -> CYCLES;
+
+    fn writeu32(&mut self, address: usize, value: u32) -> CYCLES;
+}
+
 impl GBAMemory {
-     pub fn new() -> Box<Self> {
+    pub fn new() -> Box<Self> {
         let mut wait_cycles_u16 = [0; 15];
         wait_cycles_u16[BIOS_REGION] = 1;
         wait_cycles_u16[IWRAM_REGION] = 1;
@@ -148,7 +186,7 @@ impl GBAMemory {
         })
     }
 
-     pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
+    pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
         let mut index = 0;
         let mut bios_file = File::options().read(true).open(filename)?;
         let mut buffer = [0; 4];
@@ -159,15 +197,13 @@ impl GBAMemory {
             }
             self.bios[index] = u32::from_le_bytes(buffer.clone());
             index += 1;
-        };
+        }
         Ok(())
     }
-
 }
 
-impl MemoryBus for GBAMemory {
-
-     fn read(&self, address: usize) -> MemoryFetch<u8> {
+impl MemoryBusNoPanic for GBAMemory {
+    fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address).to_le_bytes()[address & 0b11],
@@ -177,74 +213,74 @@ impl MemoryBus for GBAMemory {
             IWRAM_REGION => {
                 memory_load(&self.iwram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
-            IORAM_REGION => self.io_readu8(address),
+            IORAM_REGION => self.io_readu8(address)?,
             BGRAM_REGION => {
                 memory_load(&self.bgram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             VRAM_REGION => {
                 memory_load(&self.vram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
-            OAM_REGION => {
-                memory_load(&self.oam, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
-            }
+            OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF).to_le_bytes()[address & 0b11],
             ROM0A_REGION..=ROM2B_REGION => {
                 memory_load(&self.rom, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
             SRAM_REGION => {
                 memory_load(&self.sram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
-            _ => panic!(),
+            _ => return Err(MemoryError::ReadError(address)),
         };
 
-        MemoryFetch::new(data, self.wait_cycles_u16[region])
+        Ok(MemoryFetch::new(data, self.wait_cycles_u16[region]))
     }
 
-     fn readu16(&self, address: usize) -> MemoryFetch<u16> {
+    fn try_readu16(&self, address: usize) -> Result<MemoryFetch<u16>, MemoryError> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
             EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
             IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
-            IORAM_REGION => return MemoryFetch {
-                data: self.io_readu16(address),
-                cycles: self.wait_cycles_u16[region]
-            },
+            IORAM_REGION => {
+                return Ok(MemoryFetch {
+                    data: self.io_readu16(address)?,
+                    cycles: self.wait_cycles_u16[region],
+                })
+            }
             BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
             OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
             ROM0A_REGION..=ROM2B_REGION => memory_load(&self.rom, address & 0xFFFFFF),
             SRAM_REGION => memory_load(&self.sram, address & 0xFFFFFF),
-            _ => panic!(),
+            _ => return Err(MemoryError::ReadError(address)),
         };
 
         let shift_amount = 16 * ((address >> 1) & 0x1);
         let data = data >> shift_amount;
 
-        MemoryFetch::new(data as u16, self.wait_cycles_u16[region])
+        Ok(MemoryFetch::new(data as u16, self.wait_cycles_u16[region]))
     }
 
-     fn readu32(&self, address: usize) -> MemoryFetch<u32> {
+    fn try_readu32(&self, address: usize) -> Result<MemoryFetch<u32>, MemoryError> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
             EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
             IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
-            IORAM_REGION => self.io_readu32(address),
+            IORAM_REGION => self.io_readu32(address)?,
             BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
             OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
             ROM0A_REGION..=ROM2B_REGION => memory_load(&self.rom, address & 0xFFFFFF),
             SRAM_REGION => memory_load(&self.sram, address & 0xFFFFFF),
-            _ => panic!("address: {address}"),
+            _ => return Err(MemoryError::ReadError(address)),
         };
 
-        MemoryFetch::new(
+        Ok(MemoryFetch::new(
             data.rotate_right(8 * (address as u32 & 0b11)),
             self.wait_cycles_u32[region],
-        )
+        ))
     }
 
-     fn write(&mut self, address: usize, value: u8) -> CYCLES {
+    fn try_write(&mut self, address: usize, value: u8) -> Result<CYCLES, MemoryError> {
         let region = address >> 24;
         match region {
             BIOS_REGION => {}
@@ -260,7 +296,7 @@ impl MemoryBus for GBAMemory {
                 let value = current_value | ((value as u32) << 8 * (address & 0b11));
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
-            IORAM_REGION => self.io_writeu8(address, value),
+            IORAM_REGION => self.io_writeu8(address, value)?,
             BGRAM_REGION => {
                 let mut current_value = memory_load(&self.bgram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
@@ -286,13 +322,13 @@ impl MemoryBus for GBAMemory {
                 let value = current_value | ((value as u32) << 8 * (address & 0b11));
                 memory_store(&mut self.sram, address & 0xFFFFFF, value);
             }
-            _ => panic!(),
+            _ => return Err(MemoryError::WriteError(address, value as u32)),
         };
 
-        self.wait_cycles_u16[region]
+        Ok(self.wait_cycles_u16[region])
     }
 
-     fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
+    fn try_writeu16(&mut self, address: usize, value: u16) -> Result<CYCLES, MemoryError> {
         let region = address >> 24;
         match region {
             BIOS_REGION => {}
@@ -308,7 +344,7 @@ impl MemoryBus for GBAMemory {
                 let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
-            IORAM_REGION => self.io_writeu16(address, value),
+            IORAM_REGION => self.io_writeu16(address, value)?,
             BGRAM_REGION => {
                 let mut current_value = memory_load(&self.bgram, address & 0xFFFFFE);
                 current_value &= !(0xFFFF << 16 * (address & 0b11));
@@ -334,13 +370,13 @@ impl MemoryBus for GBAMemory {
                 let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
                 memory_store(&mut self.sram, address & 0xFFFFFF, value);
             }
-            _ => panic!(),
+            _ => return Err(MemoryError::WriteError(address, value as u32)),
         };
 
-        self.wait_cycles_u16[region]
+        Ok(self.wait_cycles_u16[region])
     }
 
-     fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
+    fn try_writeu32(&mut self, address: usize, value: u32) -> Result<CYCLES, MemoryError> {
         let region = address >> 24;
         match region {
             BIOS_REGION => {}
@@ -350,7 +386,7 @@ impl MemoryBus for GBAMemory {
             IWRAM_REGION => {
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
-            IORAM_REGION => self.io_writeu32(address, value),
+            IORAM_REGION => self.io_writeu32(address, value)?,
             BGRAM_REGION => {
                 memory_store(&mut self.bgram, address & 0xFFFFFF, value);
             }
@@ -364,10 +400,36 @@ impl MemoryBus for GBAMemory {
             SRAM_REGION => {
                 memory_store(&mut self.sram, address & 0xFFFFFF, value);
             }
-            _ => panic!(),
+            _ => return Err(MemoryError::WriteError(address, value as u32)),
         };
 
-        self.wait_cycles_u32[region]
+        Ok(self.wait_cycles_u32[region])
+    }
+}
+
+impl MemoryBus for GBAMemory {
+    fn read(&self, address: usize) -> MemoryFetch<u8> {
+        self.try_read(address).unwrap()
+    }
+
+    fn readu16(&self, address: usize) -> MemoryFetch<u16> {
+        self.try_readu16(address).unwrap()
+    }
+
+    fn readu32(&self, address: usize) -> MemoryFetch<u32> {
+        self.try_readu32(address).unwrap()
+    }
+
+    fn write(&mut self, address: usize, value: u8) -> CYCLES {
+        self.try_write(address, value).unwrap()
+    }
+
+    fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
+        self.try_writeu16(address, value).unwrap()
+    }
+
+    fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
+        self.try_writeu32(address, value).unwrap()
     }
 }
 

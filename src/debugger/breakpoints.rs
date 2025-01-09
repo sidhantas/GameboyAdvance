@@ -2,7 +2,7 @@ use std::
     fmt::Display
 ;
 
-use crate::types::REGISTER;
+use crate::{memory::memory::MemoryError, types::REGISTER};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum BreakType {
@@ -12,7 +12,8 @@ pub enum BreakType {
 }
 
 pub enum TriggeredWatchpoints {
-    Address(usize)
+    Address(usize),
+    Error(MemoryError)
 }
 
 #[derive(Clone)]
