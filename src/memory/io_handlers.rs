@@ -2,6 +2,11 @@ use super::memory::{GBAMemory, MemoryError};
 
 const DISPCNT: usize = 0x000;
 const DISPSTAT: usize = 0x004;
+const VCOUNT: usize = 0x006;
+const BG0CNT: usize = 0x008;
+const BG1CNT: usize = 0x00A;
+const BG2CNT: usize = 0x00C;
+const BG3CNT: usize = 0x00E;
 const IME: usize = 0x208;
 const IE: usize = 0x200;
 const IF: usize = 0x202;
@@ -40,6 +45,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
 
     definitions[DISPCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
     definitions[DISPSTAT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFF3F, 0xFF38), false));
+    definitions[VCOUNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x0000), false));
     definitions[IME] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0001, 0x0001), false));
     definitions[IE] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false ));
     definitions[IF] = Some(IORegisterDefinition::new(
