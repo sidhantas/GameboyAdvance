@@ -1,3 +1,5 @@
+use std::fmt::{Arguments, Write};
+
 use crate::{
     arm7tdmi::cpu::LINK_REGISTER,
     types::{ARMByteCode, CYCLES, REGISTER},
@@ -8,7 +10,6 @@ use super::{
     cpu::{InstructionMode, CPU}, interrupts::Exceptions,
 };
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
-pub type InternalOperation = fn(&mut CPU) -> CYCLES;
 pub type ALUOperation =
     fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
 
@@ -28,8 +29,9 @@ impl Default for ARMDecodedInstruction {
 }
 
 impl CPU {
-    pub fn set_executed_instruction(&mut self, name: String) {
-        self.executed_instruction = name;
+    pub fn set_executed_instruction(&mut self, name: Arguments<'_>) {
+        self.executed_instruction.clear();
+        write!(self.executed_instruction, "{}", name).unwrap();
     }
 
     pub fn arm_branch(&mut self, instruction: ARMByteCode) -> CYCLES {
@@ -42,33 +44,33 @@ impl CPU {
         let destination = offset + self.get_pc();
         self.set_pc(destination);
         cycles += self.flush_pipeline();
-        self.set_executed_instruction(format!("B {:#010x}", destination));
+        self.set_executed_instruction(format_args!("B {:#010x}", destination));
 
         cycles
     }
 
     pub fn arm_nop(&mut self, _instruction: ARMByteCode) -> CYCLES {
-        self.set_executed_instruction("NOP".into());
+        self.set_executed_instruction(format_args!("NOP"));
         return 1;
     }
 
     pub fn arm_multiply(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
+        todo!();
     }
 
     pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
+        todo!();
     }
 
     pub fn arm_multiply_long(&mut self, instruction: ARMByteCode) -> CYCLES {
-        return 0;
+        todo!();
     }
 
     pub fn arm_software_interrupt(&mut self, _instruction: ARMByteCode) -> CYCLES {
         let mut cycles = 1;
         self.raise_exception(Exceptions::Software);
         cycles += self.flush_pipeline();
-        self.set_executed_instruction("SWI".into());
+        self.set_executed_instruction(format_args!("SWI"));
 
         return cycles;
     }
@@ -85,13 +87,14 @@ impl CPU {
         }
         self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
         cycles += self.flush_pipeline();
-        self.set_executed_instruction(format!("BX {:#010x}", destination));
+        self.set_executed_instruction(format_args!("BX {:#010x}", destination));
 
         cycles
     }
 
     pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) -> CYCLES {
-        self.set_executed_instruction("NOT IMPLEMENTED".into());
+        self.set_executed_instruction(format_args!("NOT IMPLEMENTED"));
+        panic!("NOT IMPLEMENTED: {:#X}", instruction);
         return 0;
     }
 }

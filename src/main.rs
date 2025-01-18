@@ -17,6 +17,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut opts = Options::new();
     opts.optopt("b", "bios", "set bios", "BIOS");
+    opts.optopt("g", "game", "set game rom", "ROM");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(_) => {
@@ -25,11 +26,12 @@ fn main() -> Result<(), std::io::Error> {
     };
 
     let bios = matches.opt_str("b").unwrap_or(String::from("gba_bios.bin"));
+    let rom = matches.opt_str("g").unwrap();
 
     //let display_memory = memory.clone();
 
     thread::scope(move |scope| {
-        scope.spawn(move || start_debugger(bios));
+        scope.spawn(move || start_debugger(bios, rom));
         //start_display(display_memory);
     });
 

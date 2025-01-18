@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER},
+    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
     memory::memory::MemoryBus,
     types::{CYCLES, REGISTER, WORD},
     utils::bits::Bits,
@@ -20,6 +20,7 @@ impl CPU {
         cycles += self.advance_pipeline();
 
         self.set_register(rd, data);
+        self.set_executed_instruction(format_args!("LDR r{} [pc, {:#X}]", rd, offset));
 
         cycles
     }
@@ -145,75 +146,50 @@ impl CPU {
             }
         }
 
-        let base_address;
-
         cycles += match opcode {
             0b0 => {
                 // STMDB (PUSH)
                 if instruction.bit_is_set(8) {
                     register_list.push(LINK_REGISTER);
                 }
-                base_address =
-                    self.get_sp() - register_list.len() as u32 * size_of::<WORD>() as u32;
-                self.set_executed_instruction(format!("PUSH {:?}", register_list));
-                self.stm_execution(base_address as usize, true, &register_list)
+                self.stmdb_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER))
             }
             0b1 => {
                 // LDMIA (POP)
                 if instruction.bit_is_set(8) {
                     register_list.push(PC_REGISTER as u32);
                 }
-                base_address = self.get_sp();
-                self.set_executed_instruction(format!("POP {:?}", register_list));
-                self.ldm_execution(base_address as usize, true, &register_list)
+                self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER))
             }
             _ => panic!(),
         };
-
-        self.set_sp(base_address);
 
         cycles
     }
 
     pub fn thumb_multiple_load_or_store(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 0;
         let opcode = instruction.get_bit(11);
         let rb = (instruction & 0x0700) >> 8;
 
         let mut register_list: Vec<REGISTER> = Vec::new();
 
-        for i in 0..7 {
+        for i in 0..8 {
             if instruction.bit_is_set(i) {
                 register_list.push(i as REGISTER);
             }
         }
 
-        let operation = match opcode {
+        let base_address = self.get_register(rb) as usize;
+
+        match opcode {
             0b0 => {
-                if instruction.bit_is_set(8) {
-                    register_list.push(LINK_REGISTER);
-                }
-                CPU::stm_execution
+                self.stmia_execution(base_address, &register_list, Some(rb))
             }
             0b1 => {
-                if instruction.bit_is_set(8) {
-                    register_list.push(PC_REGISTER as u32);
-                }
-                CPU::ldm_execution
+                self.ldmia_execution(base_address, &register_list, Some(rb))
             }
             _ => panic!(),
-        };
-
-        let base_address = self.get_register(rb);
-
-        cycles += operation(self, base_address as usize, false, &register_list);
-
-        // Always write back
-        self.set_register(
-            rb,
-            base_address + register_list.len() as u32 * size_of::<WORD>() as u32,
-        );
-        cycles
+        }
     }
 }
 

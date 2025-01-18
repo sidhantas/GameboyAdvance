@@ -37,6 +37,41 @@ const WIN0V: usize = 0x044;
 const WIN1V: usize = 0x046;
 const WININ: usize = 0x048;
 const WINOUT: usize = 0x04A;
+const MOSAIC: usize = 0x04C;
+const BLDCNT: usize = 0x050;
+const BLDALPHA: usize = 0x052;
+const BLDY: usize = 0x054;
+
+const DMA0SAD: usize = 0x0B0;
+const DMA0DAD: usize = 0x0B4;
+const DMA0CNT_L: usize = 0x0B8;
+const DMA0CNT_H: usize = 0x0BA;
+const DMA1SAD: usize = 0x0BC;
+const DMA1DAD: usize = 0x0C0;
+const DMA1CNT_L: usize = 0x0C4;
+const DMA1CNT_H: usize = 0x0C6;
+const DMA2SAD: usize = 0x0C8;
+const DMA2DAD: usize = 0x0CC;
+const DMA2CNT_L: usize = 0x0D0;
+const DMA2CNT_H: usize = 0x0D2;
+const DMA3SAD: usize = 0x0D4;
+const DMA3DAD: usize = 0x0D8;
+const DMA3CNT_L: usize = 0x0DC;
+const DMA3CNT_H: usize = 0x0DE;
+const TM0CNT_L: usize = 0x100;
+const TM0CNT_H: usize = 0x102;
+const TM1CNT_L: usize = 0x104;
+const TM1CNT_H: usize = 0x106;
+const TM2CNT_L: usize = 0x108;
+const TM2CNT_H: usize = 0x10A;
+const TM3CNT_L: usize = 0x10C;
+const TM3CNT_H: usize = 0x10E;
+const KEYINPUT: usize = 0x130;
+const KEYCNT: usize = 0x132;
+
+
+const SOUNDBIAS: usize = 0x088;
+
 const IME: usize = 0x208;
 const IE: usize = 0x200;
 const IF: usize = 0x202;
@@ -75,6 +110,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
 
     definitions[DISPCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
     definitions[DISPSTAT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFF3F, 0xFF38), false));
+    definitions[VCOUNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x0000), false));
     definitions[BG0CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
     definitions[BG1CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
     definitions[BG2CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
@@ -103,35 +139,89 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     definitions[BG3X_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0FFF), false));
     definitions[BG3Y_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
     definitions[BG3Y_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0FFF), false));
-    definitions[VCOUNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x0000), false));
+    definitions[WIN0H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
+    definitions[WIN1H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
+    definitions[WIN0V] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
+    definitions[WIN1V] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
+    definitions[WININ] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3F3F, 0x3F3F), false));
+    definitions[WINOUT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3F3F, 0x3F3F), false));
+    definitions[MOSAIC] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[BLDCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false));
+    definitions[BLDALPHA] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false));
+    definitions[BLDY] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x001F, 0x001F), false));
+    definitions[DMA0SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
+    definitions[DMA0DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
+    definitions[DMA0CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0x3FFF), false));
+    definitions[DMA0CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[DMA1SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
+    definitions[DMA1DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
+    definitions[DMA1CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0x3FFF), false));
+    definitions[DMA1CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[DMA2SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
+    definitions[DMA2DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
+    definitions[DMA2CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0x3FFF), false));
+    definitions[DMA2CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[DMA3SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x0FFFFFFF), false));
+    definitions[DMA3DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x0FFFFFFF), false));
+    definitions[DMA3CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0xFFFF), false));
+    definitions[DMA3CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[TM0CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[TM0CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FB, 0x00FB), false));
+    definitions[TM1CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[TM1CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x00FF), false));
+    definitions[TM2CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[TM2CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x00FF), false));
+    definitions[TM3CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[TM3CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x00FF), false));
+    definitions[KEYINPUT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x03FF, 0x03FF), false));
+    definitions[KEYCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
+    definitions[SOUNDBIAS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xC3FE, 0xC3FE), false));
     definitions[IME] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0001, 0x0001), false));
     definitions[IE] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false ));
-    definitions[IF] = Some(IORegisterDefinition::new(
-        BitMask::SIXTEEN(0x3FFF, 0x3FFF),
-        true,
-    ));
+    definitions[IF] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), true));
     definitions[WAITCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xDFFF, 0xDFFF), false));
     definitions[POSTFLG] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x01, 0x01), false));
     definitions[HALTCNT] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x80, 0x80), false));
+    definitions[0x110] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x112] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x114] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x410] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x00, 0xFF), false));
     definitions[0x206] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x20A] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x20C] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x20E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x210] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x212] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x214] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x216] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x218] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x21A] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
     definitions[0x21C] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x21E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x04E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x056] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x058] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x05A] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x05C] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x05E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    let mut i = 0x0E0;
+    while i != 0x100 {
+        definitions[i] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+        i += 2;
+    }
 
     definitions
 };
 
 #[inline(always)]
-fn io_load(region: &Vec<u16>, address: usize) -> u16 {
+pub fn io_load(region: &Vec<u16>, address: usize) -> u16 {
     *region.get(address >> 1).unwrap_or(&0)
 }
 
 fn masked_io_load(region: &Vec<u16>, address: usize) -> Result<u16, MemoryError> {
-    let def = get_io_definition(address)?;
+    let Ok(def) = get_io_definition(address) else {
+        return Ok(0)
+    };
     if def.requires_special_handling() {
         match address {
             IF => {}
@@ -147,7 +237,7 @@ fn masked_io_load(region: &Vec<u16>, address: usize) -> Result<u16, MemoryError>
                 };
                 mask
             });
-            let full_mask: u16 = (upper_mask as u16) << 8 | lower_mask as u16;
+            let full_mask: u16 = ((upper_mask as u16) << 8) | lower_mask as u16;
 
             data & full_mask
         }
@@ -160,7 +250,7 @@ fn masked_io_load(region: &Vec<u16>, address: usize) -> Result<u16, MemoryError>
 }
 
 #[inline(always)]
-fn io_store(region: &mut Vec<u16>, address: usize, value: u16) {
+pub fn io_store(region: &mut Vec<u16>, address: usize, value: u16) {
     let store_address = address >> 1;
     if store_address < region.len() {
         region[store_address] = value;
@@ -169,7 +259,9 @@ fn io_store(region: &mut Vec<u16>, address: usize, value: u16) {
 
 fn masked_io_store(region: &mut Vec<u16>, address: usize, value: u16) -> Result<(), MemoryError> {
     let mut value = value;
-    let def = get_io_definition(address)?;
+    let Ok(def) = get_io_definition(address) else {
+        return Ok(())
+    };
     if def.requires_special_handling() {
         match address {
             IF => {
@@ -217,7 +309,7 @@ impl GBAMemory {
     }
 
     pub(super) fn io_readu16(&self, address: usize) -> Result<u16, MemoryError> {
-        Ok(masked_io_load(&self.ioram, address)?)
+        Ok(masked_io_load(&self.ioram, address & 0xFFE)?)
     }
 
     pub(super) fn io_readu32(&self, address: usize) -> Result<u32, MemoryError> {
@@ -244,7 +336,9 @@ impl GBAMemory {
 
     pub(super) fn io_writeu32(&mut self, address: usize, value: u32) -> Result<(), MemoryError> {
         let offset = address & 0xFFC;
-        let io_definition = get_io_definition(offset)?;
+        let Ok(io_definition) = get_io_definition(offset) else {
+            return Ok(())
+        };
 
         match io_definition.mask {
             BitMask::THIRTYTWO(_, mask) => {
@@ -301,7 +395,7 @@ mod tests {
     #[case(IME, 0xFFFF, 0x1)]
     #[case(IME, 0xFFFE, 0x0)]
     #[case(POSTFLG, 0xFFFF, 0x8001)]
-    #[case(HALTCNT, 0xFFFF, 0x0080)]
+    #[case(HALTCNT, 0xFFFF, 0x8001)]
     #[case(IE, 0xFFFE, 0x3FFE)]
     #[case(DISPSTAT, 0xFFFF, 0xFF3F)]
     fn test_regular_read_io_16(

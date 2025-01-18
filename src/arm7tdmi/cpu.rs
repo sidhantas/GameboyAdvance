@@ -1,12 +1,14 @@
+use std::{fs::{File, OpenOptions}, io::Write};
+
 use crate::{
-    debugger::breakpoints::BreakType,
-    memory::memory::{DebuggerMemoryBus, MemoryBus},
+    memory::memory::MemoryBus,
     types::*,
     utils::bits::Bits,
 };
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
+pub const STACK_POINTER: u32 = 13;
 
 pub enum InstructionMode {
     ARM,
@@ -45,6 +47,7 @@ pub struct CPU {
     pub executed_instruction: String,
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
+    pub output_file: File
 }
 
 
@@ -54,7 +57,7 @@ impl CPU {
             registers: [0; 16],
             executed_instruction_hex: 0,
             memory,
-            executed_instruction: String::from(""),
+            executed_instruction: String::with_capacity(50),
             prefetch: [None; 2],
             // start in supervisor mode
             // interrupts are disabled
@@ -66,10 +69,17 @@ impl CPU {
             registers_abt: [0; 2],
             registers_irq: [0; 2],
             registers_und: [0; 2],
+            output_file: OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open("output_file.txt")
+                .unwrap()
         }
     }
 
+    #[no_mangle]
     pub fn execute_cpu_cycle(&mut self) {
+        self.set_executed_instruction(format_args!("")); 
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
             self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
@@ -81,6 +91,8 @@ impl CPU {
             // refill pipeline if decoded instruction doesn't advance the pipeline
             self.advance_pipeline();
         }
+
+        self.output_file.write(self.get_status().as_bytes()).unwrap();
     }
 
     pub fn flush_pipeline(&mut self) -> CYCLES {
@@ -330,6 +342,15 @@ impl CPU {
             }
             _ => panic!("Invalid Shift Type"),
         }
+    }
+
+    pub fn get_status(&self) -> String {
+        let mut status = String::new();
+        for i in 0..self.registers.len() {
+            status.push_str(&format!("{:x} ", self.get_register(i as u32)).to_owned());
+        }
+        status.push_str(&format!("{:x}\n", self.cpsr).to_owned());
+        status
     }
 }
 

@@ -115,7 +115,10 @@ impl CPU {
         let result = operand1 + operand2;
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("ADD {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "ADD {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     pub fn arm_and(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -123,7 +126,10 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("AND {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "AND {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     pub fn arm_eor(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -131,7 +137,10 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("EOR {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "EOR {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -141,7 +150,10 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, 1, set_flags);
         self.set_register(rd, result);
 
-        self.set_executed_instruction(format!("SUB {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "SUB {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     pub fn arm_rsb(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -151,7 +163,10 @@ impl CPU {
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
 
-        self.set_executed_instruction(format!("RSB {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "RSB {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     pub fn arm_adc(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -160,7 +175,7 @@ impl CPU {
 
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!(
+        self.set_executed_instruction(format_args!(
             "ADC {:#X} {:#X} {:#X} {:#X}",
             rd, operand1, operand2, carry
         ));
@@ -174,7 +189,7 @@ impl CPU {
 
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!(
+        self.set_executed_instruction(format_args!(
             "SBC {:#X} {:#X} {:#X} {:#X}",
             rd, operand1, operand2, carry
         ));
@@ -188,7 +203,7 @@ impl CPU {
 
         self.set_arithmetic_flags(result, operand1, operand2, carry, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!(
+        self.set_executed_instruction(format_args!(
             "RSC {:#X} {:#X} {:#X} {:#X}",
             rd, operand1, operand2, carry
         ));
@@ -199,7 +214,10 @@ impl CPU {
         let result = operand1 & operand2;
 
         self.set_logical_flags(result, true);
-        self.set_executed_instruction(format!("TST {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "TST {:#X} {:#X}",
+             operand1, operand2
+        ));
     }
 
     #[allow(unused)]
@@ -207,12 +225,15 @@ impl CPU {
         let result = operand1 ^ operand2;
 
         self.set_logical_flags(result, true);
-        self.set_executed_instruction(format!("TEQ {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "TEQ {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     #[allow(unused)]
     pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        self.set_executed_instruction(format!("CMP {:#X} {:#X}", operand1, operand2));
+        self.set_executed_instruction(format_args!("CMP {:#X} {:#X}", operand1, operand2));
         let operand2 = !operand2 + 1;
         let result = operand1 + operand2; // use two's complement to make setting flags easier
 
@@ -223,7 +244,7 @@ impl CPU {
     pub fn arm_cmn(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 + operand2;
         self.set_arithmetic_flags(result, operand1, operand2, 0, true);
-        self.set_executed_instruction(format!("CMN {:#X} {:#X}", operand1, operand2));
+        self.set_executed_instruction(format_args!("CMN {:#X} {:#X}", operand1, operand2));
     }
 
     pub fn arm_orr(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -231,14 +252,17 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("ORR {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "ORR {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     #[allow(unused)]
     pub fn arm_mov(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         self.set_register(rd, operand2);
         self.set_logical_flags(operand2, set_flags);
-        self.set_executed_instruction(format!("MOV {:#X} {:#X}", rd, operand2));
+        self.set_executed_instruction(format_args!("MOV {:#X} {:#X}", rd, operand2));
     }
 
     pub fn arm_bic(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -246,7 +270,10 @@ impl CPU {
 
         self.set_logical_flags(result, set_flags);
         self.set_register(rd, result);
-        self.set_executed_instruction(format!("BIC {:#X} {:#X} {:#X}", rd, operand1, operand2));
+        self.set_executed_instruction(format_args!(
+            "BIC {:#X} {:#X} {:#X}",
+            rd, operand1, operand2
+        ));
     }
 
     #[allow(unused)]
@@ -254,7 +281,7 @@ impl CPU {
         let result = !operand2;
         self.set_register(rd, result);
         self.set_logical_flags(result, set_flags);
-        self.set_executed_instruction(format!("MVN {:#X} {:#X}", rd, operand2));
+        self.set_executed_instruction(format_args!("MVN {:#X} {:#X}", rd, operand2));
     }
 
     pub fn arm_mrs(&mut self, instruction: ARMByteCode) -> CYCLES {
@@ -277,7 +304,7 @@ impl CPU {
             "CPSR"
         };
 
-        self.set_executed_instruction(format!("MRS {} {}", rd, psr));
+        self.set_executed_instruction(format_args!("MRS {} {}", rd, psr));
         1
     }
 
@@ -320,19 +347,20 @@ impl CPU {
             "CPSR"
         };
 
-        self.set_executed_instruction(format!("MSR {} {:#X}", updated_psr, operand));
+        self.set_executed_instruction(format_args!("MSR {} {:#X}", updated_psr, operand));
 
         1
     }
 
     pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
-        if set_flags == true {
-            self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
-            if result == 0 {
-                self.set_flag(FlagsRegister::Z);
-            } else {
-                self.reset_flag(FlagsRegister::Z);
-            }
+        if set_flags == false {
+            return;
+        }
+        self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+        if result == 0 {
+            self.set_flag(FlagsRegister::Z);
+        } else {
+            self.reset_flag(FlagsRegister::Z);
         }
     }
 
@@ -344,44 +372,46 @@ impl CPU {
         carry: u32,
         set_flags: bool,
     ) {
-        if set_flags == true {
-            self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
-            if result == 0 {
-                self.set_flag(FlagsRegister::Z);
-            } else {
-                self.reset_flag(FlagsRegister::Z);
-            }
-            if (operand1.get_bit(31) == operand2.get_bit(31))
-                && result.get_bit(31) != operand2.get_bit(31)
-            {
-                self.set_flag(FlagsRegister::V);
-            } else {
-                self.reset_flag(FlagsRegister::V);
-            }
-            if result < operand1 || result < operand2 || result < carry {
-                self.set_flag(FlagsRegister::C);
-            } else {
-                self.reset_flag(FlagsRegister::C);
-            }
+        if set_flags == false {
+            return;
+        }
+        self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+        if result == 0 {
+            self.set_flag(FlagsRegister::Z);
+        } else {
+            self.reset_flag(FlagsRegister::Z);
+        }
+        if (operand1.get_bit(31) == operand2.get_bit(31))
+            && result.get_bit(31) != operand2.get_bit(31)
+        {
+            self.set_flag(FlagsRegister::V);
+        } else {
+            self.reset_flag(FlagsRegister::V);
+        }
+        let complete_add: u64 = operand1 as u64 + operand2 as u64 + carry as u64;
+
+        if result as u64 == complete_add {
+            self.reset_flag(FlagsRegister::C);
+        } else {
+            self.set_flag(FlagsRegister::C);
         }
     }
 }
 #[cfg(test)]
 mod tests {
-    
 
     use rstest::rstest;
 
     use crate::{
         arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU},
-        memory::memory::{ GBAMemory, MemoryBus},
+        memory::memory::GBAMemory,
         types::REGISTER,
     };
 
     #[test]
     fn add_instruction_should_set_carry_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, u32::MAX);
@@ -401,7 +431,7 @@ mod tests {
     #[test]
     fn add_instruction_should_set_overflow_and_carry_flags() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_0000);
@@ -421,7 +451,7 @@ mod tests {
     #[test]
     fn add_instruction_should_set_n_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_0000);
@@ -441,7 +471,7 @@ mod tests {
     #[test]
     fn and_instruction_should_set_c_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x0000_FFFF);
@@ -461,7 +491,7 @@ mod tests {
     #[test]
     fn and_instruction_should_set_n_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_FFFF);
@@ -481,7 +511,7 @@ mod tests {
     #[test]
     fn and_instruction_should_set_z_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8000_FFFF);
@@ -501,7 +531,7 @@ mod tests {
     #[test]
     fn orr_instruction_should_set_z_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x0000_0000);
@@ -521,7 +551,7 @@ mod tests {
     #[test]
     fn orr_instruction_should_not_set_any_flags() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x0000_0000);
@@ -541,7 +571,7 @@ mod tests {
     #[test]
     fn eor_instruction_should_set_n_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -561,7 +591,7 @@ mod tests {
     #[test]
     fn teq_instruction_should_set_n_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -580,7 +610,7 @@ mod tests {
     #[test]
     fn teq_instruction_should_set_z_flag_when_equal() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -599,7 +629,7 @@ mod tests {
     #[test]
     fn tst_instruction_should_set_z_flag_when_no_bits_match() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(2, 0x8001_0002);
@@ -618,7 +648,7 @@ mod tests {
     #[test]
     fn bic_instruction_should_reset_all_bits() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(3, 0x8001_0002);
@@ -638,7 +668,7 @@ mod tests {
     #[test]
     fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xe094131f); // adds r1, r3, r15, LSL r3; pc = 0
@@ -660,7 +690,7 @@ mod tests {
     #[test]
     fn data_processing_with_pc_as_operand1_and_register_shift_delays_pc() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xe09f1314); //  adds r1, pc, r4, lsl r3; pc = 0
@@ -683,22 +713,15 @@ mod tests {
     #[test]
     fn data_processing_with_pc_as_destination_should_start_from_result() {
         let memory = GBAMemory::new();
-        
-        
+
         let mut cpu = CPU::new(memory);
 
-        let _res = cpu.memory
-            .writeu32(0x3000000, 0xe25f1008);
-        let _res = cpu.memory
-            .writeu32(0x3000004, 0xe1a00000);
-        let _res = cpu.memory
-            .writeu32(0x3000008, 0xe1a00000); // nop
-        let _res = cpu.memory
-            .writeu32(0x300000C, 0xe1a00000); // nop
-        let _res = cpu.memory
-            .writeu32(0x3000010, 0xe1a00000); // nop
-        let _res = cpu.memory
-            .writeu32(0x3000014, 0xe281f000);
+        let _res = cpu.memory.writeu32(0x3000000, 0xe25f1008);
+        let _res = cpu.memory.writeu32(0x3000004, 0xe1a00000);
+        let _res = cpu.memory.writeu32(0x3000008, 0xe1a00000); // nop
+        let _res = cpu.memory.writeu32(0x300000C, 0xe1a00000); // nop
+        let _res = cpu.memory.writeu32(0x3000010, 0xe1a00000); // nop
+        let _res = cpu.memory.writeu32(0x3000014, 0xe281f000);
 
         cpu.set_pc(0x3000000);
         cpu.execute_cpu_cycle();
@@ -709,13 +732,16 @@ mod tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        assert_eq!(cpu.decode_instruction(cpu.prefetch[1].unwrap()).instruction, 0xe25f1008);
+        assert_eq!(
+            cpu.decode_instruction(cpu.prefetch[1].unwrap()).instruction,
+            0xe25f1008
+        );
     }
 
     #[test]
     fn mov_instruction_should_set_n_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(3, 0x8001_0002);
@@ -735,7 +761,7 @@ mod tests {
     #[test]
     fn mvn_instruction_should_set_z_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         let input = 0xFFFF_FFFF;
@@ -756,7 +782,7 @@ mod tests {
     #[test]
     fn adc_instruction_should_add_2_registers_and_carry() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 25);
@@ -777,7 +803,7 @@ mod tests {
     #[test]
     fn adc_instruction_should_set_carry_register() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0xFFFF_FFFF);
@@ -798,7 +824,7 @@ mod tests {
     #[test]
     fn adc_instruction_should_set_v_register() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0x8000_0000);
@@ -819,7 +845,7 @@ mod tests {
     #[test]
     fn sub_instruction_should_set_v_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 0x7FFF_FFFF);
@@ -839,15 +865,14 @@ mod tests {
     #[test]
     fn sub_instruction_should_reset_c_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 5);
         cpu.set_register(2, 10);
 
-        cpu.prefetch[0] = Some(0xe0514002); // subs r4, r1, r2;
+        cpu.prefetch[1] = Some(0xe0514002); // subs r4, r1, r2;
 
-        cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
         assert!(cpu.get_register(4) == 0xFFFF_FFFB);
         assert!(cpu.get_flag(FlagsRegister::C) == 0);
@@ -859,7 +884,7 @@ mod tests {
     #[test]
     fn sub_instruction_should_set_c_flag() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_register(1, 10);
@@ -886,7 +911,7 @@ mod tests {
         #[case] expected_val: u32,
     ) {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.cpsr = cpsr;
@@ -901,8 +926,8 @@ mod tests {
     #[rstest]
     #[case(0xe129f002, CPUMode::SVC, 0x000000d3, 2, 0x000000d3)] //msr CPSR_fc, r2
     #[case(0xe129f002, CPUMode::SVC, 0x00FFFFd3, 2, 0x000000d3)] //msr CPSR_fc, r2
-    #[case(0xe129f002, CPUMode::SVC, 0xf0FFFFf3, 2, 0xf00000d3)] //msr CPSR_fc, r2 
-                                                                 //thumb bit should not get used
+    #[case(0xe129f002, CPUMode::SVC, 0xf0FFFFf3, 2, 0xf00000d3)] //msr CPSR_fc, r2
+    //thumb bit should not get used
     #[case(0xe121f002, CPUMode::SVC, 0xF0FFFFd3, 2, 0x000000d3)] //msr CPSR_c, r2
     #[case(0xe128f002, CPUMode::SVC, 0xF0FFFFFF, 2, 0xF00000d3)] //msr CPSR_f, r2
     #[case(0xe129f002, CPUMode::USER, 0xF0FFFFd3, 2, 0xF00000d0)] //msr CPSR_fc, r2
@@ -915,7 +940,7 @@ mod tests {
         #[case] expected_val: u32,
     ) {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_mode(mode);
@@ -940,7 +965,7 @@ mod tests {
         #[case] expected_val: u32,
     ) {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_mode(mode);
@@ -954,15 +979,15 @@ mod tests {
     }
 
     #[rstest]
-    #[case(0xe329f0d0, CPUMode::SVC, 0x000000d0)]  // msr CPSR, 0x24
-    #[case(0xe328f20d, CPUMode::SVC, 0xd00000d3)]  // msr CPSR, 0xd0000000
+    #[case(0xe329f0d0, CPUMode::SVC, 0x000000d0)] // msr CPSR, 0x24
+    #[case(0xe328f20d, CPUMode::SVC, 0xd00000d3)] // msr CPSR, 0xd0000000
     fn msr_should_move_imm_to_cpsr(
         #[case] opcode: u32,
         #[case] mode: CPUMode,
         #[case] expected_val: u32,
     ) {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.set_mode(mode);

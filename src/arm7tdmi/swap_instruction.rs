@@ -27,7 +27,7 @@ impl CPU {
             memory_fetch.data
         };
 
-        self.set_executed_instruction(format!("SWP {} {} [{:#X}]", rd, rm, address));
+        self.set_executed_instruction(format_args!("SWP {} {} [{:#X}]", rd, rm, address));
         self.set_register(rd, memory_data);
 
         cycles

@@ -12,6 +12,7 @@ pub enum Instruction {
 }
 
 impl CPU {
+    #[no_mangle]
     pub fn decode_instruction(&mut self, instruction: ARMByteCode) -> ARMDecodedInstruction {
         return match self.get_instruction_mode() {
             InstructionMode::ARM => self.decode_arm_instruction(instruction),
@@ -99,7 +100,6 @@ impl CPU {
             _ if arm_decoders::is_branch_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_branch,
                 instruction,
-                ..Default::default()
             },
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
                 ARMDecodedInstruction {
@@ -415,7 +415,6 @@ mod sub_decoders {
 #[cfg(test)]
 mod arm_decoders_tests {
     
-
     use arm_decoders::*;
 
     use crate::memory::memory::GBAMemory;

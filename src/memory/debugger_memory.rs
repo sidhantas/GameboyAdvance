@@ -1,4 +1,4 @@
-use super::memory::{DebuggerMemoryBus, MemoryBus, MemoryBusNoPanic, MemoryError, MemoryFetch};
+use super::memory::{MemoryBus, MemoryBusNoPanic, MemoryError, MemoryFetch};
 
 pub struct DebuggerMemory {
     catch_memory_error: Box<dyn Fn(MemoryError) -> ()>,
@@ -19,8 +19,6 @@ impl DebuggerMemory {
         })
     }
 }
-
-impl DebuggerMemoryBus for DebuggerMemory {}
 
 impl MemoryBusNoPanic for DebuggerMemory {
     fn try_read(
@@ -96,7 +94,6 @@ impl MemoryBus for DebuggerMemory {
                 cycles: 0
             }
         })
-
     }
 
     fn readu32(&self, address: usize) -> super::memory::MemoryFetch<u32> {

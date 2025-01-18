@@ -36,7 +36,7 @@ impl CPU {
             cycles += self.flush_pipeline();
         }
 
-        self.set_executed_instruction(format!("B {:#b} {:#X}", condition, destination));
+        self.set_executed_instruction(format_args!("B {:#b} {:#X}", condition, destination));
 
         cycles
     }
@@ -46,14 +46,14 @@ impl CPU {
         let offset: u32 = sign_extend((instruction & 0x07FF) << 1, 11);
         self.set_pc(self.get_pc() + offset);
         cycles += self.flush_pipeline();
-        self.set_executed_instruction(format!("B {:#X}", offset));
+        self.set_executed_instruction(format_args!("B {:#X}", offset));
 
         cycles
     }
 
     pub fn thumb_set_link_register(&mut self, instruction: u32) -> CYCLES {
         let value = self.get_pc() + sign_extend((instruction & 0x07FF) << 12, 22);
-        self.set_executed_instruction(format!("SET LR: {:#X}", value));
+        self.set_executed_instruction(format_args!("SET LR: {:#X}", value));
         self.set_register(LINK_REGISTER, value);
         
         1
@@ -70,7 +70,7 @@ impl CPU {
 
         self.flush_pipeline();
 
-        self.set_executed_instruction(format!("BL: {:#X}", destination));
+        self.set_executed_instruction(format_args!("BL: {:#X}", destination));
         1
     }
 }

@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
 
-use num_traits::{Num};
+use num_traits::Num;
 use regex::Regex;
 
 

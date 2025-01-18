@@ -48,9 +48,10 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    pub fn new(bios: String) -> Self {
+    pub fn new(bios: String, rom: String) -> Self {
         let mut memory = GBAMemory::new();
         memory.initialize_bios(bios).unwrap();
+        let _ = memory.initialize_rom(rom);
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
@@ -95,14 +96,14 @@ impl Debugger {
     }
 }
 
-pub fn start_debugger(bios: String) -> Result<(), std::io::Error> {
+pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let debugger = &mut Debugger::new(bios);
+    let debugger = &mut Debugger::new(bios, rom);
 
     while !debugger.end_debugger {
         loop {
@@ -286,18 +287,14 @@ fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
         KeyCode::Char(c) => debugger.terminal_buffer.push(c),
         KeyCode::Enter => {
             match parse_command(debugger) {
-                Ok(res) => debugger
-                    .terminal_history
-                    .push(TerminalHistoryEntry {
-                        command: debugger.terminal_buffer.clone(),
-                        result: res,
-                    }),
-                Err(err) => debugger
-                    .terminal_history
-                    .push(TerminalHistoryEntry {
-                        command: debugger.terminal_buffer.clone(),
-                        result: err.to_string(),
-                    }),
+                Ok(res) => debugger.terminal_history.push(TerminalHistoryEntry {
+                    command: debugger.terminal_buffer.clone(),
+                    result: res,
+                }),
+                Err(err) => debugger.terminal_history.push(TerminalHistoryEntry {
+                    command: debugger.terminal_buffer.clone(),
+                    result: err.to_string(),
+                }),
             };
             debugger.terminal_buffer.clear();
         }

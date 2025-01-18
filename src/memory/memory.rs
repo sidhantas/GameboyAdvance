@@ -1,9 +1,11 @@
-use crate::types::{BYTE, CYCLES, HWORD, WORD};
+use crate::{memory::io_handlers::io_load, types::{BYTE, CYCLES, HWORD, WORD}};
 use std::{
     fmt::Display,
     fs::File,
     io::{Read, Seek},
 };
+
+use super::io_handlers::io_store;
 
 pub struct MemoryFetch<T> {
     pub cycles: CYCLES,
@@ -107,9 +109,6 @@ impl Display for MemoryError {
     }
 }
 
-pub trait DebuggerMemoryBus: MemoryBusNoPanic + MemoryBus {}
-impl DebuggerMemoryBus for GBAMemory {}
-
 pub trait MemoryBusNoPanic {
     fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError>;
 
@@ -171,11 +170,14 @@ impl GBAMemory {
         wait_cycles_u32[ROM2A_REGION] = 8;
         wait_cycles_u32[ROM2B_REGION] = 8;
 
+        let mut ioram = vec![0; IORAM_SIZE >> 1]; 
+        io_store(&mut ioram, 0x088, 0x200);
+
         Box::new(Self {
             bios: vec![0; BIOS_SIZE >> 2],
             exwram: vec![0; EXWRAM_SIZE >> 2],
             iwram: vec![0; IWRAM_SIZE >> 2],
-            ioram: vec![0; IORAM_SIZE >> 1],
+            ioram,
             bgram: vec![0; BGRAM_SIZE >> 2],
             vram: vec![0; VRAM_SIZE >> 2],
             oam: vec![0; OAM_SIZE >> 2],
@@ -198,6 +200,22 @@ impl GBAMemory {
             self.bios[index] = u32::from_le_bytes(buffer.clone());
             index += 1;
         }
+        Ok(())
+    }
+
+    pub fn initialize_rom(&mut self, filename: String) -> Result<(), std::io::Error> {
+        let mut index = 0;
+        let mut rom_file = File::options().read(true).open(filename)?;
+        let mut buffer = [0; 4];
+        rom_file.rewind()?;
+        while let Ok(read_bytes) = rom_file.read(&mut buffer[..]) {
+            if read_bytes == 0 {
+                break;
+            }
+            self.rom[index] = u32::from_le_bytes(buffer.clone());
+            index += 1;
+        }
+
         Ok(())
     }
 }
