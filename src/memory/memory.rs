@@ -1,4 +1,4 @@
-use crate::{memory::io_handlers::io_load, types::{BYTE, CYCLES, HWORD, WORD}};
+use crate::types::{BYTE, CYCLES, HWORD, WORD};
 use std::{
     fmt::Display,
     fs::File,
@@ -352,40 +352,40 @@ impl MemoryBusNoPanic for GBAMemory {
             BIOS_REGION => {}
             EXWRAM_REGION => {
                 let mut current_value = memory_load(&self.exwram, address & 0xFFFFFE);
-                current_value &= !(0xFFFF << 16 * (address & 0b1));
-                let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
+                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
                 memory_store(&mut self.exwram, address & 0xFFFFFF, value);
             }
             IWRAM_REGION => {
                 let mut current_value = memory_load(&self.iwram, address & 0xFFFFFE);
-                current_value &= !(0xFFFF << 16 * (address & 0b11));
-                let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
+                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
             IORAM_REGION => self.io_writeu16(address, value)?,
             BGRAM_REGION => {
                 let mut current_value = memory_load(&self.bgram, address & 0xFFFFFE);
-                current_value &= !(0xFFFF << 16 * (address & 0b11));
-                let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
+                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
                 memory_store(&mut self.bgram, address & 0xFFFFFF, value);
             }
             VRAM_REGION => {
                 let mut current_value = memory_load(&self.vram, address & 0xFFFFFE);
-                current_value &= !(0xFFFF << 16 * (address & 0b11));
-                let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
+                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
                 memory_store(&mut self.vram, address & 0xFFFFFF, value);
             }
             OAM_REGION => {
                 let mut current_value = memory_load(&self.oam, address & 0xFFFFFE);
-                current_value &= !(0xFFFF << 16 * (address & 0b11));
-                let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
+                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
                 memory_store(&mut self.oam, address & 0xFFFFFF, value);
             }
             ROM0A_REGION..=ROM2B_REGION => {}
             SRAM_REGION => {
                 let mut current_value = memory_load(&self.sram, address & 0xFFFFFE);
-                current_value &= !(0xFFFF << 16 * (address & 0b11));
-                let value = current_value | ((value as u32) << 16 * (address >> 1 & 0b1));
+                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
                 memory_store(&mut self.sram, address & 0xFFFFFF, value);
             }
             _ => return Err(MemoryError::WriteError(address, value as u32)),
@@ -631,10 +631,11 @@ mod tests {
         memory.exwram[(address & 0xFFFFFF) >> 2] = value;
 
         let cycles = memory.writeu16(address, 0x1255);
+        let cycles = memory.writeu16(address + 2, 0x1255);
         let fetch = memory.readu32(address);
 
         assert_eq!(cycles, 3);
-        assert_eq!(fetch.data, 0x12341255);
+        assert_eq!(fetch.data, 0x12551255);
     }
 
     #[test]

@@ -2,7 +2,6 @@ use std::mem::size_of;
 
 use crate::{
     arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
-    memory::memory::MemoryBus,
     types::{CYCLES, REGISTER, WORD},
     utils::bits::Bits,
 };
@@ -159,7 +158,11 @@ impl CPU {
                 if instruction.bit_is_set(8) {
                     register_list.push(PC_REGISTER as u32);
                 }
-                self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER))
+                let mut cycles = self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER));
+                if instruction.bit_is_set(8) {
+                    cycles += self.flush_pipeline();
+                }
+                cycles
             }
             _ => panic!(),
         };

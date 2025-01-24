@@ -81,7 +81,30 @@ impl CPU {
                 self.cpsr = *spsr;
             }
         }
-        let operand2 = self.decode_operand2(instruction, set_flags, shift_amount);
+        let operand2 = if instruction.bit_is_set(25) {
+            // operand 2 is immediate
+            let immediate = instruction & 0x0000_00FF;
+
+            let operand2 = immediate.rotate_right(shift_amount);
+            if set_flags && operand2 > 255 {
+                match opcode {
+                    0x0..=0x1 | 0x8..=0x9 | 0xc..=0xf => {
+                        self.set_flag_from_bit(FlagsRegister::C, operand2.get_bit(31) as u8)
+                    }
+                    _ => {}
+                }
+            }
+            operand2
+        } else {
+            let operand_register = instruction & 0x0000_000F;
+            let operand_register_value = self.get_register(operand_register);
+            self.decode_shifted_register(
+                instruction,
+                shift_amount,
+                operand_register_value,
+                set_flags,
+            )
+        };
         operation(self, rd, self.get_register(rn), operand2, set_flags);
         if rd == 15 {
             cycles += self.flush_pipeline();
@@ -144,8 +167,8 @@ impl CPU {
     }
 
     pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let operand2 = operand2.twos_complement();
-        let result = operand1 + operand2; // use two's complement to make setting flags easier
+        let operand2 = !operand2;
+        let result = operand1 + operand2 + 1; // use two's complement to make setting flags easier
 
         self.set_arithmetic_flags(result, operand1, operand2, 1, set_flags);
         self.set_register(rd, result);
@@ -157,10 +180,10 @@ impl CPU {
     }
 
     pub fn arm_rsb(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let operand1 = operand1.twos_complement();
-        let result = operand2 + operand1; // use two's complement to make setting flags easier
+        let operand1 = !operand1;
+        let result = operand2 + operand1 + 1; // use two's complement to make setting flags easier
 
-        self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
+        self.set_arithmetic_flags(result, operand1, operand2, 1, set_flags);
         self.set_register(rd, result);
 
         self.set_executed_instruction(format_args!(
@@ -214,10 +237,7 @@ impl CPU {
         let result = operand1 & operand2;
 
         self.set_logical_flags(result, true);
-        self.set_executed_instruction(format_args!(
-            "TST {:#X} {:#X}",
-             operand1, operand2
-        ));
+        self.set_executed_instruction(format_args!("TST {:#X} {:#X}", operand1, operand2));
     }
 
     #[allow(unused)]
@@ -233,11 +253,11 @@ impl CPU {
 
     #[allow(unused)]
     pub fn arm_cmp(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        self.set_executed_instruction(format_args!("CMP {:#X} {:#X}", operand1, operand2));
-        let operand2 = !operand2 + 1;
-        let result = operand1 + operand2; // use two's complement to make setting flags easier
+        let operand2 = !operand2;
+        let result = operand1 + operand2 + 1; // use two's complement to make setting flags easier
 
         self.set_arithmetic_flags(result, operand1, operand2, 1, true);
+        self.set_executed_instruction(format_args!("CMP {:#X} {:#X}", operand1, operand2));
     }
 
     #[allow(unused)]
@@ -855,11 +875,11 @@ mod tests {
 
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 1);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 1);
-        assert!(cpu.get_register(4) == 0x8000_0000);
+        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(cpu.get_flag(FlagsRegister::V), 1);
+        assert_eq!(cpu.get_register(4), 0x8000_0000);
     }
 
     #[test]

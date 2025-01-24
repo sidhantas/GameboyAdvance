@@ -1,10 +1,9 @@
-use std::{fs::{File, OpenOptions}, io::Write};
-
-use crate::{
-    memory::memory::MemoryBus,
-    types::*,
-    utils::bits::Bits,
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
 };
+
+use crate::{memory::memory::MemoryBus, types::*, utils::bits::Bits};
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -47,9 +46,8 @@ pub struct CPU {
     pub executed_instruction: String,
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
-    pub output_file: File
+    pub output_file: File,
 }
-
 
 impl CPU {
     pub fn new(memory: Box<dyn MemoryBus>) -> CPU {
@@ -73,13 +71,13 @@ impl CPU {
                 .create(true)
                 .write(true)
                 .open("output_file.txt")
-                .unwrap()
+                .unwrap(),
         }
     }
 
     #[no_mangle]
     pub fn execute_cpu_cycle(&mut self) {
-        self.set_executed_instruction(format_args!("")); 
+        self.set_executed_instruction(format_args!(""));
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
             self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
@@ -92,7 +90,9 @@ impl CPU {
             self.advance_pipeline();
         }
 
-        self.output_file.write(self.get_status().as_bytes()).unwrap();
+        self.output_file
+            .write(self.get_status().as_bytes())
+            .unwrap();
     }
 
     pub fn flush_pipeline(&mut self) -> CYCLES {
@@ -171,6 +171,10 @@ impl CPU {
 
     pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
         assert!(register_num < 16);
+        if register_num == 15 {
+            self.set_pc(value);
+            return;
+        }
         *self.get_register_ref_mut(register_num) = value;
     }
 
@@ -304,34 +308,38 @@ impl CPU {
         match shift_type {
             // Logical shift left
             0x00 => {
-                if operand_register_value.bit_is_set((32 - shift_amount) as u8) {
-                    self.set_flag(FlagsRegister::C);
-                } else {
-                    self.reset_flag(FlagsRegister::C);
+                if set_flags {
+                    if operand_register_value.bit_is_set((32 - shift_amount) as u8) {
+                        self.set_flag(FlagsRegister::C);
+                    } else {
+                        self.reset_flag(FlagsRegister::C);
+                    }
                 }
                 operand_register_value << shift_amount
             }
             // Logical shift right
             0x01 => {
-                if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
-                    self.set_flag(FlagsRegister::C);
-                } else {
-                    self.reset_flag(FlagsRegister::C);
+                if set_flags && shift_amount > 0 {
+                    self.set_flag_from_bit(
+                        FlagsRegister::C,
+                        operand_register_value.get_bit(shift_amount as u8 - 1) as u8,
+                    );
                 }
                 operand_register_value >> shift_amount
             }
             // Arithmetic shift right
             0x02 => {
-                if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
-                    self.set_flag(FlagsRegister::C);
-                } else {
-                    self.reset_flag(FlagsRegister::C);
+                if set_flags && shift_amount > 0 {
+                    self.set_flag_from_bit(
+                        FlagsRegister::C,
+                        operand_register_value.get_bit(shift_amount as u8 - 1) as u8,
+                    );
                 }
                 (operand_register_value as i32 >> shift_amount) as u32
             }
             // Rotate Right
             0x03 => {
-                if set_flags {
+                if set_flags && shift_amount > 0 {
                     if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
                         self.set_flag(FlagsRegister::C);
                     } else {
