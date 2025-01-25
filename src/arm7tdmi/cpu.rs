@@ -47,11 +47,12 @@ pub struct CPU {
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
     pub output_file: File,
+    pub cycles: u64
 }
 
 impl CPU {
-    pub fn new(memory: Box<dyn MemoryBus>) -> CPU {
-        CPU {
+    pub fn new(memory: Box<dyn MemoryBus>) -> Self {
+        let mut cpu = Self {
             registers: [0; 16],
             executed_instruction_hex: 0,
             memory,
@@ -72,27 +73,30 @@ impl CPU {
                 .write(true)
                 .open("output_file.txt")
                 .unwrap(),
-        }
+            cycles: 0
+        };
+        cpu.flush_pipeline();
+        cpu
     }
 
     #[no_mangle]
     pub fn execute_cpu_cycle(&mut self) {
         self.set_executed_instruction(format_args!(""));
+        self.output_file
+            .write(self.get_status().as_bytes())
+            .unwrap();
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
             self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
             self.prefetch[1] = None;
-            ((decoded_instruction.executable)(self, decoded_instruction.instruction));
+            self.cycles += ((decoded_instruction.executable)(self, decoded_instruction.instruction)) as u64;
         }
 
         if let None = self.prefetch[1] {
             // refill pipeline if decoded instruction doesn't advance the pipeline
-            self.advance_pipeline();
+            self.cycles += self.advance_pipeline() as u64;
         }
 
-        self.output_file
-            .write(self.get_status().as_bytes())
-            .unwrap();
     }
 
     pub fn flush_pipeline(&mut self) -> CYCLES {
@@ -247,19 +251,18 @@ impl CPU {
         self.set_flag(flag);
     }
 
-    fn fetch_instruction(&mut self) -> CYCLES {
-        let mut cycles = 0;
+    pub(super) fn fetch_instruction(&mut self) -> CYCLES {
         let memory_fetch = {
             match self.get_instruction_mode() {
                 InstructionMode::ARM => self.memory.readu32(self.get_pc() as usize),
                 InstructionMode::THUMB => self.memory.readu16(self.get_pc() as usize).into(),
             }
         };
-        cycles += memory_fetch.cycles;
         self.prefetch[0] = Some(memory_fetch.data);
         self.increment_pc();
 
-        cycles
+        memory_fetch.cycles
+
     }
 
     pub fn decode_shifted_register(
@@ -354,10 +357,11 @@ impl CPU {
 
     pub fn get_status(&self) -> String {
         let mut status = String::new();
-        for i in 0..self.registers.len() {
-            status.push_str(&format!("{:x} ", self.get_register(i as u32)).to_owned());
-        }
-        status.push_str(&format!("{:x}\n", self.cpsr).to_owned());
+        //for i in 0..self.registers.len() {
+        //    status.push_str(&format!("{:08x} ", self.get_register(i as u32)).to_owned());
+        //}
+        //status.push_str(&format!("{:08x} ", self.cpsr).to_owned());
+        status.push_str(&format!("{}\n", self.cycles).to_owned());
         status
     }
 }

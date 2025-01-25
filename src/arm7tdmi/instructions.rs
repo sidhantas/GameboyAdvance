@@ -51,7 +51,7 @@ impl CPU {
 
     pub fn arm_nop(&mut self, _instruction: ARMByteCode) -> CYCLES {
         self.set_executed_instruction(format_args!("NOP"));
-        return 1;
+        return 0;
     }
 
     pub fn arm_multiply(&mut self, instruction: ARMByteCode) -> CYCLES {

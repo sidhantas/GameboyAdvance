@@ -11,7 +11,7 @@ use super::{
 impl CPU {
     pub fn data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
         let shift_amount;
-        let mut cycles = 1;
+        let mut cycles = 0;
         if instruction.bit_is_set(25) {
             shift_amount = ((instruction & 0x0000_0F00) >> 8) * 2;
         } else {
@@ -19,8 +19,7 @@ impl CPU {
             // The rest of the operation happens on the next cycle in an I cycle
             if instruction.bit_is_set(4) {
                 // shift by register
-                self.advance_pipeline();
-                cycles += 1;
+                cycles += self.advance_pipeline() + 1;
                 let shift_register = (instruction & 0x0000_0F00) >> 8;
                 shift_amount = self.get_register(shift_register);
             } else {
@@ -110,28 +109,6 @@ impl CPU {
             cycles += self.flush_pipeline();
         }
         return cycles;
-    }
-
-    fn decode_operand2(
-        &mut self,
-        instruction: ARMByteCode,
-        set_flags: bool,
-        shift_amount: u32,
-    ) -> u32 {
-        if instruction.bit_is_set(25) {
-            // operand 2 is immediate
-            let immediate = instruction & 0x0000_00FF;
-
-            return immediate.rotate_right(shift_amount);
-        }
-        let operand_register = instruction & 0x0000_000F;
-        let operand_register_value = self.get_register(operand_register);
-        return self.decode_shifted_register(
-            instruction,
-            shift_amount,
-            operand_register_value,
-            set_flags,
-        );
     }
 
     pub fn arm_add(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -344,7 +321,7 @@ impl CPU {
             match self.get_current_spsr() {
                 Some(spsr) => spsr,
                 None => {
-                    return 1;
+                    return 0;
                 }
             }
         } else {
@@ -369,7 +346,7 @@ impl CPU {
 
         self.set_executed_instruction(format_args!("MSR {} {:#X}", updated_psr, operand));
 
-        1
+        0
     }
 
     pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {

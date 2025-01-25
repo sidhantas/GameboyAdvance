@@ -84,15 +84,13 @@ impl CPU {
         byte_transfer: bool,
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
-        let cycles = {
-            if byte_transfer {
-                self.memory.write(address as usize, data as u8)
-            } else {
-                self.memory.writeu32(address as usize, data)
-            }
-        };
-        self.set_executed_instruction(format_args!("STR {} [{:#X}]", rd, address));
-        cycles
+        if byte_transfer {
+            self.set_executed_instruction(format_args!("STRB {} [{:#X}]", rd, address));
+            self.memory.write(address as usize, data as u8)
+        } else {
+            self.set_executed_instruction(format_args!("STR {} [{:#X}]", rd, address));
+            self.memory.writeu32(address as usize, data)
+        }
     }
 
     pub fn ldr_instruction_execution(
@@ -101,11 +99,13 @@ impl CPU {
         address: u32,
         byte_transfer: bool,
     ) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let data = {
             let memory_fetch = if byte_transfer {
+                self.set_executed_instruction(format_args!("LDRB {} [{:#X}]", rd, address));
                 self.memory.read(address as usize).into()
             } else {
+                self.set_executed_instruction(format_args!("LDR {} [{:#X}]", rd, address));
                 self.memory.readu32(address as usize)
             };
             cycles += memory_fetch.cycles;
@@ -117,7 +117,6 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline();
         }
-        self.set_executed_instruction(format_args!("LDR {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -129,7 +128,7 @@ impl CPU {
         let write_back_address: bool = !pre_indexed_addressing || instruction.bit_is_set(21);
         let rd = (instruction & 0x0000_F000) >> 12;
 
-        let mut cycles = 0;
+        let mut cycles = 1;
         let offset;
         let offset_address;
 
@@ -217,7 +216,7 @@ impl CPU {
     }
 
     pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let memory_fetch = { self.memory.readu16(address as usize) };
 
         cycles += memory_fetch.cycles;
@@ -233,6 +232,7 @@ impl CPU {
     }
 
     pub fn block_dt_execution(&mut self, instruction: u32) -> CYCLES {
+        let mut cycles = 0;
         if instruction.bit_is_set(22) {
             todo!("Implement S bit");
         }
@@ -249,7 +249,9 @@ impl CPU {
             }
         }
 
-        return match opcode {
+        cycles += self.advance_pipeline();
+
+        cycles += match opcode {
             0b00000 => self.stmda_execution(base_address, &register_list, None),
             0b00001 => self.ldmda_execution(base_address, &register_list, None),
             0b00010 => self.stmda_execution(base_address, &register_list, Some(base_register)),
@@ -266,9 +268,10 @@ impl CPU {
             0b11001 => self.ldmib_execution(base_address, &register_list, None),
             0b11010 => self.stmib_execution(base_address, &register_list, Some(base_register)),
             0b11011 => self.ldmib_execution(base_address, &register_list, Some(base_register)),
-            _ => todo!()
+            _ => todo!(),
         };
 
+        cycles
     }
 
     pub fn stmia_execution(
@@ -301,7 +304,7 @@ impl CPU {
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
     ) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let mut curr_address = base_address;
         for register in register_list {
             let memory_fetch = self.memory.readu32(curr_address);
@@ -351,7 +354,7 @@ impl CPU {
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
     ) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let mut curr_address = base_address;
         for register in register_list {
             curr_address += size_of::<WORD>();
@@ -452,7 +455,6 @@ impl CPU {
 
         cycles
     }
-
 }
 
 #[cfg(test)]

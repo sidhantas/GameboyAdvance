@@ -216,7 +216,8 @@ fn draw_cpu(
             Constraint::Length(2),
             Constraint::Length(2),
             Constraint::Length(3),
-            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(1),
         ])
         .split(cpu_chunk);
 
@@ -251,6 +252,10 @@ fn draw_cpu(
         .alignment(tui::layout::Alignment::Center)
         .wrap(Wrap { trim: true });
 
+    let cycles = Paragraph::new(format!("{}", cpu.cycles))
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
+
     f.render_widget(block, cpu_chunk);
     f.render_widget(pc, sections[1]);
     f.render_widget(sp, sections[2]);
@@ -258,6 +263,7 @@ fn draw_cpu(
     f.render_widget(decoded_instruction, sections[4]);
     f.render_widget(executed_instruction, sections[5]);
     f.render_widget(inst_mode, sections[6]);
+    f.render_widget(cycles, sections[7]);
 
     Ok(())
 }

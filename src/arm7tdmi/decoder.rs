@@ -186,7 +186,7 @@ impl CPU {
             _ if thumb_decoders::is_sdt_halfword(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
-                    executable: CPU::sdt_halfword_imm
+                    executable: CPU::sdt_halfword_imm_offset
                 }
             }
             _ if thumb_decoders::is_sdt_sp_imm(instruction) => {

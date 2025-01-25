@@ -1,8 +1,12 @@
-use crate::{arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, types::CYCLES, utils::bits::{sign_extend}};
+use crate::{
+    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
+    types::CYCLES,
+    utils::bits::sign_extend,
+};
 
 impl CPU {
     pub fn thumb_conditional_branch(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
+        let mut cycles = 0;
         let condition = (instruction & 0x0F00) >> 8;
         let offset = (instruction & 0x00FF) << 1;
 
@@ -27,14 +31,18 @@ impl CPU {
                 self.get_flag(FlagsRegister::Z) == 1
                     || self.get_flag(FlagsRegister::N) != self.get_flag(FlagsRegister::V)
             } //LE
-            _ => panic!("Impossible/Undefined condition code")
+            _ => panic!("Impossible/Undefined condition code"),
         };
 
+        // We don't use the fetched instruction but we need to do it to get the correct cycle count
+        let memory_fetch = self.memory.readu16(self.get_pc() as usize);
+        cycles += memory_fetch.cycles;
         let destination = self.get_pc() + sign_extend(offset, 8);
-        if condition_passed {
-            self.set_pc(destination);
-            cycles += self.flush_pipeline();
+        if !condition_passed {
+            return 0;
         }
+        self.set_pc(destination);
+        cycles += self.flush_pipeline();
 
         self.set_executed_instruction(format_args!("B {:#b} {:#X}", condition, destination));
 
@@ -55,29 +63,29 @@ impl CPU {
         let value = self.get_pc() + sign_extend((instruction & 0x07FF) << 12, 22);
         self.set_executed_instruction(format_args!("SET LR: {:#X}", value));
         self.set_register(LINK_REGISTER, value);
-        
-        1
+
+        0
     }
 
     pub fn thumb_long_branch_with_link(&mut self, instruction: u32) -> CYCLES {
-        // TODO: This function is broken, it doesn't do the correct addition for the
-        // destination, range should be from -0x400_000 to 0x3FFFFF
-        // Also todo, check all twos complement addition again
+        let mut cycles = 0;
         let link_register_val = self.get_register(LINK_REGISTER);
         self.set_register(LINK_REGISTER, (self.get_pc() - 2) | 1);
         let destination = link_register_val + ((instruction & 0x7FF) << 1);
         self.set_pc(destination);
 
-        self.flush_pipeline();
+        // We don't use the fetched instruction but we need to do it to get the correct cycle count
+        let memory_fetch = self.memory.readu16(self.get_pc() as usize);
+        cycles += memory_fetch.cycles;
+        cycles += self.flush_pipeline();
 
         self.set_executed_instruction(format_args!("BL: {:#X}", destination));
-        1
+        cycles
     }
 }
 
 #[cfg(test)]
 mod branch_tests {
-    
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
@@ -87,7 +95,7 @@ mod branch_tests {
     #[test]
     fn should_branch_ahead() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -97,14 +105,13 @@ mod branch_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-
         assert_eq!(cpu.get_pc(), 0x2c);
     }
 
     #[test]
     fn should_branch_behind() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -114,14 +121,13 @@ mod branch_tests {
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
 
-
         assert_eq!(cpu.get_pc(), 0x1c);
     }
 
     #[test]
     fn should_set_link_register_and_branch() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
         cpu.set_instruction_mode(InstructionMode::THUMB);
 
@@ -131,7 +137,6 @@ mod branch_tests {
         cpu.prefetch[0] = Some(0xf802); // bl 0x20
         cpu.execute_cpu_cycle();
         cpu.execute_cpu_cycle();
-
 
         assert_eq!(cpu.get_pc(), 0x24);
         assert_eq!(cpu.get_register(LINK_REGISTER), 0x1d);

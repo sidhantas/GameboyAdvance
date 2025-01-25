@@ -8,7 +8,7 @@ use crate::{
 
 impl CPU {
     pub fn ldr_pc_relative(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let rd = (instruction & 0x0700) >> 8;
         let offset = (instruction & 0x00FF) * 4;
         let address = (self.get_pc() & !2) + offset;
@@ -25,7 +25,7 @@ impl CPU {
     }
 
     pub fn sdt_register_offset(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
+        let mut cycles = 0;
         let ro = (instruction & 0x01C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
         let rd = instruction & 0x0007;
@@ -68,7 +68,7 @@ impl CPU {
     }
 
     pub fn sdt_imm_offset(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
+        let mut cycles = 0;
         let opcode = (instruction & 0x1800) >> 11;
         let imm = (instruction & 0x07C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
@@ -96,8 +96,7 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_halfword_imm(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
+    pub fn sdt_halfword_imm_offset(&mut self, instruction: u32) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let imm = (instruction & 0x07C0) >> 5;
         let rb = (instruction & 0x0038) >> 3;
@@ -111,12 +110,10 @@ impl CPU {
 
         let address = self.get_register(rb) + imm;
 
-        cycles += operation(self, rd, address);
-        cycles
+        operation(self, rd, address)
     }
 
     pub fn thumb_sdt_sp_imm(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
         let opcode = instruction.get_bit(11);
         let rd = (instruction & 0x0700) >> 8;
         let imm = instruction & 0x00FF;
@@ -128,13 +125,11 @@ impl CPU {
 
         let address = self.get_sp() + imm * 4;
 
-        cycles += operation(self, rd, address, false);
-
-        cycles
+        operation(self, rd, address, false)
     }
 
     pub fn thumb_push_pop(&mut self, instruction: u32) -> CYCLES {
-        let mut cycles = 1;
+        let mut cycles = 0;
         let opcode = instruction.get_bit(11);
 
         let mut register_list: Vec<REGISTER> = Vec::new();
@@ -144,29 +139,28 @@ impl CPU {
                 register_list.push(i as REGISTER);
             }
         }
+        cycles += self.advance_pipeline();
 
-        cycles += match opcode {
+        match opcode {
             0b0 => {
                 // STMDB (PUSH)
                 if instruction.bit_is_set(8) {
                     register_list.push(LINK_REGISTER);
                 }
-                self.stmdb_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER))
+                cycles += self.stmdb_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER))
             }
             0b1 => {
                 // LDMIA (POP)
                 if instruction.bit_is_set(8) {
                     register_list.push(PC_REGISTER as u32);
                 }
-                let mut cycles = self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER));
+                cycles += self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER));
                 if instruction.bit_is_set(8) {
                     cycles += self.flush_pipeline();
                 }
-                cycles
             }
             _ => panic!(),
         };
-
         cycles
     }
 
@@ -185,12 +179,8 @@ impl CPU {
         let base_address = self.get_register(rb) as usize;
 
         match opcode {
-            0b0 => {
-                self.stmia_execution(base_address, &register_list, Some(rb))
-            }
-            0b1 => {
-                self.ldmia_execution(base_address, &register_list, Some(rb))
-            }
+            0b0 => self.stmia_execution(base_address, &register_list, Some(rb)),
+            0b1 => self.ldmia_execution(base_address, &register_list, Some(rb)),
             _ => panic!(),
         }
     }
