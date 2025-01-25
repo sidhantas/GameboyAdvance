@@ -1,7 +1,6 @@
 use std::mem::size_of;
 
 use crate::{
-    memory::memory::MemoryBus,
     types::{CYCLES, REGISTER, WORD},
     utils::{
         bits::{sign_extend, Bits},
@@ -128,7 +127,7 @@ impl CPU {
         let write_back_address: bool = !pre_indexed_addressing || instruction.bit_is_set(21);
         let rd = (instruction & 0x0000_F000) >> 12;
 
-        let mut cycles = 1;
+        let mut cycles = 0;
         let offset;
         let offset_address;
 
@@ -184,7 +183,7 @@ impl CPU {
     }
 
     pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let memory_fetch = { self.memory.readu16(address as usize) };
 
         cycles += memory_fetch.cycles;
@@ -200,7 +199,7 @@ impl CPU {
     }
 
     pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
-        let mut cycles = 0;
+        let mut cycles = 1;
         let memory_fetch = { self.memory.read(address as usize) };
 
         cycles += memory_fetch.cycles;

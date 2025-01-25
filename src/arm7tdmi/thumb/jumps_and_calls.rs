@@ -38,13 +38,13 @@ impl CPU {
         let memory_fetch = self.memory.readu16(self.get_pc() as usize);
         cycles += memory_fetch.cycles;
         let destination = self.get_pc() + sign_extend(offset, 8);
+        self.set_executed_instruction(format_args!("B {:#b} {:#X}", condition, destination));
         if !condition_passed {
             return 0;
         }
         self.set_pc(destination);
         cycles += self.flush_pipeline();
 
-        self.set_executed_instruction(format_args!("B {:#b} {:#X}", condition, destination));
 
         cycles
     }

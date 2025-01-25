@@ -305,39 +305,39 @@ impl MemoryBusNoPanic for GBAMemory {
             EXWRAM_REGION => {
                 let mut current_value = memory_load(&self.exwram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << 8 * (address & 0b11));
+                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
                 memory_store(&mut self.exwram, address & 0xFFFFFF, value);
             }
             IWRAM_REGION => {
                 let mut current_value = memory_load(&self.iwram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << 8 * (address & 0b11));
+                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
                 memory_store(&mut self.iwram, address & 0xFFFFFF, value);
             }
             IORAM_REGION => self.io_writeu8(address, value)?,
             BGRAM_REGION => {
                 let mut current_value = memory_load(&self.bgram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << 8 * (address & 0b11));
+                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
                 memory_store(&mut self.bgram, address & 0xFFFFFF, value);
             }
             VRAM_REGION => {
                 let mut current_value = memory_load(&self.vram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << 8 * (address & 0b11));
+                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
                 memory_store(&mut self.vram, address & 0xFFFFFF, value);
             }
             OAM_REGION => {
                 let mut current_value = memory_load(&self.oam, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << 8 * (address & 0b11));
+                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
                 memory_store(&mut self.oam, address & 0xFFFFFF, value);
             }
             ROM0A_REGION..=ROM2B_REGION => {}
             SRAM_REGION => {
                 let mut current_value = memory_load(&self.sram, address & 0xFFFFFF);
                 current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << 8 * (address & 0b11));
+                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
                 memory_store(&mut self.sram, address & 0xFFFFFF, value);
             }
             _ => return Err(MemoryError::WriteError(address, value as u32)),

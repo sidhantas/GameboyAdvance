@@ -71,7 +71,7 @@ impl CPU {
             output_file: OpenOptions::new()
                 .create(true)
                 .write(true)
-                .open("output_file.txt")
+                .open("cycle_timings.txt")
                 .unwrap(),
             cycles: 0
         };

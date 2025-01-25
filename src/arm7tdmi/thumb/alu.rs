@@ -201,8 +201,8 @@ impl CPU {
 
     fn thumb_cmp_imm(&mut self, rd: REGISTER, imm: u8) {
         let minuend = self.get_register(rd);
-        let imm = !(imm as u32) + 1;
-        let result = minuend + imm;
+        let imm = !(imm as u32);
+        let result = minuend + imm + 1;
         self.set_arithmetic_flags(result, minuend, imm, 1, true);
         self.set_executed_instruction(format_args!("CMP r{} {:#X}", rd, imm));
     }
