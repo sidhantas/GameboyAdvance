@@ -1,17 +1,18 @@
-use super::memory::{MemoryBus, MemoryBusNoPanic, MemoryError, MemoryFetch};
+use super::memory::{DebuggerMemoryBus, MemoryBus, MemoryBusNoPanic, MemoryError, MemoryFetch};
 
 pub struct DebuggerMemory {
     catch_memory_error: Box<dyn Fn(MemoryError) -> ()>,
     breakpoint_checker: Box<dyn Fn(usize) -> ()>,
-    pub memory: Box<dyn MemoryBusNoPanic>,
+    pub memory: Box<dyn DebuggerMemoryBus>,
 }
+
 
 impl DebuggerMemory {
     pub fn new(
-        memory: Box<dyn MemoryBusNoPanic>,
+        memory: Box<dyn DebuggerMemoryBus>,
         breakpoint_checker: Box<dyn Fn(usize) -> ()>,
         catch_memory_error: Box<dyn Fn(MemoryError) -> ()>,
-    ) -> Box<dyn MemoryBus> {
+    ) -> Box<DebuggerMemory> {
         Box::new(Self {
             memory,
             breakpoint_checker,
@@ -133,5 +134,9 @@ impl MemoryBus for DebuggerMemory {
             0
         })
 
+    }
+    
+    fn ppu_io_write(&mut self, address: usize, value: u16) {
+        self.memory.ppu_io_write(address, value)
     }
 }

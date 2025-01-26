@@ -1,9 +1,8 @@
 use std::{
-    fs::{File, OpenOptions},
-    io::Write,
+    collections::VecDeque, fmt::Display, fs::{File, OpenOptions}, io::Write
 };
 
-use crate::{memory::memory::MemoryBus, types::*, utils::bits::Bits};
+use crate::{graphics::ppu::PPU, memory::memory::MemoryBus, types::*, utils::bits::Bits};
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -33,6 +32,13 @@ pub enum FlagsRegister {
     V = 28,
 }
 
+#[derive(Default)]
+struct Status {
+    pub registers: [WORD; 16],
+    pub cpsr: WORD,
+    pub cycles: u64,
+}
+
 pub struct CPU {
     registers: [WORD; 16],
     registers_fiq: [WORD; 8],
@@ -47,7 +53,10 @@ pub struct CPU {
     pub cpsr: WORD,
     pub spsr: [WORD; 5],
     pub output_file: File,
-    pub cycles: u64
+    pub cycles: u64,
+    pub relative_cycles: u64,
+    pub ppu: PPU,
+    status_history: VecDeque<Status>,
 }
 
 impl CPU {
@@ -73,7 +82,10 @@ impl CPU {
                 .write(true)
                 .open("cycle_timings.txt")
                 .unwrap(),
-            cycles: 0
+            cycles: 0,
+            relative_cycles: 3,
+            ppu: Default::default(),
+            status_history: VecDeque::with_capacity(10000),
         };
         cpu.flush_pipeline();
         cpu
@@ -82,21 +94,27 @@ impl CPU {
     #[no_mangle]
     pub fn execute_cpu_cycle(&mut self) {
         self.set_executed_instruction(format_args!(""));
-        self.output_file
-            .write(self.get_status().as_bytes())
-            .unwrap();
+        if self.status_history.len() >= 10000 {
+            self.status_history.pop_front();
+        }
+        self.status_history.push_back(self.get_status());
+        let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
             self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
             self.prefetch[1] = None;
-            self.cycles += ((decoded_instruction.executable)(self, decoded_instruction.instruction)) as u64;
+            execution_cycles +=
+                ((decoded_instruction.executable)(self, decoded_instruction.instruction)) as u64;
         }
 
         if let None = self.prefetch[1] {
             // refill pipeline if decoded instruction doesn't advance the pipeline
-            self.cycles += self.advance_pipeline() as u64;
+            execution_cycles += self.advance_pipeline() as u64;
         }
-
+        self.cycles += execution_cycles;
+        self.relative_cycles += execution_cycles;
+        self.ppu
+            .advance_ppu(&mut self.relative_cycles, &mut self.memory);
     }
 
     pub fn flush_pipeline(&mut self) -> CYCLES {
@@ -262,7 +280,6 @@ impl CPU {
         self.increment_pc();
 
         memory_fetch.cycles
-
     }
 
     pub fn decode_shifted_register(
@@ -355,14 +372,35 @@ impl CPU {
         }
     }
 
-    pub fn get_status(&self) -> String {
-        let mut status = String::new();
-        //for i in 0..self.registers.len() {
-        //    status.push_str(&format!("{:08x} ", self.get_register(i as u32)).to_owned());
-        //}
-        //status.push_str(&format!("{:08x} ", self.cpsr).to_owned());
-        status.push_str(&format!("{}\n", self.cycles).to_owned());
+    fn get_status(&self) -> Status {
+        let mut status = Status::default();
+        for i in 0..self.registers.len() {
+            status.registers[i] = self.get_register(i as REGISTER);
+        }
+        status.cpsr = self.cpsr;
+        status.cycles = self.cycles;
         status
+    }
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for i in self.registers {
+            write!(f, "{:08x} ", i)?;
+        }
+
+        write!(f, "{:08} ", self.cpsr)?;
+        write!(f, "{}\n", self.cycles)
+    }
+}
+
+impl Drop for CPU {
+    fn drop(&mut self) {
+        for i in self.status_history.iter() {
+            self.output_file
+                .write(format!("{}", i).as_bytes())
+                .unwrap();
+        }
     }
 }
 

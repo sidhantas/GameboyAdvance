@@ -1,8 +1,9 @@
 use super::memory::{GBAMemory, MemoryError};
 
+pub const IO_BASE: usize = 0x4000000;
 const DISPCNT: usize = 0x000;
 const DISPSTAT: usize = 0x004;
-const VCOUNT: usize = 0x006;
+pub const VCOUNT: usize = 0x006;
 const BG0CNT: usize = 0x008;
 const BG1CNT: usize = 0x00A;
 const BG2CNT: usize = 0x00C;

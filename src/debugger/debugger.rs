@@ -9,9 +9,7 @@ use crossterm::{
 use std::{
     cell::RefCell,
     io::{self, Stdout},
-    mem,
     rc::Rc,
-    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -26,11 +24,7 @@ use tui::{
 use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
     memory::{
-        debugger_memory::DebuggerMemory,
-        memory::{
-            GBAMemory,
-            MemoryError::{ReadError, WriteError},
-        },
+        debugger_memory::DebuggerMemory, io_handlers::{IO_BASE, VCOUNT}, memory::GBAMemory
     },
 };
 
@@ -42,7 +36,7 @@ pub struct Debugger {
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub terminal_enabled: bool,
     pub end_debugger: bool,
-    pub cpu: Arc<Mutex<CPU>>,
+    pub cpu: CPU,
     pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
     pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
@@ -81,10 +75,10 @@ impl Debugger {
             )
         };
 
-        let cpu = Arc::new(Mutex::new(CPU::new(memory)));
+        let cpu = CPU::new(memory);
 
         Self {
-            memory_start_address: 0x0000000,
+            memory_start_address: 0x4000000,
             terminal_buffer: String::new(),
             terminal_history: Vec::new(),
             terminal_enabled: true,
@@ -145,6 +139,7 @@ pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
                         Constraint::Length(20),
                         Constraint::Length(20),
                         Constraint::Length(20),
+                        Constraint::Length(20),
                         Constraint::Length(50),
                     ]
                     .as_ref(),
@@ -168,12 +163,14 @@ pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
             let register_chunk = horizontal_chunks[1];
             let register_chunk_2 = horizontal_chunks[2];
             let flags_chunk = horizontal_chunks[3];
+            let ppu_chunk = horizontal_chunks[4];
             let memory_chunk = horizontal_chunks_1[0];
             let terminal_chunk = horizontal_chunks_1[1];
 
             {
-                let cpu = &debugger.cpu.lock().unwrap();
+                let cpu = &debugger.cpu;
                 draw_cpu(f, cpu_chunk, cpu).unwrap();
+                draw_ppu(f, ppu_chunk, cpu).unwrap();
                 draw_registers(f, register_chunk, 0, cpu).unwrap();
                 draw_registers(f, register_chunk_2, 10, cpu).unwrap();
                 draw_cpsr(f, flags_chunk, cpu).unwrap();
@@ -197,6 +194,65 @@ pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+fn draw_ppu(
+    f: &mut Frame<'_, CrosstermBackend<Stdout>>,
+    ppu_chunk: Rect,
+    cpu: &CPU,
+) -> Result<(), std::io::Error> {
+    let block = Block::default()
+        .title("PPU")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+
+    let flags_sections = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(ppu_chunk);
+
+    let ppu_regs = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1); 8])
+        .split(flags_sections[0]);
+
+    let ppu_values = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1); 8])
+        .split(flags_sections[1]);
+
+    f.render_widget(
+        Paragraph::new(format!("VCOUNT")).alignment(Alignment::Center),
+        ppu_regs[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.memory.readu16(IO_BASE + VCOUNT).data)).alignment(Alignment::Center),
+        ppu_values[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("X")).alignment(Alignment::Center),
+        ppu_regs[2],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.ppu.x)).alignment(Alignment::Center),
+        ppu_values[2],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("Y")).alignment(Alignment::Center),
+        ppu_regs[3],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.ppu.y)).alignment(Alignment::Center),
+        ppu_values[3],
+    );
+
+    f.render_widget(block, ppu_chunk);
+
+    Ok(())
+}
 fn draw_cpu(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,
     cpu_chunk: Rect,
@@ -310,12 +366,13 @@ fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
 
 fn handle_normal_mode_events(debugger: &mut Debugger, event: KeyEvent) {
     match event.code {
-        KeyCode::Char('n') => debugger.cpu.lock().unwrap().execute_cpu_cycle(),
+        KeyCode::Char('n') => debugger.cpu.execute_cpu_cycle(),
         KeyCode::Char('M') => debugger.memory_start_address -= 0x100,
         KeyCode::Char('m') => debugger.memory_start_address += 0x100,
         _ => {}
     }
 }
+
 
 fn draw_registers(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,

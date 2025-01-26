@@ -3,7 +3,6 @@ use std::thread;
 
 use debugger::debugger::start_debugger;
 use getopts::Options;
-use memory::memory::{GBAMemory, MemoryBus};
 use std::env;
 mod arm7tdmi;
 mod debugger;

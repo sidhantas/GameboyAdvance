@@ -1,32 +1,31 @@
-#![allow(unused)]
-use std::sync::{Arc, Mutex};
+use crate::memory::{io_handlers::VCOUNT, memory::MemoryBus};
 
-use crate::memory::memory::GBAMemory;
+const HDRAW: u32 = 240;
+const HBLANK: u32 = 68;
+const VDRAW: u32 = 160;
+const VBLANK: u32 = 68;
 
-
-struct Pixel {
-    bg_mode: u8,
-    display_frame_select: u8,
-    h_blank_interval_free: u8,
-    obj_char_vram_mapping: u8,
+#[derive(Default)]
+pub struct PPU {
+    pub x: u64,
+    pub y: u64,
 }
 
-impl Pixel {
-    pub fn new(memory: &GBAMemory) {
+
+impl PPU {
+    pub fn advance_ppu(&mut self, cycles: &mut u64, memory: &mut Box<dyn MemoryBus>) {
+        let dots = *cycles / 4;
+        *cycles %= 4;
+        self.x += dots;
+        if self.x > (HDRAW + HBLANK) as u64 {
+            self.y += 1;
+            self.x %= (HDRAW + HBLANK) as u64;
+
+            if self.y > (VDRAW + VBLANK) as u64 {
+                self.y %= (VDRAW + VBLANK) as u64;
+            }
+            memory.ppu_io_write(VCOUNT, self.y as u16);
+        }
 
     }
 }
-
-#[repr(u32)]
-enum DisplayAddresses {
-    DISPCNT = 0x4000_0000,
-    DISPSTAT = 0x4000_0004,
-    VCOUNT = 0x4000_0006,
-    BG0CNT = 0x4000_0008
-}
-
-pub struct PPU {
-    memory: Arc<Mutex<GBAMemory>>,
-    frame_buffer: Vec<u8>
-}
-

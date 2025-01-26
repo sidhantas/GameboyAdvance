@@ -109,6 +109,8 @@ impl Display for MemoryError {
     }
 }
 
+pub trait DebuggerMemoryBus: MemoryBus + MemoryBusNoPanic {}
+
 pub trait MemoryBusNoPanic {
     fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError>;
 
@@ -135,7 +137,11 @@ pub trait MemoryBus {
     fn writeu16(&mut self, address: usize, value: u16) -> CYCLES;
 
     fn writeu32(&mut self, address: usize, value: u32) -> CYCLES;
+
+    fn ppu_io_write(&mut self, address: usize, value: u16);
 }
+
+impl DebuggerMemoryBus for GBAMemory {}
 
 impl GBAMemory {
     pub fn new() -> Box<Self> {
@@ -448,6 +454,10 @@ impl MemoryBus for GBAMemory {
 
     fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         self.try_writeu32(address, value).unwrap()
+    }
+
+    fn ppu_io_write(&mut self, address: usize, value: u16) {
+        self.ioram[(address & 0xFFF) >> 1] = value;
     }
 }
 
