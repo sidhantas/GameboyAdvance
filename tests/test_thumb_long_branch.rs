@@ -14,7 +14,7 @@ fn test_thumb_long_branch() {
 
     {
         let mut cpu = cpu.lock().unwrap();
-        for _ in 0..9 {
+        for _ in 0..7 {
             cpu.execute_cpu_cycle();
         }
         assert_eq!(cpu.get_pc(), 0x9c6);

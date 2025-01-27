@@ -17,11 +17,11 @@ impl PPU {
         let dots = *cycles / 4;
         *cycles %= 4;
         self.x += dots;
-        if self.x > (HDRAW + HBLANK) as u64 {
+        if self.x >= (HDRAW + HBLANK) as u64 {
             self.y += 1;
             self.x %= (HDRAW + HBLANK) as u64;
 
-            if self.y > (VDRAW + VBLANK) as u64 {
+            if self.y >= (VDRAW + VBLANK) as u64 {
                 self.y %= (VDRAW + VBLANK) as u64;
             }
             memory.ppu_io_write(VCOUNT, self.y as u16);

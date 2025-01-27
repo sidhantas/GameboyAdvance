@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque, fmt::Display, fs::{File, OpenOptions}, io::Write
+    collections::VecDeque, fmt::Display, fs::{remove_file, File, OpenOptions}, io::Write
 };
 
 use crate::{graphics::ppu::PPU, memory::memory::MemoryBus, types::*, utils::bits::Bits};
@@ -34,6 +34,7 @@ pub enum FlagsRegister {
 
 #[derive(Default)]
 struct Status {
+    pub instruction_count: usize,
     pub registers: [WORD; 16],
     pub cpsr: WORD,
     pub cycles: u64,
@@ -59,8 +60,13 @@ pub struct CPU {
     status_history: VecDeque<Status>,
 }
 
+const OUTPUT_FILE: &str = "cycle_timings.txt";
+const HISTORY_SIZE: usize = 100_000;
+static mut INSTRUCTION_COUNT: usize = 0;
+
 impl CPU {
     pub fn new(memory: Box<dyn MemoryBus>) -> Self {
+        let _ = remove_file(OUTPUT_FILE);
         let mut cpu = Self {
             registers: [0; 16],
             executed_instruction_hex: 0,
@@ -80,12 +86,12 @@ impl CPU {
             output_file: OpenOptions::new()
                 .create(true)
                 .write(true)
-                .open("cycle_timings.txt")
+                .open(OUTPUT_FILE)
                 .unwrap(),
             cycles: 0,
             relative_cycles: 3,
             ppu: Default::default(),
-            status_history: VecDeque::with_capacity(10000),
+            status_history: VecDeque::with_capacity(HISTORY_SIZE),
         };
         cpu.flush_pipeline();
         cpu
@@ -94,8 +100,11 @@ impl CPU {
     #[no_mangle]
     pub fn execute_cpu_cycle(&mut self) {
         self.set_executed_instruction(format_args!(""));
-        if self.status_history.len() >= 10000 {
+        if self.status_history.len() >= HISTORY_SIZE {
             self.status_history.pop_front();
+        }
+        unsafe {
+            INSTRUCTION_COUNT += 1;
         }
         self.status_history.push_back(self.get_status());
         let mut execution_cycles = 0;
@@ -379,24 +388,28 @@ impl CPU {
         }
         status.cpsr = self.cpsr;
         status.cycles = self.cycles;
+        unsafe {
+            status.instruction_count = INSTRUCTION_COUNT;
+        }
         status
     }
 }
 
 impl Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ", self.instruction_count)?;
         for i in self.registers {
             write!(f, "{:08x} ", i)?;
         }
 
-        write!(f, "{:08} ", self.cpsr)?;
+        write!(f, "{:08x} ", self.cpsr)?;
         write!(f, "{}\n", self.cycles)
     }
 }
 
 impl Drop for CPU {
     fn drop(&mut self) {
-        for i in self.status_history.iter() {
+        for i in self.status_history.iter().skip(1) {
             self.output_file
                 .write(format!("{}", i).as_bytes())
                 .unwrap();

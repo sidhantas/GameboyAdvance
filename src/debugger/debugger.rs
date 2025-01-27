@@ -78,7 +78,7 @@ impl Debugger {
         let cpu = CPU::new(memory);
 
         Self {
-            memory_start_address: 0x4000000,
+            memory_start_address: 0x0000000,
             terminal_buffer: String::new(),
             terminal_history: Vec::new(),
             terminal_enabled: true,

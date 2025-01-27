@@ -70,7 +70,6 @@ const TM3CNT_H: usize = 0x10E;
 const KEYINPUT: usize = 0x130;
 const KEYCNT: usize = 0x132;
 
-
 const SOUNDBIAS: usize = 0x088;
 
 const IME: usize = 0x208;
@@ -96,9 +95,11 @@ enum BitMask {
 
 impl IORegisterDefinition {
     pub const fn new(mask: BitMask, needs_special_handling: bool) -> Self {
-        Self { mask, needs_special_handling }
+        Self {
+            mask,
+            needs_special_handling,
+        }
     }
-
 
     #[inline(always)]
     fn requires_special_handling(&self) -> bool {
@@ -109,105 +110,387 @@ impl IORegisterDefinition {
 const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     let mut definitions = [None; 0x412];
 
-    definitions[DISPCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[DISPSTAT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFF3F, 0xFF38), false));
-    definitions[VCOUNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x0000), false));
-    definitions[BG0CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[BG1CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[BG2CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[BG3CNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[BG0HOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG0VOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG1HOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG1VOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG2HOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG2VOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG3HOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[BG3VOFS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x01FF), false));
-    definitions[DX] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[DMX] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[DY] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[DMY] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG2X_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG2X_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0FFF), false));
-    definitions[BG2Y_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG2Y_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0FFF), false));
-    definitions[BG3_DX] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG3_DMX] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG3_DY] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG3_DMY] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG3X_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG3X_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0FFF), false));
-    definitions[BG3Y_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[BG3Y_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0FFF), false));
-    definitions[WIN0H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[WIN1H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[WIN0V] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[WIN1V] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0xFFFF), false));
-    definitions[WININ] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3F3F, 0x3F3F), false));
-    definitions[WINOUT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3F3F, 0x3F3F), false));
-    definitions[MOSAIC] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[BLDCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false));
-    definitions[BLDALPHA] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false));
-    definitions[BLDY] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x001F, 0x001F), false));
-    definitions[DMA0SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
-    definitions[DMA0DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
-    definitions[DMA0CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0x3FFF), false));
-    definitions[DMA0CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[DMA1SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
-    definitions[DMA1DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
-    definitions[DMA1CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0x3FFF), false));
-    definitions[DMA1CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[DMA2SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
-    definitions[DMA2DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x07FFFFFF), false));
-    definitions[DMA2CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0x3FFF), false));
-    definitions[DMA2CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[DMA3SAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x0FFFFFFF), false));
-    definitions[DMA3DAD] = Some(IORegisterDefinition::new(BitMask::THIRTYTWO(0, 0x0FFFFFFF), false));
-    definitions[DMA3CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0, 0xFFFF), false));
-    definitions[DMA3CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[TM0CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[TM0CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FB, 0x00FB), false));
-    definitions[TM1CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[TM1CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x00FF), false));
-    definitions[TM2CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[TM2CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x00FF), false));
-    definitions[TM3CNT_L] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[TM3CNT_H] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x00FF, 0x00FF), false));
-    definitions[KEYINPUT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x03FF, 0x03FF), false));
-    definitions[KEYCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xFFFF, 0xFFFF), false));
-    definitions[SOUNDBIAS] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xC3FE, 0xC3FE), false));
-    definitions[IME] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0001, 0x0001), false));
-    definitions[IE] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), false ));
-    definitions[IF] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), true));
-    definitions[WAITCNT] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0xDFFF, 0xDFFF), false));
+    definitions[DISPCNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[DISPSTAT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFF3F, 0xFF38),
+        false,
+    ));
+    definitions[VCOUNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x00FF, 0x0000),
+        false,
+    ));
+    definitions[BG0CNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[BG1CNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[BG2CNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[BG3CNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[BG0HOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG0VOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG1HOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG1VOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG2HOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG2VOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG3HOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[BG3VOFS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x01FF),
+        false,
+    ));
+    definitions[DX] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[DMX] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[DY] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[DMY] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG2X_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG2X_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0FFF),
+        false,
+    ));
+    definitions[BG2Y_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG2Y_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0FFF),
+        false,
+    ));
+    definitions[BG3_DX] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG3_DMX] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG3_DY] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG3_DMY] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG3X_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG3X_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0FFF),
+        false,
+    ));
+    definitions[BG3Y_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[BG3Y_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0FFF),
+        false,
+    ));
+    definitions[WIN0H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[WIN1H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[WIN0V] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[WIN1V] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0xFFFF),
+        false,
+    ));
+    definitions[WININ] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x3F3F, 0x3F3F),
+        false,
+    ));
+    definitions[WINOUT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x3F3F, 0x3F3F),
+        false,
+    ));
+    definitions[MOSAIC] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[BLDCNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x3FFF, 0x3FFF),
+        false,
+    ));
+    definitions[BLDALPHA] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x3FFF, 0x3FFF),
+        false,
+    ));
+    definitions[BLDY] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x001F, 0x001F),
+        false,
+    ));
+    definitions[DMA0SAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x07FFFFFF),
+        false,
+    ));
+    definitions[DMA0DAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x07FFFFFF),
+        false,
+    ));
+    definitions[DMA0CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0, 0x3FFF),
+        false,
+    ));
+    definitions[DMA0CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[DMA1SAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x07FFFFFF),
+        false,
+    ));
+    definitions[DMA1DAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x07FFFFFF),
+        false,
+    ));
+    definitions[DMA1CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0, 0x3FFF),
+        false,
+    ));
+    definitions[DMA1CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[DMA2SAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x07FFFFFF),
+        false,
+    ));
+    definitions[DMA2DAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x07FFFFFF),
+        false,
+    ));
+    definitions[DMA2CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0, 0x3FFF),
+        false,
+    ));
+    definitions[DMA2CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[DMA3SAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x0FFFFFFF),
+        false,
+    ));
+    definitions[DMA3DAD] = Some(IORegisterDefinition::new(
+        BitMask::THIRTYTWO(0, 0x0FFFFFFF),
+        false,
+    ));
+    definitions[DMA3CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0, 0xFFFF),
+        false,
+    ));
+    definitions[DMA3CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[TM0CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[TM0CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x00FB, 0x00FB),
+        false,
+    ));
+    definitions[TM1CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[TM1CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x00FF, 0x00FF),
+        false,
+    ));
+    definitions[TM2CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[TM2CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x00FF, 0x00FF),
+        false,
+    ));
+    definitions[TM3CNT_L] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[TM3CNT_H] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x00FF, 0x00FF),
+        false,
+    ));
+    definitions[KEYINPUT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x03FF, 0x03FF),
+        false,
+    ));
+    definitions[KEYCNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xFFFF, 0xFFFF),
+        false,
+    ));
+    definitions[SOUNDBIAS] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xC3FE, 0xC3FE),
+        false,
+    ));
+    definitions[IME] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0001, 0x0001),
+        false,
+    ));
+    definitions[IE] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x3FFF, 0x3FFF),
+        false,
+    ));
+    definitions[IF] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x3FFF, 0x3FFF),
+        true,
+    ));
+    definitions[WAITCNT] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0xDFFF, 0xDFFF),
+        false,
+    ));
     definitions[POSTFLG] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x01, 0x01), false));
     definitions[HALTCNT] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x80, 0x80), false));
-    definitions[0x110] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x112] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x114] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x110] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x112] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x114] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
     definitions[0x410] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x00, 0xFF), false));
-    definitions[0x206] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x20A] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x20C] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x20E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x210] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x212] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x214] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x216] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x218] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x21A] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x21C] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x21E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x04E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x056] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x058] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x05A] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x05C] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
-    definitions[0x05E] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+    definitions[0x206] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x20A] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x20C] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x20E] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x210] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x212] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x214] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x216] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x218] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x21A] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x21C] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x21E] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x04E] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x056] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x058] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x05A] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x05C] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
+    definitions[0x05E] = Some(IORegisterDefinition::new(
+        BitMask::SIXTEEN(0x0000, 0x0000),
+        false,
+    ));
     let mut i = 0x0E0;
     while i != 0x100 {
-        definitions[i] = Some(IORegisterDefinition::new(BitMask::SIXTEEN(0x0000, 0x0000), false));
+        definitions[i] = Some(IORegisterDefinition::new(
+            BitMask::SIXTEEN(0x0000, 0x0000),
+            false,
+        ));
         i += 2;
     }
 
@@ -221,7 +504,7 @@ pub fn io_load(region: &Vec<u16>, address: usize) -> u16 {
 
 fn masked_io_load(region: &Vec<u16>, address: usize) -> Result<u16, MemoryError> {
     let Ok(def) = get_io_definition(address) else {
-        return Ok(0)
+        return Ok(0);
     };
     if def.requires_special_handling() {
         match address {
@@ -261,7 +544,7 @@ pub fn io_store(region: &mut Vec<u16>, address: usize, value: u16) {
 fn masked_io_store(region: &mut Vec<u16>, address: usize, value: u16) -> Result<(), MemoryError> {
     let mut value = value;
     let Ok(def) = get_io_definition(address) else {
-        return Ok(())
+        return Ok(());
     };
     if def.requires_special_handling() {
         match address {
@@ -296,11 +579,13 @@ fn masked_io_store(region: &mut Vec<u16>, address: usize, value: u16) -> Result<
 
 #[inline(always)]
 fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError> {
-    let Some(io_definition) = IO_REGISTER_DEFINITIONS[offset] else {
-        return Err(MemoryError::NoIODefinition(offset));
+    if let Some(io_definition) = IO_REGISTER_DEFINITIONS[offset] {
+        return Ok(io_definition);
     };
-
-    Ok(io_definition)
+    if let Some(io_definition) = IO_REGISTER_DEFINITIONS[offset & 0xFFE] {
+        return Ok(io_definition);
+    };
+    return Err(MemoryError::NoIODefinition(offset));
 }
 
 impl GBAMemory {
@@ -323,12 +608,9 @@ impl GBAMemory {
 
     pub(super) fn io_writeu8(&mut self, address: usize, value: u8) -> Result<(), MemoryError> {
         let mut current_value = io_load(&self.ioram, address & 0xFFE);
-        current_value &= 0xFFFF << !(address & 0b1);
-        masked_io_store(
-            &mut self.ioram,
-            address & 0xFFF,
-            current_value | (value as u16) << (8 * (address & 0b1)),
-        )
+        current_value &= 0xFF << (8 * !(address & 0b1));
+        current_value |= (value as u16) << (8 * (address & 0b1));
+        masked_io_store(&mut self.ioram, address & 0xFFF, current_value)
     }
 
     pub(super) fn io_writeu16(&mut self, address: usize, value: u16) -> Result<(), MemoryError> {
@@ -338,7 +620,7 @@ impl GBAMemory {
     pub(super) fn io_writeu32(&mut self, address: usize, value: u32) -> Result<(), MemoryError> {
         let offset = address & 0xFFC;
         let Ok(io_definition) = get_io_definition(offset) else {
-            return Ok(())
+            return Ok(());
         };
 
         match io_definition.mask {
@@ -366,10 +648,7 @@ impl GBAMemory {
 mod tests {
     use rstest::rstest;
 
-    use crate::memory::{
-        io_handlers::*,
-        memory::GBAMemory,
-    };
+    use crate::memory::{io_handlers::*, memory::GBAMemory};
 
     #[rstest]
     #[case(DISPCNT, 0xAB, 0xAB)]
@@ -459,5 +738,14 @@ mod tests {
         memory.io_writeu16(IF, write_val).unwrap();
 
         assert_eq!(io_load(&memory.ioram, IF), expected_val);
+    }
+
+    #[rstest]
+    fn test_write_io8() {
+        let mut memory = GBAMemory::new();
+        io_store(&mut memory.ioram, SOUNDBIAS, 0x200);
+        memory.io_writeu8(SOUNDBIAS + 1, 0x42).unwrap();
+
+        assert_eq!(io_load(&memory.ioram, SOUNDBIAS), 0x4200);
     }
 }

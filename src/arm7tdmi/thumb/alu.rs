@@ -189,7 +189,7 @@ impl CPU {
     }
 
     fn thumb_move_imm(&mut self, rd: REGISTER, imm: u8) {
-        self.set_flag_from_bit(FlagsRegister::N, imm.get_bit(7));
+        self.reset_flag(FlagsRegister::N);
         if imm == 0 {
             self.set_flag(FlagsRegister::Z);
         } else {
@@ -347,7 +347,7 @@ impl CPU {
 
     #[allow(unused)]
     fn thumb_neg(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        self.arm_rsb(rd, 0, operand2, set_flags);
+        self.arm_rsb(rd, operand2, 0, set_flags);
     }
 
     fn thumb_mul(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -856,7 +856,7 @@ mod thumb_move_compare_add_subtract_tests {
     }
 
     #[test]
-    fn should_move_immediate_into_r0_and_set_n_flag() {
+    fn should_move_immediate_into_r0_and_not_set_n_flag() {
         let memory = GBAMemory::new();
 
         let mut cpu = CPU::new(memory);
@@ -868,7 +868,7 @@ mod thumb_move_compare_add_subtract_tests {
 
         assert_eq!(cpu.get_register(0), 150);
         assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
         assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
     }
 
