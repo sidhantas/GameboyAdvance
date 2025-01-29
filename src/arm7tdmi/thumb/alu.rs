@@ -237,15 +237,15 @@ impl CPU {
             0x2 => {
                 cycles += self.advance_pipeline() + 1;
                 CPU::thumb_lsl
-            },
+            }
             0x3 => {
                 cycles += self.advance_pipeline() + 1;
                 CPU::thumb_lsr_register
-            },
+            }
             0x4 => {
                 cycles += self.advance_pipeline() + 1;
                 CPU::thumb_asr_register
-            },
+            }
             0x5 => CPU::arm_adc,
             0x6 => CPU::arm_sbc,
             0x7 => {
@@ -259,17 +259,18 @@ impl CPU {
             0xC => CPU::arm_orr,
             0xD => {
                 let multiplier = self.get_register(rd);
-                cycles += if multiplier & 0xFF00_0000 > 0 {
-                    4
-                } else if multiplier & 0x00FF_0000 > 0 {
-                    3
-                } else if multiplier & 0x0000_FF00 > 0 {
-                    2
-                } else {
-                    1
-                };
+                cycles +=
+                    if multiplier & 0xFFFF_FF00 == 0 || multiplier & 0xFFFF_FF00 == 0xFFFF_FF00 {
+                        1
+                    } else if multiplier & 0xFFFF_0000 == 0 || multiplier & 0xFFFF_0000 == 0xFFFF_0000 {
+                        2
+                    } else if multiplier & 0xFF00_0000 == 0 || multiplier & 0xFF00_0000 == 0xFFFF_0000 {
+                        3
+                    } else {
+                        4
+                    };
                 CPU::thumb_mul
-            },
+            }
             0xE => CPU::arm_bic,
             0xF => CPU::arm_mvn,
             _ => panic!("Unimplemented operation"),
@@ -351,7 +352,7 @@ impl CPU {
     }
 
     fn thumb_mul(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let result = operand1 * operand2;
+        let result = (operand1 as u64 * operand2 as u64) as u32;
         if set_flags {
             self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
             if result == 0 {
@@ -359,7 +360,6 @@ impl CPU {
             } else {
                 self.reset_flag(FlagsRegister::Z);
             }
-            self.reset_flag(FlagsRegister::N);
         }
         self.set_register(rd, result);
     }

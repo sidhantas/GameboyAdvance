@@ -2,7 +2,7 @@ use super::memory::{GBAMemory, MemoryError};
 
 pub const IO_BASE: usize = 0x4000000;
 const DISPCNT: usize = 0x000;
-const DISPSTAT: usize = 0x004;
+pub const DISPSTAT: usize = 0x004;
 pub const VCOUNT: usize = 0x006;
 const BG0CNT: usize = 0x008;
 const BG1CNT: usize = 0x00A;
@@ -67,14 +67,14 @@ const TM2CNT_L: usize = 0x108;
 const TM2CNT_H: usize = 0x10A;
 const TM3CNT_L: usize = 0x10C;
 const TM3CNT_H: usize = 0x10E;
-const KEYINPUT: usize = 0x130;
+pub const KEYINPUT: usize = 0x130;
 const KEYCNT: usize = 0x132;
 
 const SOUNDBIAS: usize = 0x088;
 
-const IME: usize = 0x208;
-const IE: usize = 0x200;
-const IF: usize = 0x202;
+pub const IME: usize = 0x208;
+pub const IE: usize = 0x200;
+pub const IF: usize = 0x202;
 const WAITCNT: usize = 0x204;
 const POSTFLG: usize = 0x300;
 const HALTCNT: usize = 0x301;
@@ -371,8 +371,8 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
         false,
     ));
     definitions[KEYINPUT] = Some(IORegisterDefinition::new(
-        BitMask::SIXTEEN(0x03FF, 0x03FF),
-        false,
+        BitMask::SIXTEEN(0x03FF, 0x0000),
+        true,
     ));
     definitions[KEYCNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
@@ -508,7 +508,8 @@ fn masked_io_load(region: &Vec<u16>, address: usize) -> Result<u16, MemoryError>
     };
     if def.requires_special_handling() {
         match address {
-            IF => {}
+            IF => {},
+            KEYINPUT => {}
             _ => todo!(),
         }
     }
@@ -549,7 +550,10 @@ fn masked_io_store(region: &mut Vec<u16>, address: usize, value: u16) -> Result<
     if def.requires_special_handling() {
         match address {
             IF => {
-                value = io_load(region, address) ^ value;
+                value = io_load(region, address) & !value;
+            },
+            KEYINPUT => {
+                return Ok(())
             }
             _ => return Err(MemoryError::NoIODefinition(address)),
         }
@@ -678,6 +682,7 @@ mod tests {
     #[case(HALTCNT, 0xFFFF, 0x8001)]
     #[case(IE, 0xFFFE, 0x3FFE)]
     #[case(DISPSTAT, 0xFFFF, 0xFF3F)]
+    #[case(KEYINPUT, 0x3FF, 0x3FF)]
     fn test_regular_read_io_16(
         #[case] address: usize,
         #[case] write_value: u16,

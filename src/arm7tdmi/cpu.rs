@@ -1,8 +1,21 @@
 use std::{
-    collections::VecDeque, fmt::Display, fs::{remove_file, File, OpenOptions}, io::Write
+    collections::VecDeque,
+    fmt::Display,
+    fs::{remove_file, File, OpenOptions},
+    io::Write,
 };
 
-use crate::{graphics::ppu::PPU, memory::memory::MemoryBus, types::*, utils::bits::Bits};
+use crate::{
+    graphics::ppu::PPU,
+    memory::{
+        io_handlers::{IE, IF, IME, IO_BASE},
+        memory::MemoryBus,
+    },
+    types::*,
+    utils::bits::Bits,
+};
+
+use super::interrupts::Exceptions;
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -58,6 +71,7 @@ pub struct CPU {
     pub relative_cycles: u64,
     pub ppu: PPU,
     status_history: VecDeque<Status>,
+    pub(super) pipeline_stalled: bool,
 }
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
@@ -92,6 +106,7 @@ impl CPU {
             relative_cycles: 3,
             ppu: Default::default(),
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
+            pipeline_stalled: false,
         };
         cpu.flush_pipeline();
         cpu
@@ -106,7 +121,17 @@ impl CPU {
         unsafe {
             INSTRUCTION_COUNT += 1;
         }
+        let ime = self.memory.readu16(IO_BASE + IME).data;
+        let interrupt_flags_register = self.memory.readu16(IO_BASE + IF).data;
+        let interrupt_enable_register = self.memory.readu16(IO_BASE + IE).data;
+
         self.status_history.push_back(self.get_status());
+        if (interrupt_flags_register & interrupt_enable_register) > 0
+            && ime > 0
+            && !self.cpsr.bit_is_set(7)
+        {
+            self.raise_exception(Exceptions::IRQ);
+        }
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
@@ -117,8 +142,10 @@ impl CPU {
         }
 
         if let None = self.prefetch[1] {
-            // refill pipeline if decoded instruction doesn't advance the pipeline
-            execution_cycles += self.advance_pipeline() as u64;
+            if self.pipeline_stalled {
+                // refill pipeline if decoded instruction doesn't advance the pipeline
+                execution_cycles += self.advance_pipeline() as u64;
+            }
         }
         self.cycles += execution_cycles;
         self.relative_cycles += execution_cycles;
@@ -387,7 +414,7 @@ impl CPU {
             status.registers[i] = self.get_register(i as REGISTER);
         }
         status.cpsr = self.cpsr;
-        status.cycles = self.cycles;
+        status.cycles = 0;
         unsafe {
             status.instruction_count = INSTRUCTION_COUNT;
         }
@@ -410,9 +437,7 @@ impl Display for Status {
 impl Drop for CPU {
     fn drop(&mut self) {
         for i in self.status_history.iter().skip(1) {
-            self.output_file
-                .write(format!("{}", i).as_bytes())
-                .unwrap();
+            self.output_file.write(format!("{}", i).as_bytes()).unwrap();
         }
     }
 }

@@ -5,7 +5,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use super::io_handlers::io_store;
+use super::io_handlers::{io_store, KEYINPUT};
 
 pub struct MemoryFetch<T> {
     pub cycles: CYCLES,
@@ -178,6 +178,7 @@ impl GBAMemory {
 
         let mut ioram = vec![0; IORAM_SIZE >> 1]; 
         io_store(&mut ioram, 0x088, 0x200);
+        io_store(&mut ioram, KEYINPUT, 0x03FF);
 
         Box::new(Self {
             bios: vec![0; BIOS_SIZE >> 2],
@@ -232,19 +233,19 @@ impl MemoryBusNoPanic for GBAMemory {
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address).to_le_bytes()[address & 0b11],
             EXWRAM_REGION => {
-                memory_load(&self.exwram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
+                memory_load(&self.exwram, address & 0x3FFFF).to_le_bytes()[address & 0b11]
             }
             IWRAM_REGION => {
-                memory_load(&self.iwram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
+                memory_load(&self.iwram, address & 0x7FFF).to_le_bytes()[address & 0b11]
             }
             IORAM_REGION => self.io_readu8(address)?,
             BGRAM_REGION => {
-                memory_load(&self.bgram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
+                memory_load(&self.bgram, address & 0x3FF).to_le_bytes()[address & 0b11]
             }
             VRAM_REGION => {
                 memory_load(&self.vram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
-            OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF).to_le_bytes()[address & 0b11],
+            OAM_REGION => memory_load(&self.oam, address & 0x3FF).to_le_bytes()[address & 0b11],
             ROM0A_REGION..=ROM2B_REGION => {
                 memory_load(&self.rom, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
@@ -288,7 +289,7 @@ impl MemoryBusNoPanic for GBAMemory {
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
             EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
-            IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
+            IWRAM_REGION => memory_load(&self.iwram, address & 0x7FFF),
             IORAM_REGION => self.io_readu32(address)?,
             BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),

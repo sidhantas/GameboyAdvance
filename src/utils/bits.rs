@@ -1,5 +1,5 @@
 
-use crate::types::{BYTE, WORD};
+use crate::types::{BYTE, HWORD, WORD};
 
 pub trait Bits {
     fn twos_complement(self) -> Self;
@@ -31,6 +31,32 @@ impl Bits for WORD {
     }
     
     fn twos_complement(self) -> WORD {
+        return !self + 1
+    }
+}
+
+impl Bits for HWORD {
+    fn bit_is_set(&self, bit: u8) -> bool {
+        assert!(bit < size_of::<Self>() as u8);
+        return self >> bit & 0x01 != 0;
+    }
+
+    fn set_bit(&mut self, bit: u8) {
+        assert!(bit < size_of::<Self>() as u8);
+        *self |= 1 << bit;
+    }
+
+    fn reset_bit(&mut self, bit: u8) {
+        assert!(bit < size_of::<Self>() as u8);
+        *self &= !(1 << bit);
+    }
+
+    fn get_bit(self, bit: u8) -> Self {
+        assert!(bit < size_of::<Self>() as u8);
+        return (self >> bit & 0x01) as Self;
+    }
+    
+    fn twos_complement(self) -> Self {
         return !self + 1
     }
 }

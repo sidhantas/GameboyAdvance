@@ -25,7 +25,7 @@ use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
     memory::{
         debugger_memory::DebuggerMemory, io_handlers::{IO_BASE, VCOUNT}, memory::GBAMemory
-    },
+    }, utils::bits::Bits,
 };
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
@@ -455,12 +455,12 @@ fn draw_cpsr(
 
     let flag_names = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1); 8])
+        .constraints([Constraint::Length(1); 9])
         .split(flags_sections[0]);
 
     let flag_values = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1); 8])
+        .constraints([Constraint::Length(1); 9])
         .split(flags_sections[1]);
 
     f.render_widget(
@@ -492,6 +492,10 @@ fn draw_cpsr(
     f.render_widget(
         Paragraph::new(format!("CPSR")).alignment(Alignment::Center),
         flag_names[7],
+    );
+    f.render_widget(
+        Paragraph::new(format!("NO IRQ")).alignment(Alignment::Center),
+        flag_names[8],
     );
 
     f.render_widget(
@@ -540,6 +544,10 @@ fn draw_cpsr(
     f.render_widget(
         Paragraph::new(format!("{:08x}", cpu.cpsr)).alignment(Alignment::Center),
         flag_values[7],
+    );
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.cpsr.get_bit(7))).alignment(Alignment::Center),
+        flag_values[8],
     );
     f.render_widget(block, flags_chunk);
 

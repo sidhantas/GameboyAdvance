@@ -7,7 +7,8 @@ use crate::{
 };
 
 use super::{
-    cpu::{InstructionMode, CPU}, interrupts::Exceptions,
+    cpu::{FlagsRegister, InstructionMode, CPU},
+    interrupts::Exceptions,
 };
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
 pub type ALUOperation =
@@ -55,7 +56,36 @@ impl CPU {
     }
 
     pub fn arm_multiply(&mut self, instruction: ARMByteCode) -> CYCLES {
-        todo!();
+        let rd = (instruction & 0x000F_0000) >> 16;
+        let rs = (instruction & 0x0000_0F00) >> 8;
+        let rm = instruction & 0x0000_000F;
+        let set_flags = instruction.bit_is_set(20);
+
+        let operand1 = self.get_register(rm) as u64;
+        let operand2 = self.get_register(rs) as u64;
+
+        let result = (operand1 * operand2) as u32;
+        self.set_register(rd, result);
+
+        self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+        if set_flags {
+            if result == 0 {
+                self.reset_flag(FlagsRegister::Z);
+            } else {
+                self.set_flag(FlagsRegister::Z);
+            }
+        }
+
+        self.set_executed_instruction(format_args!("MUL {} {} {}", rd, rm, rs));
+        if operand2 & 0xFFFF_FF00 == 0 || operand2 & 0xFFFF_FF00 == 0xFFFF_FF00 {
+            1
+        } else if operand2 & 0xFFFF_0000 == 0 || operand2 & 0xFFFF_0000 == 0xFFFF_0000 {
+            2
+        } else if operand2 & 0xFF00_0000 == 0 || operand2 & 0xFF00_0000 == 0xFFFF_0000 {
+            3
+        } else {
+            4
+        }
     }
 
     pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode) -> CYCLES {
@@ -74,7 +104,6 @@ impl CPU {
 
         return cycles;
     }
-
 
     pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) -> CYCLES {
         let mut destination = self.get_register(instruction & 0x0000_000F);
@@ -110,7 +139,7 @@ mod instruction_tests {
     #[test]
     fn branch_ends_up_at_correct_address() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xea000002); // b 0x10
@@ -127,7 +156,7 @@ mod instruction_tests {
     #[test]
     fn branch_can_go_backwards() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xeafffffa); // b 0x0
@@ -146,7 +175,7 @@ mod instruction_tests {
     #[test]
     fn branch_with_link_stores_the_instruction_correctly() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
 
         cpu.prefetch[0] = Some(0xebfffffa); // b 0
@@ -164,7 +193,7 @@ mod instruction_tests {
     #[test]
     fn software_interrupt_goes_to_the_correct_interrupt_vec() {
         let memory = GBAMemory::new();
-        
+
         let mut cpu = CPU::new(memory);
         cpu.set_mode(CPUMode::USER);
         cpu.set_pc(0xF8);
