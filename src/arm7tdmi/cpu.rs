@@ -26,7 +26,7 @@ pub enum InstructionMode {
     THUMB,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum CPUMode {
     USER = 0b10000,
     FIQ = 0b10001, // Fast Interrupt
@@ -61,7 +61,7 @@ pub struct CPU {
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
     pub memory: Box<dyn MemoryBus>,
-    pub prefetch: [Option<WORD>; 2],
+    pub prefetch: [Option<Instruction>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
     pub cpsr: WORD,
@@ -71,12 +71,27 @@ pub struct CPU {
     pub relative_cycles: u64,
     pub ppu: PPU,
     status_history: VecDeque<Status>,
-    pub(super) pipeline_stalled: bool,
+    pub(super) pipeline_stalled: u8,
+}
+
+#[derive(Clone, Copy)]
+pub enum Instruction {
+    ARM(u32),
+    THUMB(u32),
+}
+
+impl Instruction {
+    pub fn unwrap_opcode(&self) -> u32 {
+        match self {
+            Instruction::ARM(opcode) => *opcode,
+            Instruction::THUMB(opcode) => *opcode,
+        }
+    }
 }
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
 const HISTORY_SIZE: usize = 100_000;
-static mut INSTRUCTION_COUNT: usize = 0;
+pub static mut INSTRUCTION_COUNT: usize = 0;
 
 impl CPU {
     pub fn new(memory: Box<dyn MemoryBus>) -> Self {
@@ -106,7 +121,7 @@ impl CPU {
             relative_cycles: 3,
             ppu: Default::default(),
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
-            pipeline_stalled: false,
+            pipeline_stalled: 0,
         };
         cpu.flush_pipeline();
         cpu
@@ -121,11 +136,11 @@ impl CPU {
         unsafe {
             INSTRUCTION_COUNT += 1;
         }
+        self.status_history.push_back(self.get_status());
         let ime = self.memory.readu16(IO_BASE + IME).data;
         let interrupt_flags_register = self.memory.readu16(IO_BASE + IF).data;
         let interrupt_enable_register = self.memory.readu16(IO_BASE + IE).data;
 
-        self.status_history.push_back(self.get_status());
         if (interrupt_flags_register & interrupt_enable_register) > 0
             && ime > 0
             && !self.cpsr.bit_is_set(7)
@@ -135,17 +150,15 @@ impl CPU {
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
-            self.executed_instruction_hex = self.prefetch[1].unwrap_or(0x0);
+            self.executed_instruction_hex = decoded_instruction.instruction;
             self.prefetch[1] = None;
             execution_cycles +=
                 ((decoded_instruction.executable)(self, decoded_instruction.instruction)) as u64;
         }
 
         if let None = self.prefetch[1] {
-            if self.pipeline_stalled {
-                // refill pipeline if decoded instruction doesn't advance the pipeline
-                execution_cycles += self.advance_pipeline() as u64;
-            }
+            // refill pipeline if decoded instruction doesn't advance the pipeline
+            execution_cycles += self.advance_pipeline() as u64;
         }
         self.cycles += execution_cycles;
         self.relative_cycles += execution_cycles;
@@ -281,7 +294,7 @@ impl CPU {
             x if x == CPUMode::ABT as u8 => CPUMode::ABT,
             x if x == CPUMode::UND as u8 => CPUMode::UND,
             x if x == CPUMode::SYS as u8 => CPUMode::SYS,
-            _ => panic!("Impossible cpsr value"),
+            _ => panic!("Impossible cpsr value {:#x}", self.cpsr),
         }
     }
 
@@ -312,7 +325,12 @@ impl CPU {
                 InstructionMode::THUMB => self.memory.readu16(self.get_pc() as usize).into(),
             }
         };
-        self.prefetch[0] = Some(memory_fetch.data);
+        match self.get_instruction_mode() {
+            InstructionMode::ARM => self.prefetch[0] = Some(Instruction::ARM(memory_fetch.data)),
+            InstructionMode::THUMB => {
+                self.prefetch[0] = Some(Instruction::THUMB(memory_fetch.data))
+            }
+        }
         self.increment_pc();
 
         memory_fetch.cycles

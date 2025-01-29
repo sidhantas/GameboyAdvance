@@ -176,7 +176,7 @@ impl GBAMemory {
         wait_cycles_u32[ROM2A_REGION] = 8;
         wait_cycles_u32[ROM2B_REGION] = 8;
 
-        let mut ioram = vec![0; IORAM_SIZE >> 1]; 
+        let mut ioram = vec![0; IORAM_SIZE >> 1];
         io_store(&mut ioram, 0x088, 0x200);
         io_store(&mut ioram, KEYINPUT, 0x03FF);
 
@@ -212,7 +212,7 @@ impl GBAMemory {
 
     pub fn initialize_rom(&mut self, filename: String) -> Result<(), std::io::Error> {
         let mut index = 0;
-        let mut rom_file = File::options().read(true).open(filename)?;
+        let mut rom_file = File::options().read(true).open(filename).unwrap();
         let mut buffer = [0; 4];
         rom_file.rewind()?;
         while let Ok(read_bytes) = rom_file.read(&mut buffer[..]) {
@@ -227,25 +227,30 @@ impl GBAMemory {
     }
 }
 
+const EX_WRAM_MIRROR_MASK: usize = 0x3FFFF;
+const IW_WRAM_MIRROR_MASK: usize = 0x7FFF;
+const BGRAM_MIRROR_MASK: usize = 0x3FF;
+const OAM_MIRROR_MASK: usize = 0x3FF;
+
 impl MemoryBusNoPanic for GBAMemory {
     fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError> {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address).to_le_bytes()[address & 0b11],
-            EXWRAM_REGION => {
-                memory_load(&self.exwram, address & 0x3FFFF).to_le_bytes()[address & 0b11]
-            }
-            IWRAM_REGION => {
-                memory_load(&self.iwram, address & 0x7FFF).to_le_bytes()[address & 0b11]
-            }
+            EXWRAM_REGION => memory_load(&self.exwram, address & EX_WRAM_MIRROR_MASK).to_le_bytes()
+                [address & 0b11],
+            IWRAM_REGION => memory_load(&self.iwram, address & IW_WRAM_MIRROR_MASK).to_le_bytes()
+                [address & 0b11],
             IORAM_REGION => self.io_readu8(address)?,
             BGRAM_REGION => {
-                memory_load(&self.bgram, address & 0x3FF).to_le_bytes()[address & 0b11]
+                memory_load(&self.bgram, address & BGRAM_MIRROR_MASK).to_le_bytes()[address & 0b11]
             }
             VRAM_REGION => {
                 memory_load(&self.vram, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
-            OAM_REGION => memory_load(&self.oam, address & 0x3FF).to_le_bytes()[address & 0b11],
+            OAM_REGION => {
+                memory_load(&self.oam, address & OAM_MIRROR_MASK).to_le_bytes()[address & 0b11]
+            }
             ROM0A_REGION..=ROM2B_REGION => {
                 memory_load(&self.rom, address & 0xFFFFFF).to_le_bytes()[address & 0b11]
             }
@@ -262,17 +267,17 @@ impl MemoryBusNoPanic for GBAMemory {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
-            EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
-            IWRAM_REGION => memory_load(&self.iwram, address & 0xFFFFFF),
+            EXWRAM_REGION => memory_load(&self.exwram, address & EX_WRAM_MIRROR_MASK),
+            IWRAM_REGION => memory_load(&self.iwram, address & IW_WRAM_MIRROR_MASK),
             IORAM_REGION => {
                 return Ok(MemoryFetch {
                     data: self.io_readu16(address)?,
                     cycles: self.wait_cycles_u16[region],
                 })
             }
-            BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
+            BGRAM_REGION => memory_load(&self.bgram, address & BGRAM_MIRROR_MASK),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
-            OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
+            OAM_REGION => memory_load(&self.oam, address & OAM_MIRROR_MASK),
             ROM0A_REGION..=ROM2B_REGION => memory_load(&self.rom, address & 0xFFFFFF),
             SRAM_REGION => memory_load(&self.sram, address & 0xFFFFFF),
             _ => return Err(MemoryError::ReadError(address)),
@@ -288,12 +293,12 @@ impl MemoryBusNoPanic for GBAMemory {
         let region = address >> 24;
         let data = match region {
             BIOS_REGION => memory_load(&self.bios, address),
-            EXWRAM_REGION => memory_load(&self.exwram, address & 0xFFFFFF),
-            IWRAM_REGION => memory_load(&self.iwram, address & 0x7FFF),
+            EXWRAM_REGION => memory_load(&self.exwram, address & EX_WRAM_MIRROR_MASK),
+            IWRAM_REGION => memory_load(&self.iwram, address & IW_WRAM_MIRROR_MASK),
             IORAM_REGION => self.io_readu32(address)?,
-            BGRAM_REGION => memory_load(&self.bgram, address & 0xFFFFFF),
+            BGRAM_REGION => memory_load(&self.bgram, address & BGRAM_MIRROR_MASK),
             VRAM_REGION => memory_load(&self.vram, address & 0xFFFFFF),
-            OAM_REGION => memory_load(&self.oam, address & 0xFFFFFF),
+            OAM_REGION => memory_load(&self.oam, address & OAM_MIRROR_MASK),
             ROM0A_REGION..=ROM2B_REGION => memory_load(&self.rom, address & 0xFFFFFF),
             SRAM_REGION => memory_load(&self.sram, address & 0xFFFFFF),
             _ => return Err(MemoryError::ReadError(address)),
@@ -310,23 +315,28 @@ impl MemoryBusNoPanic for GBAMemory {
         match region {
             BIOS_REGION => {}
             EXWRAM_REGION => {
-                let mut current_value = memory_load(&self.exwram, address & 0xFFFFFF);
+                let mirror_masked_address = address & EX_WRAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.exwram, mirror_masked_address);
                 current_value &= !(0xFF << 8 * (address & 0b11));
                 let value = current_value | ((value as u32) << (8 * (address & 0b11)));
-                memory_store(&mut self.exwram, address & 0xFFFFFF, value);
+                memory_store(&mut self.exwram, mirror_masked_address, value);
             }
             IWRAM_REGION => {
-                let mut current_value = memory_load(&self.iwram, address & 0xFFFFFF);
-                current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
-                memory_store(&mut self.iwram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & IW_WRAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.iwram, mirror_masked_address);
+                current_value &= !(0xFF << 8 * (mirror_masked_address & 0b11));
+                let value =
+                    current_value | ((value as u32) << (8 * (mirror_masked_address & 0b11)));
+                memory_store(&mut self.iwram, mirror_masked_address, value);
             }
             IORAM_REGION => self.io_writeu8(address, value)?,
             BGRAM_REGION => {
-                let mut current_value = memory_load(&self.bgram, address & 0xFFFFFF);
-                current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
-                memory_store(&mut self.bgram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & BGRAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.bgram, mirror_masked_address);
+                current_value &= !(0xFF << 8 * (mirror_masked_address & 0b11));
+                let value =
+                    current_value | ((value as u32) << (8 * (mirror_masked_address & 0b11)));
+                memory_store(&mut self.bgram, mirror_masked_address, value);
             }
             VRAM_REGION => {
                 let mut current_value = memory_load(&self.vram, address & 0xFFFFFF);
@@ -335,10 +345,12 @@ impl MemoryBusNoPanic for GBAMemory {
                 memory_store(&mut self.vram, address & 0xFFFFFF, value);
             }
             OAM_REGION => {
-                let mut current_value = memory_load(&self.oam, address & 0xFFFFFF);
-                current_value &= !(0xFF << 8 * (address & 0b11));
-                let value = current_value | ((value as u32) << (8 * (address & 0b11)));
-                memory_store(&mut self.oam, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & OAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.oam, mirror_masked_address);
+                current_value &= !(0xFF << 8 * (mirror_masked_address & 0b11));
+                let value =
+                    current_value | ((value as u32) << (8 * (mirror_masked_address & 0b11)));
+                memory_store(&mut self.oam, mirror_masked_address, value);
             }
             ROM0A_REGION..=ROM2B_REGION => {}
             SRAM_REGION => {
@@ -358,23 +370,26 @@ impl MemoryBusNoPanic for GBAMemory {
         match region {
             BIOS_REGION => {}
             EXWRAM_REGION => {
-                let mut current_value = memory_load(&self.exwram, address & 0xFFFFFE);
-                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
-                memory_store(&mut self.exwram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & EX_WRAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.exwram, mirror_masked_address & 0xFFFFFE);
+                current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                memory_store(&mut self.exwram, mirror_masked_address & 0xFFFFFF, value);
             }
             IWRAM_REGION => {
-                let mut current_value = memory_load(&self.iwram, address & 0xFFFFFE);
-                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
-                memory_store(&mut self.iwram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & IW_WRAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.iwram, mirror_masked_address & 0xFFFFFE);
+                current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                memory_store(&mut self.iwram, mirror_masked_address & 0xFFFFFF, value);
             }
             IORAM_REGION => self.io_writeu16(address, value)?,
             BGRAM_REGION => {
-                let mut current_value = memory_load(&self.bgram, address & 0xFFFFFE);
-                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
-                memory_store(&mut self.bgram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & BGRAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.bgram, mirror_masked_address & 0xFFFFFE);
+                current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                memory_store(&mut self.bgram, mirror_masked_address & 0xFFFFFF, value);
             }
             VRAM_REGION => {
                 let mut current_value = memory_load(&self.vram, address & 0xFFFFFE);
@@ -383,10 +398,11 @@ impl MemoryBusNoPanic for GBAMemory {
                 memory_store(&mut self.vram, address & 0xFFFFFF, value);
             }
             OAM_REGION => {
-                let mut current_value = memory_load(&self.oam, address & 0xFFFFFE);
-                current_value &= !(0xFFFFu32 << (16 * ((address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((address >> 1) & 0b1)));
-                memory_store(&mut self.oam, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & OAM_MIRROR_MASK;
+                let mut current_value = memory_load(&self.oam, mirror_masked_address & 0xFFFFFE);
+                current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                memory_store(&mut self.oam, mirror_masked_address & 0xFFFFFF, value);
             }
             ROM0A_REGION..=ROM2B_REGION => {}
             SRAM_REGION => {
@@ -406,20 +422,24 @@ impl MemoryBusNoPanic for GBAMemory {
         match region {
             BIOS_REGION => {}
             EXWRAM_REGION => {
-                memory_store(&mut self.exwram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & EX_WRAM_MIRROR_MASK;
+                memory_store(&mut self.exwram, mirror_masked_address, value);
             }
             IWRAM_REGION => {
-                memory_store(&mut self.iwram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & IW_WRAM_MIRROR_MASK;
+                memory_store(&mut self.iwram, mirror_masked_address & 0xFFFFFF, value);
             }
             IORAM_REGION => self.io_writeu32(address, value)?,
             BGRAM_REGION => {
-                memory_store(&mut self.bgram, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & OAM_MIRROR_MASK;
+                memory_store(&mut self.bgram, mirror_masked_address & 0xFFFFFF, value);
             }
             VRAM_REGION => {
                 memory_store(&mut self.vram, address & 0xFFFFFF, value);
             }
             OAM_REGION => {
-                memory_store(&mut self.oam, address & 0xFFFFFF, value);
+                let mirror_masked_address = address & OAM_MIRROR_MASK;
+                memory_store(&mut self.oam, mirror_masked_address & 0xFFFFFF, value);
             }
             ROM0A_REGION..=ROM2B_REGION => {}
             SRAM_REGION => {

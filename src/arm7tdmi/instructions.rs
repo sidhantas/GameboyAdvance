@@ -17,7 +17,7 @@ pub type ALUOperation =
 #[derive(Clone, Copy)]
 pub struct ARMDecodedInstruction {
     pub executable: ARMExecutable,
-    pub instruction: ARMByteCode,
+    pub instruction: u32,
 }
 
 impl Default for ARMDecodedInstruction {

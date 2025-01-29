@@ -26,6 +26,8 @@ impl CPU {
                 shift_amount = (instruction & 0x0000_0F80) >> 7;
             }
         }
+        let rn = (0x000F_0000 & instruction) >> 16;
+        let rd = (0x0000_F000 & instruction) >> 12;
         let opcode = (instruction & 0x01E0_0000) >> 21;
         let operation: ALUOperation = match opcode {
             0x0 => CPU::arm_and,
@@ -71,15 +73,8 @@ impl CPU {
             _ => panic!("Impossible to decode opcode"),
         };
 
-        let rn = (0x000F_0000 & instruction) >> 16;
-        let rd = (0x0000_F000 & instruction) >> 12;
 
         let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
-        if rd == 15 && instruction.bit_is_set(20) {
-            if let Some(spsr) = self.get_current_spsr() {
-                self.cpsr = *spsr;
-            }
-        }
         let operand2 = if instruction.bit_is_set(25) {
             // operand 2 is immediate
             let immediate = instruction & 0x0000_00FF;
@@ -106,6 +101,11 @@ impl CPU {
         };
         operation(self, rd, self.get_register(rn), operand2, set_flags);
         if rd == 15 {
+            if instruction.bit_is_set(20) {
+                if let Some(spsr) = self.get_current_spsr() {
+                    self.cpsr = *spsr;
+                }
+            }
             cycles += self.flush_pipeline();
         }
         return cycles;

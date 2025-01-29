@@ -22,7 +22,7 @@ use tui::{
 };
 
 use crate::{
-    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
+    arm7tdmi::cpu::{CPUMode, FlagsRegister, Instruction, InstructionMode, CPU},
     memory::{
         debugger_memory::DebuggerMemory, io_handlers::{IO_BASE, VCOUNT}, memory::GBAMemory
     }, utils::bits::Bits,
@@ -287,14 +287,14 @@ fn draw_cpu(
 
     let instruction = Paragraph::new(format!(
         "fetched inst:\n{:#010x}",
-        cpu.prefetch[0].unwrap_or(0)
+        cpu.prefetch[0].unwrap_or(Instruction::ARM(0)).unwrap_opcode()
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });
 
     let decoded_instruction = Paragraph::new(format!(
         "decoded inst:\n{:#010x}",
-        cpu.prefetch[1].unwrap_or(0)
+        cpu.prefetch[1].unwrap_or(Instruction::ARM(0)).unwrap_opcode()
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });

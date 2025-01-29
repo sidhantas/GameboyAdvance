@@ -1,22 +1,15 @@
 use super::{
-    cpu::{FlagsRegister, InstructionMode, CPU},
+    cpu::{FlagsRegister, Instruction, InstructionMode, CPU},
     instructions::ARMDecodedInstruction,
 };
 use crate::types::*;
 
-#[allow(dead_code)]
-pub enum Instruction {
-    ADD(WORD),
-    BRANCH(WORD),
-    NOP,
-}
-
 impl CPU {
     #[no_mangle]
-    pub fn decode_instruction(&mut self, instruction: ARMByteCode) -> ARMDecodedInstruction {
-        return match self.get_instruction_mode() {
-            InstructionMode::ARM => self.decode_arm_instruction(instruction),
-            InstructionMode::THUMB => self.decode_thumb_instruction(instruction),
+    pub fn decode_instruction(&mut self, instruction: Instruction) -> ARMDecodedInstruction {
+        return match instruction {
+            Instruction::ARM(opcode) => self.decode_arm_instruction(opcode),
+            Instruction::THUMB(opcode) => self.decode_thumb_instruction(opcode),
         };
     }
 
