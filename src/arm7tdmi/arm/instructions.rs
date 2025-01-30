@@ -1,15 +1,11 @@
 use std::fmt::{Arguments, Write};
 
 use crate::{
-    arm7tdmi::cpu::LINK_REGISTER,
+    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions},
     types::{ARMByteCode, CYCLES, REGISTER},
     utils::bits::{sign_extend, Bits},
 };
 
-use super::{
-    cpu::{FlagsRegister, InstructionMode, CPU},
-    interrupts::Exceptions,
-};
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
 pub type ALUOperation =
     fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();

@@ -1,8 +1,6 @@
-pub mod cpu;
-pub mod decoder;
-pub mod instructions;
-pub mod alu;
-pub mod data_transfer_instructions;
-pub mod swap_instruction;
 pub mod thumb;
+pub mod arm;
+pub mod decoder;
+pub mod cpu;
 pub mod interrupts;
+pub mod memory_bus;

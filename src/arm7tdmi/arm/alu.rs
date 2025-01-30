@@ -1,12 +1,10 @@
 use crate::{
+    arm7tdmi::{cpu::{CPUMode, FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER}, interrupts::Exceptions},
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::bits::Bits,
+    utils::bits::{sign_extend, Bits},
 };
 
-use super::{
-    cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
-    instructions::ALUOperation,
-};
+use super::instructions::ALUOperation;
 
 impl CPU {
     pub fn data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {

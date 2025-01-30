@@ -1,8 +1,8 @@
-use super::{
-    cpu::{FlagsRegister, Instruction, InstructionMode, CPU},
-    instructions::ARMDecodedInstruction,
-};
+use instructions::ARMDecodedInstruction;
+
 use crate::types::*;
+
+use super::{arm::*, cpu::{FlagsRegister, Instruction, CPU}};
 
 impl CPU {
     #[no_mangle]
@@ -381,11 +381,11 @@ mod thumb_decoders {
 
 mod sub_decoders {
     use crate::{
-        arm7tdmi::{cpu::CPU, instructions::ARMDecodedInstruction},
+        arm7tdmi::{cpu::CPU },
         utils::bits::Bits,
     };
 
-    use super::ARMByteCode;
+    use super::{instructions::ARMDecodedInstruction, ARMByteCode};
 
     impl CPU {
         pub fn decode_multiply(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {

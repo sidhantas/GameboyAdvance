@@ -1,8 +1,9 @@
 use crate::{
-    memory::memory::MemoryBus, types::{CYCLES, WORD}, utils::bits::Bits
+    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions},
+    types::{ARMByteCode, CYCLES, REGISTER, WORD},
+    utils::bits::{sign_extend, Bits},
 };
 
-use super::cpu::CPU;
 
 impl CPU {
     pub fn single_data_swap(&mut self, instruction: WORD) -> CYCLES {
