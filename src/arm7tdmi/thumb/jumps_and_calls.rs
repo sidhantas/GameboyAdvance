@@ -1,5 +1,5 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, memory::memory::MemoryBus, types::CYCLES, utils::bits::sign_extend
+    arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, memory::memory::MemoryBus, types::CYCLES, utils::bits::sign_extend
 };
 
 impl CPU {

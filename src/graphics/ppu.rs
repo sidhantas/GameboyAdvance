@@ -1,4 +1,4 @@
-use crate::{memory::{io_handlers::{DISPSTAT, IF, IO_BASE, VCOUNT}, memory::MemoryBus}, utils::bits::Bits};
+use crate::memory::{io_handlers::{DISPSTAT, IF, IO_BASE, VCOUNT}, memory::MemoryBus};
 
 const HDRAW: u64 = 240;
 const HBLANK: u64 = 68;
@@ -13,14 +13,19 @@ const HBLANK_ENABLE: u16 = 1 << 4;
 
 #[derive(Default, Debug)]
 pub struct PPU {
+    usable_cycles: u64,
     pub x: u64,
     pub y: u64,
 }
 
 impl PPU {
-    pub fn advance_ppu(&mut self, cycles: &mut u64, memory: &mut Box<dyn MemoryBus>) {
-        let dots = *cycles / 4;
-        *cycles %= 4;
+    pub fn advance_ppu(&mut self, cycles: u8, memory: &mut Box<dyn MemoryBus>) {
+        self.usable_cycles += cycles as u64;
+        let dots = self.usable_cycles / 4;
+        if dots < 1 {
+            return;
+        }
+        self.usable_cycles %= 4;
         self.x += dots;
         let mut disp_stat = memory.readu16(IO_BASE + DISPSTAT).data;
         let mut interrupt_flags_register = memory.readu16(IO_BASE + IF).data;

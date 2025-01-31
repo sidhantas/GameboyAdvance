@@ -6,10 +6,9 @@ use std::{
 };
 
 use crate::{
-    graphics::ppu::PPU,
     memory::{
         io_handlers::{IE, IF, IME, IO_BASE},
-        memory::{MemoryBus, MemoryFetch},
+        memory::MemoryBus,
     },
     types::*,
     utils::bits::Bits,
@@ -69,9 +68,7 @@ pub struct CPU {
     pub output_file: File,
     pub cycles: u64,
     pub relative_cycles: u64,
-    ppu: PPU,
     status_history: VecDeque<Status>,
-    pub(super) pipeline_stalled: u8,
 }
 
 
@@ -104,15 +101,13 @@ impl CPU {
                 .unwrap(),
             cycles: 0,
             relative_cycles: 3,
-            ppu: Default::default(),
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
-            pipeline_stalled: 0,
         };
         cpu
     }
 
     #[no_mangle]
-    pub fn execute_cpu_cycle(&mut self, memory: &mut Box<dyn MemoryBus>) {
+    pub fn execute_cpu_cycle(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
         if self.status_history.len() >= HISTORY_SIZE {
             self.status_history.pop_front();
@@ -145,9 +140,7 @@ impl CPU {
             execution_cycles += self.advance_pipeline(memory) as u64;
         }
         self.cycles += execution_cycles;
-        self.relative_cycles += execution_cycles;
-        self.ppu
-            .advance_ppu(&mut self.relative_cycles, memory);
+        execution_cycles as u8
     }
 
     pub fn flush_pipeline(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {

@@ -42,7 +42,7 @@ pub struct Debugger {
 
 impl Debugger {
     pub fn new(bios: String, rom: String) -> Self {
-        let mut memory = GBAMemory::new();
+        let memory = GBAMemory::new();
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 

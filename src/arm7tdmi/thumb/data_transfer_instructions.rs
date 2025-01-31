@@ -1,7 +1,6 @@
-use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER, WORD}, utils::bits::Bits
+    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER}, utils::bits::Bits
 };
 
 impl CPU {

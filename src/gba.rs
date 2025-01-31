@@ -25,6 +25,8 @@ impl GBA {
     }
 
     pub fn step(&mut self) {
-        self.cpu.execute_cpu_cycle(&mut self.memory);
+        let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
+        self.ppu
+            .advance_ppu(cpu_cycles, &mut self.memory);
     }
 }
