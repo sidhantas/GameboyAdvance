@@ -1,12 +1,10 @@
 use std::fmt::{Arguments, Write};
 
 use crate::{
-    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions},
-    types::{ARMByteCode, CYCLES, REGISTER},
-    utils::bits::{sign_extend, Bits},
+    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions}, memory::memory::MemoryBus, types::{ARMByteCode, CYCLES, REGISTER}, utils::bits::{sign_extend, Bits}
 };
 
-pub type ARMExecutable = fn(&mut CPU, ARMByteCode) -> CYCLES;
+pub type ARMExecutable = fn(&mut CPU, ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES;
 pub type ALUOperation =
     fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
 
@@ -31,7 +29,7 @@ impl CPU {
         write!(self.executed_instruction, "{}", name).unwrap();
     }
 
-    pub fn arm_branch(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_branch(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
         if instruction.bit_is_set(24) {
             self.set_register(LINK_REGISTER, self.get_pc() - 4);
@@ -40,18 +38,18 @@ impl CPU {
         let offset = sign_extend(offset << 2, 25);
         let destination = offset + self.get_pc();
         self.set_pc(destination);
-        cycles += self.flush_pipeline();
+        cycles += self.flush_pipeline(memory);
         self.set_executed_instruction(format_args!("B {:#010x}", destination));
 
         cycles
     }
 
-    pub fn arm_nop(&mut self, _instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_nop(&mut self, _instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         self.set_executed_instruction(format_args!("NOP"));
         return 0;
     }
 
-    pub fn arm_multiply(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_multiply(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let rd = (instruction & 0x000F_0000) >> 16;
         let rs = (instruction & 0x0000_0F00) >> 8;
         let rm = instruction & 0x0000_000F;
@@ -84,24 +82,23 @@ impl CPU {
         }
     }
 
-    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+        panic!("Not implemented" );
+    }
+
+    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         todo!();
     }
 
-    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode) -> CYCLES {
-        todo!();
-    }
-
-    pub fn arm_software_interrupt(&mut self, _instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_software_interrupt(&mut self, _instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
-        self.raise_exception(Exceptions::Software);
-        cycles += self.flush_pipeline();
+        cycles += self.raise_exception(Exceptions::Software, memory);
         self.set_executed_instruction(format_args!("SWI"));
 
         return cycles;
     }
 
-    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut destination = self.get_register(instruction & 0x0000_000F);
         let mut cycles = 1;
         if destination.bit_is_set(0) {
@@ -111,13 +108,13 @@ impl CPU {
             self.set_instruction_mode(InstructionMode::ARM);
         }
         self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
-        cycles += self.flush_pipeline();
+        cycles += self.flush_pipeline(memory);
         self.set_executed_instruction(format_args!("BX {:#010x}", destination));
 
         cycles
     }
 
-    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         self.set_executed_instruction(format_args!("NOT IMPLEMENTED"));
         panic!("NOT IMPLEMENTED: {:#X}", instruction);
         return 0;

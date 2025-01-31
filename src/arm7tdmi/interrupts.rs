@@ -1,4 +1,4 @@
-use crate::utils::bits::Bits;
+use crate::{memory::memory::MemoryBus, types::CYCLES, utils::bits::Bits};
 
 use super::cpu::{CPUMode, InstructionMode, CPU, LINK_REGISTER};
 
@@ -22,7 +22,7 @@ impl From<Exceptions> for CPUMode {
 }
 
 impl CPU {
-    pub fn raise_exception(&mut self, exception: Exceptions) {
+    pub fn raise_exception(&mut self, exception: Exceptions, memory: &mut Box<dyn MemoryBus>) -> CYCLES{
         let instruction_size = match self.get_instruction_mode() {
             super::cpu::InstructionMode::ARM => 4,
             super::cpu::InstructionMode::THUMB => 0,
@@ -62,6 +62,6 @@ impl CPU {
         };
 
         self.set_pc(exception_vector);
-        self.flush_pipeline();
+        self.flush_pipeline(memory)
     }
 }

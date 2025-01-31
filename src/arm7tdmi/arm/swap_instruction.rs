@@ -1,12 +1,10 @@
 use crate::{
-    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions},
-    types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::bits::{sign_extend, Bits},
+    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions}, memory::memory::MemoryBus, types::{ARMByteCode, CYCLES, REGISTER, WORD}, utils::bits::{sign_extend, Bits}
 };
 
 
 impl CPU {
-    pub fn single_data_swap(&mut self, instruction: WORD) -> CYCLES {
+    pub fn single_data_swap(&mut self, instruction: WORD, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1; // 1 I cycle
         let is_byte_swap = instruction.bit_is_set(22);
         let rn = (instruction & 0x000F_0000) >> 16;
@@ -15,15 +13,15 @@ impl CPU {
         let address = self.get_register(rn) as usize;
 
         let memory_data = if is_byte_swap {
-            let memory_fetch = self.memory.read(address);
+            let memory_fetch = memory.read(address);
             cycles += memory_fetch.cycles;
-            cycles += self.memory.write(address, self.get_register(rm) as u8);
+            cycles += memory.write(address, self.get_register(rm) as u8);
 
             memory_fetch.data as u32
         } else {
-            let memory_fetch = self.memory.readu32(address);
+            let memory_fetch = memory.readu32(address);
             cycles += memory_fetch.cycles;
-            cycles += self.memory.writeu32(address, self.get_register(rm));
+            cycles += memory.writeu32(address, self.get_register(rm));
 
             memory_fetch.data
         };

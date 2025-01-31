@@ -1,22 +1,20 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
-    types::{CYCLES, REGISTER, WORD},
-    utils::bits::Bits,
+    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER, WORD}, utils::bits::Bits
 };
 
 impl CPU {
-    pub fn ldr_pc_relative(&mut self, instruction: u32) -> CYCLES {
+    pub fn ldr_pc_relative(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
         let rd = (instruction & 0x0700) >> 8;
         let offset = (instruction & 0x00FF) * 4;
         let address = (self.get_pc() & !2) + offset;
-        let memory_fetch = self.memory.readu32(address as usize);
+        let memory_fetch = memory.readu32(address as usize);
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
-        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline(memory);
 
         self.set_register(rd, data);
         self.set_executed_instruction(format_args!("LDR r{} [pc, {:#X}]", rd, offset));
@@ -24,7 +22,7 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_register_offset(&mut self, instruction: u32) -> CYCLES {
+    pub fn sdt_register_offset(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let ro = (instruction & 0x01C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
@@ -42,12 +40,12 @@ impl CPU {
         let address = self.get_register(rb) + self.get_register(ro);
         let is_byte_transfer = opcode.bit_is_set(0);
 
-        cycles += operation(self, rd, address, is_byte_transfer);
+        cycles += operation(self, rd, address, is_byte_transfer, memory);
 
         cycles
     }
 
-    pub fn sdt_sign_extend_byte_or_halfword(&mut self, instruction: u32) -> CYCLES {
+    pub fn sdt_sign_extend_byte_or_halfword(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = (instruction & 0x0C00) >> 10;
         let ro = (instruction & 0x01C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
@@ -62,12 +60,12 @@ impl CPU {
         };
         let address = self.get_register(rb) + self.get_register(ro);
 
-        let cycles = operation(self, rd, address);
+        let cycles = operation(self, rd, address, memory);
 
         cycles
     }
 
-    pub fn sdt_imm_offset(&mut self, instruction: u32) -> CYCLES {
+    pub fn sdt_imm_offset(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let opcode = (instruction & 0x1800) >> 11;
         let imm = (instruction & 0x07C0) >> 6;
@@ -91,12 +89,12 @@ impl CPU {
             base_address + imm * 4
         };
 
-        cycles += operation(self, rd, address, is_byte_transfer);
+        cycles += operation(self, rd, address, is_byte_transfer, memory);
 
         cycles
     }
 
-    pub fn sdt_halfword_imm_offset(&mut self, instruction: u32) -> CYCLES {
+    pub fn sdt_halfword_imm_offset(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let imm = (instruction & 0x07C0) >> 5;
         let rb = (instruction & 0x0038) >> 3;
@@ -110,10 +108,10 @@ impl CPU {
 
         let address = self.get_register(rb) + imm;
 
-        operation(self, rd, address)
+        operation(self, rd, address, memory)
     }
 
-    pub fn thumb_sdt_sp_imm(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_sdt_sp_imm(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rd = (instruction & 0x0700) >> 8;
         let imm = instruction & 0x00FF;
@@ -125,10 +123,10 @@ impl CPU {
 
         let address = self.get_sp() + imm * 4;
 
-        operation(self, rd, address, false)
+        operation(self, rd, address, false, memory)
     }
 
-    pub fn thumb_push_pop(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_push_pop(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let opcode = instruction.get_bit(11);
 
@@ -139,7 +137,7 @@ impl CPU {
                 register_list.push(i as REGISTER);
             }
         }
-        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline(memory);
 
         match opcode {
             0b0 => {
@@ -147,16 +145,16 @@ impl CPU {
                 if instruction.bit_is_set(8) {
                     register_list.push(LINK_REGISTER);
                 }
-                cycles += self.stmdb_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER))
+                cycles += self.stmdb_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER), memory)
             }
             0b1 => {
                 // LDMIA (POP)
                 if instruction.bit_is_set(8) {
                     register_list.push(PC_REGISTER as u32);
                 }
-                cycles += self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER));
+                cycles += self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER), memory);
                 if instruction.bit_is_set(8) {
-                    cycles += self.flush_pipeline();
+                    cycles += self.flush_pipeline(memory);
                 }
             }
             _ => panic!(),
@@ -164,7 +162,7 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_multiple_load_or_store(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_multiple_load_or_store(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rb = (instruction & 0x0700) >> 8;
 
@@ -179,8 +177,8 @@ impl CPU {
         let base_address = self.get_register(rb) as usize;
 
         match opcode {
-            0b0 => self.stmia_execution(base_address, &register_list, Some(rb)),
-            0b1 => self.ldmia_execution(base_address, &register_list, Some(rb)),
+            0b0 => self.stmia_execution(base_address, &register_list, Some(rb), memory),
+            0b1 => self.ldmia_execution(base_address, &register_list, Some(rb), memory),
             _ => panic!(),
         }
     }

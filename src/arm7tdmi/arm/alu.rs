@@ -1,13 +1,11 @@
 use crate::{
-    arm7tdmi::{cpu::{CPUMode, FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER}, interrupts::Exceptions},
-    types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::bits::{sign_extend, Bits},
+    arm7tdmi::{cpu::{CPUMode, FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER}, interrupts::Exceptions}, memory::memory::MemoryBus, types::{ARMByteCode, CYCLES, REGISTER, WORD}, utils::bits::{sign_extend, Bits}
 };
 
 use super::instructions::ALUOperation;
 
 impl CPU {
-    pub fn data_processing_instruction(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn data_processing_instruction(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let shift_amount;
         let mut cycles = 0;
         if instruction.bit_is_set(25) {
@@ -17,7 +15,7 @@ impl CPU {
             // The rest of the operation happens on the next cycle in an I cycle
             if instruction.bit_is_set(4) {
                 // shift by register
-                cycles += self.advance_pipeline() + 1;
+                cycles += self.advance_pipeline(memory) + 1;
                 let shift_register = (instruction & 0x0000_0F00) >> 8;
                 shift_amount = self.get_register(shift_register);
             } else {
@@ -40,28 +38,28 @@ impl CPU {
                 if instruction.bit_is_set(20) {
                     CPU::arm_tst
                 } else {
-                    return self.arm_mrs(instruction);
+                    return self.arm_mrs(instruction, memory);
                 }
             }
             0x9 => {
                 if instruction.bit_is_set(20) {
                     CPU::arm_teq
                 } else {
-                    return self.arm_msr(instruction);
+                    return self.arm_msr(instruction, memory);
                 }
             }
             0xa => {
                 if instruction.bit_is_set(20) {
                     CPU::arm_cmp
                 } else {
-                    return self.arm_mrs(instruction);
+                    return self.arm_mrs(instruction, memory);
                 }
             }
             0xb => {
                 if instruction.bit_is_set(20) {
                     CPU::arm_cmn
                 } else {
-                    return self.arm_msr(instruction);
+                    return self.arm_msr(instruction, memory);
                 }
             }
             0xc => CPU::arm_orr,
@@ -104,7 +102,7 @@ impl CPU {
                     self.cpsr = *spsr;
                 }
             }
-            cycles += self.flush_pipeline();
+            cycles += self.flush_pipeline(memory);
         }
         return cycles;
     }
@@ -279,7 +277,7 @@ impl CPU {
         self.set_executed_instruction(format_args!("MVN {:#X} {:#X}", rd, operand2));
     }
 
-    pub fn arm_mrs(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_mrs(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let rd = (instruction & 0x0000_F000) >> 12;
         let source_psr = if instruction.bit_is_set(22) {
             match self.get_current_spsr() {
@@ -303,7 +301,7 @@ impl CPU {
         1
     }
 
-    pub fn arm_msr(&mut self, instruction: ARMByteCode) -> CYCLES {
+    pub fn arm_msr(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         const FLG_MASK: u32 = 0xFF00_0000;
         const CTL_MASK: u32 = 0x0000_00DF; // can't assign T-bit with this operation
         let current_cpu_mode = self.get_cpu_mode();

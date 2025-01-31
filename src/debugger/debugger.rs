@@ -22,10 +22,9 @@ use tui::{
 };
 
 use crate::{
-    arm7tdmi::cpu::{CPUMode, FlagsRegister, Instruction, InstructionMode, CPU},
-    memory::{
+    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::{
         debugger_memory::DebuggerMemory, io_handlers::{IO_BASE, VCOUNT}, memory::GBAMemory
-    }, utils::bits::Bits,
+    }, utils::bits::Bits
 };
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
@@ -36,7 +35,7 @@ pub struct Debugger {
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub terminal_enabled: bool,
     pub end_debugger: bool,
-    pub cpu: CPU,
+    pub cpu: GBA,
     pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
     pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
@@ -44,8 +43,6 @@ pub struct Debugger {
 impl Debugger {
     pub fn new(bios: String, rom: String) -> Self {
         let mut memory = GBAMemory::new();
-        memory.initialize_bios(bios).unwrap();
-        let _ = memory.initialize_rom(rom);
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
@@ -75,7 +72,7 @@ impl Debugger {
             )
         };
 
-        let cpu = CPU::new(memory);
+        let cpu = GBA::new(bios, rom);
 
         Self {
             memory_start_address: 0x0000000,
@@ -169,12 +166,12 @@ pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
 
             {
                 let cpu = &debugger.cpu;
-                draw_cpu(f, cpu_chunk, cpu).unwrap();
+                draw_cpu(f, cpu_chunk, &cpu.cpu).unwrap();
                 draw_ppu(f, ppu_chunk, cpu).unwrap();
-                draw_registers(f, register_chunk, 0, cpu).unwrap();
-                draw_registers(f, register_chunk_2, 10, cpu).unwrap();
-                draw_cpsr(f, flags_chunk, cpu).unwrap();
-                draw_memory(f, memory_chunk, cpu, &debugger).unwrap();
+                draw_registers(f, register_chunk, 0, &cpu.cpu).unwrap();
+                draw_registers(f, register_chunk_2, 10, &cpu.cpu).unwrap();
+                draw_cpsr(f, flags_chunk, &cpu.cpu).unwrap();
+                draw_memory(f, memory_chunk, &cpu, &debugger).unwrap();
                 draw_terminal(f, terminal_chunk, &debugger).unwrap();
             }
         }) else {
@@ -197,7 +194,7 @@ pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
 fn draw_ppu(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,
     ppu_chunk: Rect,
-    cpu: &CPU,
+    cpu: &GBA,
 ) -> Result<(), std::io::Error> {
     let block = Block::default()
         .title("PPU")
@@ -287,14 +284,14 @@ fn draw_cpu(
 
     let instruction = Paragraph::new(format!(
         "fetched inst:\n{:#010x}",
-        cpu.prefetch[0].unwrap_or(Instruction::ARM(0)).unwrap_opcode()
+        cpu.prefetch[0].unwrap_or(0)
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });
 
     let decoded_instruction = Paragraph::new(format!(
         "decoded inst:\n{:#010x}",
-        cpu.prefetch[1].unwrap_or(Instruction::ARM(0)).unwrap_opcode()
+        cpu.prefetch[1].unwrap_or(0)
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });
@@ -366,7 +363,7 @@ fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
 
 fn handle_normal_mode_events(debugger: &mut Debugger, event: KeyEvent) {
     match event.code {
-        KeyCode::Char('n') => debugger.cpu.execute_cpu_cycle(),
+        KeyCode::Char('n') => debugger.cpu.step(),
         KeyCode::Char('M') => debugger.memory_start_address -= 0x100,
         KeyCode::Char('m') => debugger.memory_start_address += 0x100,
         _ => {}
@@ -557,7 +554,7 @@ fn draw_cpsr(
 fn draw_memory(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,
     memory_chunk: Rect,
-    cpu: &CPU,
+    cpu: &GBA,
     debugger: &Debugger,
 ) -> Result<(), std::io::Error> {
     let start_address = debugger.memory_start_address;

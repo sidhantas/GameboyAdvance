@@ -2,14 +2,14 @@ use instructions::ARMDecodedInstruction;
 
 use crate::types::*;
 
-use super::{arm::*, cpu::{FlagsRegister, Instruction, CPU}};
+use super::{arm::*, cpu::{FlagsRegister, InstructionMode, CPU}};
 
 impl CPU {
     #[no_mangle]
-    pub fn decode_instruction(&mut self, instruction: Instruction) -> ARMDecodedInstruction {
-        return match instruction {
-            Instruction::ARM(opcode) => self.decode_arm_instruction(opcode),
-            Instruction::THUMB(opcode) => self.decode_thumb_instruction(opcode),
+    pub fn decode_instruction(&mut self, instruction: WORD) -> ARMDecodedInstruction {
+        return match self.get_instruction_mode() {
+            InstructionMode::ARM => self.decode_arm_instruction(instruction),
+            InstructionMode::THUMB => self.decode_thumb_instruction(instruction),
         };
     }
 

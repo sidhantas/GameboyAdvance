@@ -1,11 +1,9 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
-    types::CYCLES,
-    utils::bits::sign_extend,
+    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, memory::memory::MemoryBus, types::CYCLES, utils::bits::sign_extend
 };
 
 impl CPU {
-    pub fn thumb_conditional_branch(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_conditional_branch(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let condition = (instruction & 0x0F00) >> 8;
         let offset = (instruction & 0x00FF) << 1;
@@ -35,7 +33,7 @@ impl CPU {
         };
 
         // We don't use the fetched instruction but we need to do it to get the correct cycle count
-        let memory_fetch = self.memory.readu16(self.get_pc() as usize);
+        let memory_fetch = memory.readu16(self.get_pc() as usize);
         cycles += memory_fetch.cycles;
         let destination = self.get_pc() + sign_extend(offset, 8);
         self.set_executed_instruction(format_args!("B {:#b} {:#X}", condition, destination));
@@ -43,23 +41,23 @@ impl CPU {
             return 0;
         }
         self.set_pc(destination);
-        cycles += self.flush_pipeline();
+        cycles += self.flush_pipeline(memory);
 
 
         cycles
     }
 
-    pub fn thumb_unconditional_branch(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_unconditional_branch(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
         let offset: u32 = sign_extend((instruction & 0x07FF) << 1, 11);
         self.set_pc(self.get_pc() + offset);
-        cycles += self.flush_pipeline();
+        cycles += self.flush_pipeline(memory);
         self.set_executed_instruction(format_args!("B {:#X}", offset));
 
         cycles
     }
 
-    pub fn thumb_set_link_register(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_set_link_register(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let value = self.get_pc() + sign_extend((instruction & 0x07FF) << 12, 22);
         self.set_executed_instruction(format_args!("SET LR: {:#X}", value));
         self.set_register(LINK_REGISTER, value);
@@ -67,7 +65,7 @@ impl CPU {
         0
     }
 
-    pub fn thumb_long_branch_with_link(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_long_branch_with_link(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let link_register_val = self.get_register(LINK_REGISTER);
         self.set_register(LINK_REGISTER, (self.get_pc() - 2) | 1);
@@ -75,9 +73,9 @@ impl CPU {
         self.set_pc(destination);
 
         // We don't use the fetched instruction but we need to do it to get the correct cycle count
-        let memory_fetch = self.memory.readu16(self.get_pc() as usize);
+        let memory_fetch = memory.readu16(self.get_pc() as usize);
         cycles += memory_fetch.cycles;
-        cycles += self.flush_pipeline();
+        cycles += self.flush_pipeline(memory);
 
         self.set_executed_instruction(format_args!("BL: {:#X}", destination));
         cycles

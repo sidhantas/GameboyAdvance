@@ -11,7 +11,7 @@ const VCOUNTER_FLAG: u16 = 1 << 2;
 const VBLANK_ENABLE: u16 = 1 << 3;
 const HBLANK_ENABLE: u16 = 1 << 4;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PPU {
     pub x: u64,
     pub y: u64,

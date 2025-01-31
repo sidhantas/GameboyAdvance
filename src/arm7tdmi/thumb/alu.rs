@@ -1,11 +1,9 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER},
-    types::{CYCLES, REGISTER},
-    utils::bits::{sign_extend, Bits},
+    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER}, utils::bits::{sign_extend, Bits}
 };
 
 impl CPU {
-    pub fn thumb_move_shifted_register_instruction(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_move_shifted_register_instruction(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = (instruction & 0x1800) >> 11;
         let rs_val = self.get_register((instruction & 0x0038) >> 3);
         let rd = instruction & 0x0007;
@@ -137,7 +135,7 @@ impl CPU {
         self.set_executed_instruction(format_args!("ASR {rd} {:#X} {:#X}", rs_val, offset));
     }
 
-    pub fn thumb_add_or_subtract_instruction(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_add_or_subtract_instruction(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = (instruction & 0x0600) >> 9;
         let operand2 = (instruction & 0x01C0) >> 6;
         let operand2_value;
@@ -170,7 +168,7 @@ impl CPU {
         0
     }
 
-    pub fn thumb_move_add_compare_add_subtract_immediate(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_move_add_compare_add_subtract_immediate(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = (instruction & 0x1800) >> 11;
         let rd = (instruction & 0x0700) >> 8;
         let imm: u8 = (instruction & 0x00FF) as u8;
@@ -224,7 +222,7 @@ impl CPU {
         self.set_executed_instruction(format_args!("SUB {} {:#X}", rd, imm));
     }
 
-    pub fn thumb_alu_instructions(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_alu_instructions(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = (instruction & 0x03C0) >> 6;
         let mut cycles = 0;
 
@@ -235,21 +233,21 @@ impl CPU {
             0x0 => CPU::arm_and,
             0x1 => CPU::arm_eor,
             0x2 => {
-                cycles += self.advance_pipeline() + 1;
+                cycles += self.advance_pipeline(memory) + 1;
                 CPU::thumb_lsl
             }
             0x3 => {
-                cycles += self.advance_pipeline() + 1;
+                cycles += self.advance_pipeline(memory) + 1;
                 CPU::thumb_lsr_register
             }
             0x4 => {
-                cycles += self.advance_pipeline() + 1;
+                cycles += self.advance_pipeline(memory) + 1;
                 CPU::thumb_asr_register
             }
             0x5 => CPU::arm_adc,
             0x6 => CPU::arm_sbc,
             0x7 => {
-                cycles += self.advance_pipeline() + 1;
+                cycles += self.advance_pipeline(memory) + 1;
                 CPU::thumb_ror
             }
             0x8 => CPU::arm_tst,
@@ -364,7 +362,7 @@ impl CPU {
         self.set_register(rd, result);
     }
 
-    pub fn thumb_hi_reg_operations(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_hi_reg_operations(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let opcode = (instruction & 0x0300) >> 8;
 
@@ -387,13 +385,13 @@ impl CPU {
         );
 
         if rd == PC_REGISTER as u32 {
-            cycles += self.flush_pipeline();
+            cycles += self.flush_pipeline(memory);
         }
 
         cycles
     }
 
-    pub fn thumb_bx(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_bx(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
         let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
         let mut destination = self.get_register(rs);
@@ -405,13 +403,13 @@ impl CPU {
         };
 
         self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
-        cycles += self.flush_pipeline();
+        cycles += self.flush_pipeline(memory);
         self.set_executed_instruction(format_args!("BX {:#010x}", destination));
 
         cycles
     }
 
-    pub fn thumb_get_relative_address(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_get_relative_address(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rd = (instruction & 0x0700) >> 8;
         let imm = (instruction & 0x00FF) * 4;
@@ -428,7 +426,7 @@ impl CPU {
         0
     }
 
-    pub fn thumb_add_offset_to_sp(&mut self, instruction: u32) -> CYCLES {
+    pub fn thumb_add_offset_to_sp(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let opcode = instruction.get_bit(7);
         let imm = (instruction & 0x007F) * 4;
 

@@ -123,16 +123,16 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
 
     let cpu = &mut debugger.cpu;
     for _ in 0..num_executions {
-        cpu.execute_cpu_cycle();
+        cpu.step();
         for breakpoint in debugger.breakpoints.borrow().iter() {
             match breakpoint.break_type {
                 BreakType::Break(break_pc) => {
-                    if cpu.get_pc() == break_pc {
+                    if cpu.cpu.get_pc() == break_pc {
                         return Ok(String::from("Breakpoint encountered"));
                     }
                 }
                 BreakType::WatchRegister(register, value) => {
-                    if cpu.get_register(register) == value {
+                    if cpu.cpu.get_register(register) == value {
                         return Ok(format!("Watchpoint encountered {}", breakpoint.break_type));
                     }
                 }

@@ -1,13 +1,11 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::{cpu::{CPUMode, FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER}, interrupts::Exceptions},
-    types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::{bits::{sign_extend, Bits}, utils::print_vec},
+    arm7tdmi::{cpu::{CPUMode, FlagsRegister, InstructionMode, CPU, LINK_REGISTER, PC_REGISTER}, interrupts::Exceptions}, memory::memory::MemoryBus, types::{ARMByteCode, CYCLES, REGISTER, WORD}, utils::{bits::{sign_extend, Bits}, utils::print_vec}
 };
 
 impl CPU {
-    pub fn sdt_instruction_execution(&mut self, instruction: u32) -> CYCLES {
+    pub fn sdt_instruction_execution(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         let offset;
         let offset_address;
@@ -44,7 +42,7 @@ impl CPU {
             offset_address = base_register_address - offset;
         }
 
-        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline(memory);
 
         let access_address = if pre_indexed_addressing {
             offset_address
@@ -58,9 +56,9 @@ impl CPU {
         }
 
         cycles += if instruction.bit_is_set(20) {
-            self.ldr_instruction_execution(rd, access_address, is_byte_transfer)
+            self.ldr_instruction_execution(rd, access_address, is_byte_transfer, memory)
         } else {
-            self.str_instruction_execution(rd, access_address, is_byte_transfer)
+            self.str_instruction_execution(rd, access_address, is_byte_transfer, memory)
         };
 
         self.set_mode(old_cpu_mode);
@@ -77,14 +75,15 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
         if byte_transfer {
             self.set_executed_instruction(format_args!("STRB {} [{:#X}]", rd, address));
-            self.memory.write(address as usize, data as u8)
+            memory.write(address as usize, data as u8)
         } else {
             self.set_executed_instruction(format_args!("STR {} [{:#X}]", rd, address));
-            self.memory.writeu32(address as usize, data)
+            memory.writeu32(address as usize, data)
         }
     }
 
@@ -93,15 +92,16 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let mut cycles = 1;
         let data = {
             let memory_fetch = if byte_transfer {
                 self.set_executed_instruction(format_args!("LDRB {} [{:#X}]", rd, address));
-                self.memory.read(address as usize).into()
+                memory.read(address as usize).into()
             } else {
                 self.set_executed_instruction(format_args!("LDR {} [{:#X}]", rd, address));
-                self.memory.readu32(address as usize)
+                memory.readu32(address as usize)
             };
             cycles += memory_fetch.cycles;
 
@@ -110,13 +110,13 @@ impl CPU {
 
         self.set_register(rd, data);
         if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline();
+            cycles += self.flush_pipeline(memory);
         }
 
         cycles
     }
 
-    pub fn hw_or_signed_data_transfer(&mut self, instruction: u32) -> CYCLES {
+    pub fn hw_or_signed_data_transfer(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let pre_indexed_addressing = instruction.bit_is_set(24);
         let add_offset = instruction.bit_is_set(23);
         let use_immediate_offset = instruction.bit_is_set(22);
@@ -143,7 +143,7 @@ impl CPU {
             offset_address = base_register_address - offset;
         }
 
-        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline(memory);
 
         let access_address = if pre_indexed_addressing {
             offset_address
@@ -154,13 +154,13 @@ impl CPU {
         cycles += if instruction.bit_is_set(20) {
             let opcode = (instruction & 0x0000_0060) >> 5;
             match opcode {
-                0b01 => self.ldrh_execution(rd, access_address),
-                0b10 => self.ldrsb_execution(rd, access_address),
-                0b11 => self.ldrsh_execution(rd, access_address),
+                0b01 => self.ldrh_execution(rd, access_address, memory),
+                0b10 => self.ldrsb_execution(rd, access_address, memory),
+                0b11 => self.ldrsh_execution(rd, access_address, memory),
                 _ => panic!("Invalid Opcode"),
             }
         } else {
-            self.strh_execution(rd, access_address)
+            self.strh_execution(rd, access_address, memory)
         };
 
         if write_back_address {
@@ -170,63 +170,63 @@ impl CPU {
         cycles
     }
 
-    pub fn strh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn strh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let data: WORD = self.get_register(rd);
-        let cycles = { self.memory.writeu16(address as usize, data as u16) };
+        let cycles = { memory.writeu16(address as usize, data as u16) };
         self.set_executed_instruction(format_args!("STRH {} [{:#X}]", rd, address));
 
         cycles
     }
 
-    pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
-        let memory_fetch = { self.memory.readu16(address as usize) };
+        let memory_fetch = { memory.readu16(address as usize) };
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
 
         self.set_register(rd, sign_extend(data.into(), 15));
         if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline();
+            cycles += self.flush_pipeline(memory);
         }
         self.set_executed_instruction(format_args!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
 
-    pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
-        let memory_fetch = { self.memory.read(address as usize) };
+        let memory_fetch = { memory.read(address as usize) };
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
 
         self.set_register(rd, sign_extend(data.into(), 7));
         if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline();
+            cycles += self.flush_pipeline(memory);
         }
         self.set_executed_instruction(format_args!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
 
-    pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32) -> CYCLES {
+    pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 1;
-        let memory_fetch = { self.memory.readu16(address as usize) };
+        let memory_fetch = { memory.readu16(address as usize) };
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
 
         self.set_register(rd, data.into());
         if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline();
+            cycles += self.flush_pipeline(memory);
         }
         self.set_executed_instruction(format_args!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
 
-    pub fn block_dt_execution(&mut self, instruction: u32) -> CYCLES {
+    pub fn block_dt_execution(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         if instruction.bit_is_set(22) {
             todo!("Implement S bit");
@@ -244,25 +244,25 @@ impl CPU {
             }
         }
 
-        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline(memory);
 
         cycles += match opcode {
-            0b00000 => self.stmda_execution(base_address, &register_list, None),
-            0b00001 => self.ldmda_execution(base_address, &register_list, None),
-            0b00010 => self.stmda_execution(base_address, &register_list, Some(base_register)),
-            0b00011 => self.ldmda_execution(base_address, &register_list, Some(base_register)),
-            0b01000 => self.stmia_execution(base_address, &register_list, None),
-            0b01001 => self.ldmia_execution(base_address, &register_list, None),
-            0b01010 => self.stmia_execution(base_address, &register_list, Some(base_register)),
-            0b01011 => self.ldmia_execution(base_address, &register_list, Some(base_register)),
-            0b10000 => self.stmdb_execution(base_address, &register_list, None),
-            0b10001 => self.ldmdb_execution(base_address, &register_list, None),
-            0b10010 => self.stmdb_execution(base_address, &register_list, Some(base_register)),
-            0b10011 => self.ldmdb_execution(base_address, &register_list, Some(base_register)),
-            0b11000 => self.stmib_execution(base_address, &register_list, None),
-            0b11001 => self.ldmib_execution(base_address, &register_list, None),
-            0b11010 => self.stmib_execution(base_address, &register_list, Some(base_register)),
-            0b11011 => self.ldmib_execution(base_address, &register_list, Some(base_register)),
+            0b00000 => self.stmda_execution(base_address, &register_list, None, memory),
+            0b00001 => self.ldmda_execution(base_address, &register_list, None, memory),
+            0b00010 => self.stmda_execution(base_address, &register_list, Some(base_register), memory),
+            0b00011 => self.ldmda_execution(base_address, &register_list, Some(base_register), memory),
+            0b01000 => self.stmia_execution(base_address, &register_list, None, memory),
+            0b01001 => self.ldmia_execution(base_address, &register_list, None, memory),
+            0b01010 => self.stmia_execution(base_address, &register_list, Some(base_register), memory),
+            0b01011 => self.ldmia_execution(base_address, &register_list, Some(base_register), memory),
+            0b10000 => self.stmdb_execution(base_address, &register_list, None, memory),
+            0b10001 => self.ldmdb_execution(base_address, &register_list, None, memory),
+            0b10010 => self.stmdb_execution(base_address, &register_list, Some(base_register), memory),
+            0b10011 => self.ldmdb_execution(base_address, &register_list, Some(base_register), memory),
+            0b11000 => self.stmib_execution(base_address, &register_list, None, memory),
+            0b11001 => self.ldmib_execution(base_address, &register_list, None, memory),
+            0b11010 => self.stmib_execution(base_address, &register_list, Some(base_register), memory),
+            0b11011 => self.ldmib_execution(base_address, &register_list, Some(base_register), memory),
             _ => todo!(),
         };
 
@@ -274,12 +274,13 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let mut cycles = 0;
         let mut curr_address = base_address;
         for register in register_list {
             let data = self.get_register(*register);
-            cycles += self.memory.writeu32(curr_address, data);
+            cycles += memory.writeu32(curr_address, data);
             curr_address += size_of::<WORD>();
         }
         if let Some(reg) = writeback_register {
@@ -298,11 +299,12 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let mut cycles = 1;
         let mut curr_address = base_address;
         for register in register_list {
-            let memory_fetch = self.memory.readu32(curr_address);
+            let memory_fetch = memory.readu32(curr_address);
             cycles += memory_fetch.cycles;
             let data = memory_fetch.data;
             self.set_register(*register, data);
@@ -324,13 +326,14 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let mut cycles = 0;
         let mut curr_address = base_address;
         for register in register_list {
             curr_address += size_of::<WORD>();
             let data = self.get_register(*register);
-            cycles += self.memory.writeu32(curr_address, data);
+            cycles += memory.writeu32(curr_address, data);
         }
         if let Some(reg) = writeback_register {
             self.set_register(reg, curr_address as u32);
@@ -348,12 +351,13 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let mut cycles = 1;
         let mut curr_address = base_address;
         for register in register_list {
             curr_address += size_of::<WORD>();
-            let memory_fetch = self.memory.readu32(curr_address);
+            let memory_fetch = memory.readu32(curr_address);
             cycles += memory_fetch.cycles;
             let data = memory_fetch.data;
             self.set_register(*register, data);
@@ -374,9 +378,10 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
-        let cycles = self.stmia_execution(base_address, register_list, None);
+        let cycles = self.stmia_execution(base_address, register_list, None, memory);
         self.set_executed_instruction(format_args!(
             "STMDB [{:#X}], {}",
             base_address,
@@ -394,9 +399,10 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
-        let cycles = self.ldmia_execution(base_address, register_list, None);
+        let cycles = self.ldmia_execution(base_address, register_list, None, memory);
         self.set_executed_instruction(format_args!(
             "LDMDB [{:#X}], {}",
             base_address,
@@ -414,9 +420,10 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
-        let cycles = self.stmib_execution(base_address, register_list, None);
+        let cycles = self.stmib_execution(base_address, register_list, None, memory);
         self.set_executed_instruction(format_args!(
             "STMDA [{:#X}], {}",
             base_address,
@@ -435,9 +442,10 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
+        memory: &mut Box<dyn MemoryBus>
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
-        let cycles = self.ldmib_execution(base_address, register_list, None);
+        let cycles = self.ldmib_execution(base_address, register_list, None, memory);
         self.set_executed_instruction(format_args!(
             "LDMDA [{:#X}], {}",
             base_address,

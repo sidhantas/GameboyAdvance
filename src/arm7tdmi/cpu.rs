@@ -9,7 +9,7 @@ use crate::{
     graphics::ppu::PPU,
     memory::{
         io_handlers::{IE, IF, IME, IO_BASE},
-        memory::MemoryBus,
+        memory::{MemoryBus, MemoryFetch},
     },
     types::*,
     utils::bits::Bits,
@@ -45,7 +45,7 @@ pub enum FlagsRegister {
     V = 28,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Status {
     pub instruction_count: usize,
     pub registers: [WORD; 16],
@@ -53,6 +53,7 @@ struct Status {
     pub cycles: u64,
 }
 
+#[derive(Debug)]
 pub struct CPU {
     registers: [WORD; 16],
     registers_fiq: [WORD; 8],
@@ -60,8 +61,7 @@ pub struct CPU {
     registers_abt: [WORD; 2],
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
-    pub memory: Box<dyn MemoryBus>,
-    pub prefetch: [Option<Instruction>; 2],
+    pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
     pub cpsr: WORD,
@@ -69,37 +69,22 @@ pub struct CPU {
     pub output_file: File,
     pub cycles: u64,
     pub relative_cycles: u64,
-    pub ppu: PPU,
+    ppu: PPU,
     status_history: VecDeque<Status>,
     pub(super) pipeline_stalled: u8,
 }
 
-#[derive(Clone, Copy)]
-pub enum Instruction {
-    ARM(u32),
-    THUMB(u32),
-}
-
-impl Instruction {
-    pub fn unwrap_opcode(&self) -> u32 {
-        match self {
-            Instruction::ARM(opcode) => *opcode,
-            Instruction::THUMB(opcode) => *opcode,
-        }
-    }
-}
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
 const HISTORY_SIZE: usize = 100_000;
 pub static mut INSTRUCTION_COUNT: usize = 0;
 
 impl CPU {
-    pub fn new(memory: Box<dyn MemoryBus>) -> Self {
+    pub fn new() -> Self {
         let _ = remove_file(OUTPUT_FILE);
-        let mut cpu = Self {
+        let cpu = Self {
             registers: [0; 16],
             executed_instruction_hex: 0,
-            memory,
             executed_instruction: String::with_capacity(50),
             prefetch: [None; 2],
             // start in supervisor mode
@@ -123,12 +108,11 @@ impl CPU {
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
             pipeline_stalled: 0,
         };
-        cpu.flush_pipeline();
         cpu
     }
 
     #[no_mangle]
-    pub fn execute_cpu_cycle(&mut self) {
+    pub fn execute_cpu_cycle(&mut self, memory: &mut Box<dyn MemoryBus>) {
         self.set_executed_instruction(format_args!(""));
         if self.status_history.len() >= HISTORY_SIZE {
             self.status_history.pop_front();
@@ -137,15 +121,15 @@ impl CPU {
             INSTRUCTION_COUNT += 1;
         }
         self.status_history.push_back(self.get_status());
-        let ime = self.memory.readu16(IO_BASE + IME).data;
-        let interrupt_flags_register = self.memory.readu16(IO_BASE + IF).data;
-        let interrupt_enable_register = self.memory.readu16(IO_BASE + IE).data;
+        let ime = memory.readu16(IO_BASE + IME).data;
+        let interrupt_flags_register = memory.readu16(IO_BASE + IF).data;
+        let interrupt_enable_register = memory.readu16(IO_BASE + IE).data;
 
         if (interrupt_flags_register & interrupt_enable_register) > 0
             && ime > 0
             && !self.cpsr.bit_is_set(7)
         {
-            self.raise_exception(Exceptions::IRQ);
+            self.raise_exception(Exceptions::IRQ, memory);
         }
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
@@ -153,33 +137,33 @@ impl CPU {
             self.executed_instruction_hex = decoded_instruction.instruction;
             self.prefetch[1] = None;
             execution_cycles +=
-                ((decoded_instruction.executable)(self, decoded_instruction.instruction)) as u64;
+                ((decoded_instruction.executable)(self, decoded_instruction.instruction, memory)) as u64;
         }
 
         if let None = self.prefetch[1] {
             // refill pipeline if decoded instruction doesn't advance the pipeline
-            execution_cycles += self.advance_pipeline() as u64;
+            execution_cycles += self.advance_pipeline(memory) as u64;
         }
         self.cycles += execution_cycles;
         self.relative_cycles += execution_cycles;
         self.ppu
-            .advance_ppu(&mut self.relative_cycles, &mut self.memory);
+            .advance_ppu(&mut self.relative_cycles, memory);
     }
 
-    pub fn flush_pipeline(&mut self) -> CYCLES {
+    pub fn flush_pipeline(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let mut cycles = 0;
         self.prefetch[0] = None;
         self.prefetch[1] = None;
 
-        cycles += self.advance_pipeline();
-        cycles += self.advance_pipeline();
+        cycles += self.advance_pipeline(memory);
+        cycles += self.advance_pipeline(memory);
 
         cycles
     }
 
-    pub fn advance_pipeline(&mut self) -> CYCLES {
+    pub fn advance_pipeline(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         self.prefetch[1] = self.prefetch[0];
-        self.fetch_instruction()
+        self.fetch_instruction(memory)
     }
 
     pub fn get_pc(&self) -> u32 {
@@ -318,19 +302,14 @@ impl CPU {
         self.set_flag(flag);
     }
 
-    pub(super) fn fetch_instruction(&mut self) -> CYCLES {
+    pub(super) fn fetch_instruction(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
         let memory_fetch = {
             match self.get_instruction_mode() {
-                InstructionMode::ARM => self.memory.readu32(self.get_pc() as usize),
-                InstructionMode::THUMB => self.memory.readu16(self.get_pc() as usize).into(),
+                InstructionMode::ARM => memory.readu32(self.get_pc() as usize),
+                InstructionMode::THUMB => memory.readu16(self.get_pc() as usize).into(),
             }
         };
-        match self.get_instruction_mode() {
-            InstructionMode::ARM => self.prefetch[0] = Some(Instruction::ARM(memory_fetch.data)),
-            InstructionMode::THUMB => {
-                self.prefetch[0] = Some(Instruction::THUMB(memory_fetch.data))
-            }
-        }
+        self.prefetch[0] = Some(memory_fetch.data);
         self.increment_pc();
 
         memory_fetch.cycles
