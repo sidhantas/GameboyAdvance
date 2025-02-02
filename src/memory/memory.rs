@@ -5,7 +5,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use super::io_handlers::{io_store, KEYINPUT};
+use super::io_handlers::{DISPSTAT, IF, KEYINPUT};
 
 pub struct MemoryFetch<T> {
     pub cycles: CYCLES,
@@ -61,6 +61,12 @@ const OAM_SIZE: usize = 0x400;
 const ROM_SIZE: usize = 0x1000000;
 const SRAM_SIZE: usize = 0x10000;
 
+#[derive(Clone, Copy, Debug)]
+pub enum CPUCallbacks {
+    HALT,
+    STOP,
+}
+
 pub struct GBAMemory {
     bios: Vec<u32>,
     exwram: Vec<u32>,
@@ -73,6 +79,7 @@ pub struct GBAMemory {
     sram: Vec<u32>,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
+    pub cpu_commands: Vec<CPUCallbacks>,
 }
 
 #[inline(always)]
@@ -109,42 +116,8 @@ impl Display for MemoryError {
     }
 }
 
-pub trait DebuggerMemoryBus: MemoryBus + MemoryBusNoPanic {}
-
-pub trait MemoryBusNoPanic {
-    fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError>;
-
-    fn try_readu16(&self, address: usize) -> Result<MemoryFetch<u16>, MemoryError>;
-
-    fn try_readu32(&self, address: usize) -> Result<MemoryFetch<u32>, MemoryError>;
-
-    fn try_write(&mut self, address: usize, value: u8) -> Result<CYCLES, MemoryError>;
-
-    fn try_writeu16(&mut self, address: usize, value: u16) -> Result<CYCLES, MemoryError>;
-
-    fn try_writeu32(&mut self, address: usize, value: u32) -> Result<CYCLES, MemoryError>;
-}
-
-pub trait MemoryBus {
-    fn read(&self, address: usize) -> MemoryFetch<u8>;
-
-    fn readu16(&self, address: usize) -> MemoryFetch<u16>;
-
-    fn readu32(&self, address: usize) -> MemoryFetch<u32>;
-
-    fn write(&mut self, address: usize, value: u8) -> CYCLES;
-
-    fn writeu16(&mut self, address: usize, value: u16) -> CYCLES;
-
-    fn writeu32(&mut self, address: usize, value: u32) -> CYCLES;
-
-    fn ppu_io_write(&mut self, address: usize, value: u16);
-}
-
-impl DebuggerMemoryBus for GBAMemory {}
-
 impl GBAMemory {
-    pub fn new() -> Box<Self> {
+    pub fn new() -> Self {
         let mut wait_cycles_u16 = [0; 15];
         wait_cycles_u16[BIOS_REGION] = 1;
         wait_cycles_u16[IWRAM_REGION] = 1;
@@ -176,15 +149,11 @@ impl GBAMemory {
         wait_cycles_u32[ROM2A_REGION] = 8;
         wait_cycles_u32[ROM2B_REGION] = 8;
 
-        let mut ioram = vec![0; IORAM_SIZE >> 1];
-        io_store(&mut ioram, 0x088, 0x200);
-        io_store(&mut ioram, KEYINPUT, 0x03FF);
-
-        Box::new(Self {
+        let mut memory = Self {
             bios: vec![0; BIOS_SIZE >> 2],
             exwram: vec![0; EXWRAM_SIZE >> 2],
             iwram: vec![0; IWRAM_SIZE >> 2],
-            ioram,
+            ioram: vec![0; IORAM_SIZE >> 1],
             bgram: vec![0; BGRAM_SIZE >> 2],
             vram: vec![0; VRAM_SIZE >> 2],
             oam: vec![0; OAM_SIZE >> 2],
@@ -192,7 +161,11 @@ impl GBAMemory {
             sram: vec![0; SRAM_SIZE >> 2],
             wait_cycles_u16,
             wait_cycles_u32,
-        })
+            cpu_commands: Vec::new(),
+        };
+        memory.io_store(0x088, 0x200);
+        memory.io_store(KEYINPUT, 0x03FF);
+        memory
     }
 
     pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
@@ -232,7 +205,7 @@ const IW_WRAM_MIRROR_MASK: usize = 0x7FFF;
 const BGRAM_MIRROR_MASK: usize = 0x3FF;
 const OAM_MIRROR_MASK: usize = 0x3FF;
 
-impl MemoryBusNoPanic for GBAMemory {
+impl GBAMemory {
     fn try_read(&self, address: usize) -> Result<MemoryFetch<u8>, MemoryError> {
         let region = address >> 24;
         let data = match region {
@@ -373,14 +346,16 @@ impl MemoryBusNoPanic for GBAMemory {
                 let mirror_masked_address = address & EX_WRAM_MIRROR_MASK;
                 let mut current_value = memory_load(&self.exwram, mirror_masked_address & 0xFFFFFE);
                 current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value =
+                    current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
                 memory_store(&mut self.exwram, mirror_masked_address & 0xFFFFFF, value);
             }
             IWRAM_REGION => {
                 let mirror_masked_address = address & IW_WRAM_MIRROR_MASK;
                 let mut current_value = memory_load(&self.iwram, mirror_masked_address & 0xFFFFFE);
                 current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value =
+                    current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
                 memory_store(&mut self.iwram, mirror_masked_address & 0xFFFFFF, value);
             }
             IORAM_REGION => self.io_writeu16(address, value)?,
@@ -388,7 +363,8 @@ impl MemoryBusNoPanic for GBAMemory {
                 let mirror_masked_address = address & BGRAM_MIRROR_MASK;
                 let mut current_value = memory_load(&self.bgram, mirror_masked_address & 0xFFFFFE);
                 current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value =
+                    current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
                 memory_store(&mut self.bgram, mirror_masked_address & 0xFFFFFF, value);
             }
             VRAM_REGION => {
@@ -401,7 +377,8 @@ impl MemoryBusNoPanic for GBAMemory {
                 let mirror_masked_address = address & OAM_MIRROR_MASK;
                 let mut current_value = memory_load(&self.oam, mirror_masked_address & 0xFFFFFE);
                 current_value &= !(0xFFFFu32 << (16 * ((mirror_masked_address >> 1) & 0b1)));
-                let value = current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
+                let value =
+                    current_value | ((value as u32) << (16 * ((mirror_masked_address >> 1) & 0b1)));
                 memory_store(&mut self.oam, mirror_masked_address & 0xFFFFFF, value);
             }
             ROM0A_REGION..=ROM2B_REGION => {}
@@ -452,40 +429,54 @@ impl MemoryBusNoPanic for GBAMemory {
     }
 }
 
-impl MemoryBus for GBAMemory {
-    fn read(&self, address: usize) -> MemoryFetch<u8> {
+impl GBAMemory {
+    pub fn read(&self, address: usize) -> MemoryFetch<u8> {
         self.try_read(address).unwrap()
     }
 
-    fn readu16(&self, address: usize) -> MemoryFetch<u16> {
+    pub fn readu16(&self, address: usize) -> MemoryFetch<u16> {
         self.try_readu16(address).unwrap()
     }
 
-    fn readu32(&self, address: usize) -> MemoryFetch<u32> {
+    pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
         self.try_readu32(address).unwrap()
     }
 
-    fn write(&mut self, address: usize, value: u8) -> CYCLES {
+    pub fn write(&mut self, address: usize, value: u8) -> CYCLES {
         self.try_write(address, value).unwrap()
     }
 
-    fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
+    pub fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
         self.try_writeu16(address, value).unwrap()
     }
 
-    fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
+    pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         self.try_writeu32(address, value).unwrap()
     }
 
-    fn ppu_io_write(&mut self, address: usize, value: u16) {
+    pub fn ppu_io_write(&mut self, address: usize, value: u16) {
+        let old_value = self.ioram[(address & 0xFFF) >> 1];
         self.ioram[(address & 0xFFF) >> 1] = value;
+        match address {
+            DISPSTAT => {
+                if old_value ^ value == 0 {
+                    return;
+                }
+                let possible_interrupts = value & 0x7;
+                let toggled_interrupts = (value >> 3) & 0x7;
+                let available_interrupts = possible_interrupts & toggled_interrupts;
+                let mut current_if = self.ioram[(IF & 0xFFF) >> 1];
+                current_if &= !0x7;
+                current_if |= available_interrupts;
+                self.ioram[(IF & 0xFFF) >> 1] = current_if;
+            }
+            _ => {}
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::memory::memory::MemoryBus;
-
     use super::GBAMemory;
 
     #[test]

@@ -1,10 +1,16 @@
 use std::fmt::{Arguments, Write};
 
 use crate::{
-    arm7tdmi::{cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER}, interrupts::Exceptions}, memory::memory::MemoryBus, types::{ARMByteCode, CYCLES, REGISTER}, utils::bits::{sign_extend, Bits}
+    arm7tdmi::{
+        cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
+        interrupts::Exceptions,
+    },
+    memory::memory::GBAMemory,
+    types::{ARMByteCode, CYCLES, REGISTER},
+    utils::bits::{sign_extend, Bits},
 };
 
-pub type ARMExecutable = fn(&mut CPU, ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES;
+pub type ARMExecutable = fn(&mut CPU, ARMByteCode, memory: &mut GBAMemory) -> CYCLES;
 pub type ALUOperation =
     fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
 
@@ -29,7 +35,7 @@ impl CPU {
         write!(self.executed_instruction, "{}", name).unwrap();
     }
 
-    pub fn arm_branch(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_branch(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
         if instruction.bit_is_set(24) {
             self.set_register(LINK_REGISTER, self.get_pc() - 4);
@@ -44,12 +50,12 @@ impl CPU {
         cycles
     }
 
-    pub fn arm_nop(&mut self, _instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_nop(&mut self, _instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!("NOP"));
         return 0;
     }
 
-    pub fn arm_multiply(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_multiply(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
         let rd = (instruction & 0x000F_0000) >> 16;
         let rs = (instruction & 0x0000_0F00) >> 8;
         let rm = instruction & 0x0000_000F;
@@ -82,15 +88,27 @@ impl CPU {
         }
     }
 
-    pub fn arm_multiply_accumulate(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
-        panic!("Not implemented" );
+    pub fn arm_multiply_accumulate(
+        &mut self,
+        instruction: ARMByteCode,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
+        panic!("Not implemented");
     }
 
-    pub fn arm_multiply_long(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_multiply_long(
+        &mut self,
+        instruction: ARMByteCode,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         todo!();
     }
 
-    pub fn arm_software_interrupt(&mut self, _instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_software_interrupt(
+        &mut self,
+        _instruction: ARMByteCode,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut cycles = 1;
         cycles += self.raise_exception(Exceptions::Software, memory);
         self.set_executed_instruction(format_args!("SWI"));
@@ -98,7 +116,11 @@ impl CPU {
         return cycles;
     }
 
-    pub fn arm_branch_and_exchange(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_branch_and_exchange(
+        &mut self,
+        instruction: ARMByteCode,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut destination = self.get_register(instruction & 0x0000_000F);
         let mut cycles = 1;
         if destination.bit_is_set(0) {
@@ -114,7 +136,11 @@ impl CPU {
         cycles
     }
 
-    pub fn arm_not_implemented(&mut self, instruction: ARMByteCode, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn arm_not_implemented(
+        &mut self,
+        instruction: ARMByteCode,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         self.set_executed_instruction(format_args!("NOT IMPLEMENTED"));
         panic!("NOT IMPLEMENTED: {:#X}", instruction);
         return 0;
@@ -125,77 +151,67 @@ impl CPU {
 mod instruction_tests {
 
     use crate::{
-        arm7tdmi::cpu::{CPUMode, CPU, LINK_REGISTER},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{CPUMode, LINK_REGISTER},
+        gba::GBA,
     };
 
     #[test]
     fn branch_ends_up_at_correct_address() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
 
-        let mut cpu = CPU::new(memory);
-
-        cpu.prefetch[0] = Some(0xea000002); // b 0x10
-        cpu.set_pc(4);
+        gba.cpu.prefetch[0] = Some(0xea000002); // b 0x10
+        gba.cpu.set_pc(4);
 
         let expected_destination = 0x10 + 0x8;
+        gba.step();
+        gba.step();
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_pc(), expected_destination);
+        assert_eq!(gba.cpu.get_pc(), expected_destination);
     }
 
     #[test]
     fn branch_can_go_backwards() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
 
-        let mut cpu = CPU::new(memory);
+        gba.cpu.prefetch[0] = Some(0xeafffffa); // b 0x0
+        gba.cpu.prefetch[1] = Some(0xe1a00000);
 
-        cpu.prefetch[0] = Some(0xeafffffa); // b 0x0
-        cpu.prefetch[1] = Some(0xe1a00000);
-
-        cpu.set_pc(0x14);
+        gba.cpu.set_pc(0x14);
 
         let expected_destination = 0x8;
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_pc(), expected_destination);
+        assert_eq!(gba.cpu.get_pc(), expected_destination);
     }
 
     #[test]
     fn branch_with_link_stores_the_instruction_correctly() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
 
-        let mut cpu = CPU::new(memory);
-
-        cpu.prefetch[0] = Some(0xebfffffa); // b 0
-        cpu.set_pc(0x14);
+        gba.cpu.prefetch[0] = Some(0xebfffffa); // b 0
+        gba.cpu.set_pc(0x14);
 
         let expected_destination = 0x8;
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert!(cpu.get_pc() == expected_destination);
-        assert!(cpu.get_register(LINK_REGISTER) == 0x14);
+        assert!(gba.cpu.get_pc() == expected_destination);
+        assert!(gba.cpu.get_register(LINK_REGISTER) == 0x14);
     }
 
     #[test]
     fn software_interrupt_goes_to_the_correct_interrupt_vec() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_mode(CPUMode::USER);
+        gba.cpu.set_pc(0xF8);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_mode(CPUMode::USER);
-        cpu.set_pc(0xF8);
-
-        cpu.prefetch[1] = Some(0xef000000); // SWI
-
-        cpu.execute_cpu_cycle();
-        assert_eq!(cpu.get_pc(), 0x10);
-        assert!(cpu.get_cpu_mode() == CPUMode::SVC);
-        assert_eq!(cpu.get_register(LINK_REGISTER), 0xF4);
+        gba.cpu.prefetch[1] = Some(0xef000000); // SWI
+        gba.step();
+        assert_eq!(gba.cpu.get_pc(), 0x10);
+        assert!(gba.cpu.get_cpu_mode() == CPUMode::SVC);
+        assert_eq!(gba.cpu.get_register(LINK_REGISTER), 0xF4);
     }
 }

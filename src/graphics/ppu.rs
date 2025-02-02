@@ -1,4 +1,7 @@
-use crate::memory::{io_handlers::{DISPSTAT, IF, IO_BASE, VCOUNT}, memory::MemoryBus};
+use crate::memory::{
+    io_handlers::{DISPSTAT, IF, IO_BASE, VCOUNT},
+    memory::GBAMemory,
+};
 
 const HDRAW: u64 = 240;
 const HBLANK: u64 = 68;
@@ -19,7 +22,7 @@ pub struct PPU {
 }
 
 impl PPU {
-    pub fn advance_ppu(&mut self, cycles: u8, memory: &mut Box<dyn MemoryBus>) {
+    pub fn advance_ppu(&mut self, cycles: u8, memory: &mut GBAMemory) {
         self.usable_cycles += cycles as u64;
         let dots = self.usable_cycles / 4;
         if dots < 1 {
@@ -28,44 +31,48 @@ impl PPU {
         self.usable_cycles %= 4;
         self.x += dots;
         let mut disp_stat = memory.readu16(IO_BASE + DISPSTAT).data;
-        let mut interrupt_flags_register = memory.readu16(IO_BASE + IF).data;
         if self.x >= (HDRAW + HBLANK) {
             self.y += 1;
             self.x %= HDRAW + HBLANK;
 
-            if self.y >= VDRAW && (disp_stat & VBLANK_ENABLE) > 0 {
-                disp_stat |= VBLANK_FLAG;
-                interrupt_flags_register |= VBLANK_FLAG;
-            }
+            self.check_vblank(&mut disp_stat);
 
-            if self.y >= (VDRAW + VBLANK) {
-                self.y %= VDRAW + VBLANK;
-            }
             memory.ppu_io_write(VCOUNT, self.y as u16);
         }
         memory.ppu_io_write(DISPSTAT, disp_stat);
-        memory.ppu_io_write(IF, interrupt_flags_register);
+    }
+
+    #[inline(always)]
+    fn check_vblank(&mut self, disp_stat: &mut u16) {
+        if self.y == VDRAW {
+            *disp_stat |= VBLANK_FLAG;
+        } else if self.y < VDRAW {
+            *disp_stat &= !VBLANK_FLAG;
+        }
+        self.y %= VDRAW + VBLANK;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{arm7tdmi::cpu::CPU, graphics::ppu::{HBLANK, HDRAW, VDRAW}, memory::{io_handlers::{DISPSTAT, IO_BASE}, memory::GBAMemory}};
+    use crate::{
+        gba::GBA,
+        graphics::ppu::{HBLANK, HDRAW, VDRAW},
+        memory::io_handlers::{DISPSTAT, IO_BASE},
+    };
 
     use super::VBLANK_ENABLE;
 
     #[test]
     fn ppu_sets_vblank_flag_when_in_vblank() {
-        let memory = GBAMemory::new();
-        let mut cpu = CPU::new(memory);
-        cpu.memory.writeu16(IO_BASE + DISPSTAT, VBLANK_ENABLE); // Enable VBLANK
-        assert_eq!(cpu.memory.readu16(IO_BASE + DISPSTAT).data, 0x8);
+        let mut gba = GBA::new_no_bios();
+        gba.memory.writeu16(IO_BASE + DISPSTAT, VBLANK_ENABLE); // Enable VBLANK
+        assert_eq!(gba.memory.readu16(IO_BASE + DISPSTAT).data, 0x8);
 
         for _ in 0..(VDRAW * (HDRAW + HBLANK) * 4) {
-            cpu.execute_cpu_cycle();
+            gba.step();
         }
 
-        assert_eq!(cpu.memory.readu16(IO_BASE + DISPSTAT).data, 0x9);
-
+        assert_eq!(gba.memory.readu16(IO_BASE + DISPSTAT).data, 0x9);
     }
 }

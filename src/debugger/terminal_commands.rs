@@ -121,7 +121,7 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
         None => 1,
     };
 
-    let cpu = &mut debugger.cpu;
+    let cpu = &mut debugger.gba;
     for _ in 0..num_executions {
         cpu.step();
         for breakpoint in debugger.breakpoints.borrow().iter() {

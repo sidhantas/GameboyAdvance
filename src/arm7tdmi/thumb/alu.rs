@@ -1,9 +1,16 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER}, utils::bits::{sign_extend, Bits}
+    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER},
+    memory::memory::GBAMemory,
+    types::{CYCLES, REGISTER},
+    utils::bits::{sign_extend, Bits},
 };
 
 impl CPU {
-    pub fn thumb_move_shifted_register_instruction(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_move_shifted_register_instruction(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let opcode = (instruction & 0x1800) >> 11;
         let rs_val = self.get_register((instruction & 0x0038) >> 3);
         let rd = instruction & 0x0007;
@@ -135,7 +142,11 @@ impl CPU {
         self.set_executed_instruction(format_args!("ASR {rd} {:#X} {:#X}", rs_val, offset));
     }
 
-    pub fn thumb_add_or_subtract_instruction(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_add_or_subtract_instruction(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let opcode = (instruction & 0x0600) >> 9;
         let operand2 = (instruction & 0x01C0) >> 6;
         let operand2_value;
@@ -168,7 +179,11 @@ impl CPU {
         0
     }
 
-    pub fn thumb_move_add_compare_add_subtract_immediate(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_move_add_compare_add_subtract_immediate(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let opcode = (instruction & 0x1800) >> 11;
         let rd = (instruction & 0x0700) >> 8;
         let imm: u8 = (instruction & 0x00FF) as u8;
@@ -222,7 +237,7 @@ impl CPU {
         self.set_executed_instruction(format_args!("SUB {} {:#X}", rd, imm));
     }
 
-    pub fn thumb_alu_instructions(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_alu_instructions(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let opcode = (instruction & 0x03C0) >> 6;
         let mut cycles = 0;
 
@@ -257,16 +272,17 @@ impl CPU {
             0xC => CPU::arm_orr,
             0xD => {
                 let multiplier = self.get_register(rd);
-                cycles +=
-                    if multiplier & 0xFFFF_FF00 == 0 || multiplier & 0xFFFF_FF00 == 0xFFFF_FF00 {
-                        1
-                    } else if multiplier & 0xFFFF_0000 == 0 || multiplier & 0xFFFF_0000 == 0xFFFF_0000 {
-                        2
-                    } else if multiplier & 0xFF00_0000 == 0 || multiplier & 0xFF00_0000 == 0xFFFF_0000 {
-                        3
-                    } else {
-                        4
-                    };
+                cycles += if multiplier & 0xFFFF_FF00 == 0
+                    || multiplier & 0xFFFF_FF00 == 0xFFFF_FF00
+                {
+                    1
+                } else if multiplier & 0xFFFF_0000 == 0 || multiplier & 0xFFFF_0000 == 0xFFFF_0000 {
+                    2
+                } else if multiplier & 0xFF00_0000 == 0 || multiplier & 0xFF00_0000 == 0xFFFF_0000 {
+                    3
+                } else {
+                    4
+                };
                 CPU::thumb_mul
             }
             0xE => CPU::arm_bic,
@@ -362,7 +378,7 @@ impl CPU {
         self.set_register(rd, result);
     }
 
-    pub fn thumb_hi_reg_operations(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_hi_reg_operations(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let opcode = (instruction & 0x0300) >> 8;
 
@@ -391,7 +407,7 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_bx(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_bx(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
         let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
         let mut destination = self.get_register(rs);
@@ -409,7 +425,11 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_get_relative_address(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_get_relative_address(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rd = (instruction & 0x0700) >> 8;
         let imm = (instruction & 0x00FF) * 4;
@@ -426,7 +446,7 @@ impl CPU {
         0
     }
 
-    pub fn thumb_add_offset_to_sp(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_add_offset_to_sp(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let opcode = instruction.get_bit(7);
         let imm = (instruction & 0x007F) * 4;
 
@@ -451,224 +471,201 @@ impl CPU {
 mod thumb_add_and_subtract_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_add_two_registers_together() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 20);
+        gba.cpu.set_register(2, 43);
+        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 20);
-        cpu.set_register(2, 43);
-        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 63);
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), 63);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_add_two_registers_together_and_set_n_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 20);
+        gba.cpu.set_register(2, (-43 as i32) as u32);
+        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 20);
-        cpu.set_register(2, (-43 as i32) as u32);
-        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), (-23 as i32) as u32);
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 1);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), (-23 as i32) as u32);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_add_two_registers_together_and_set_z_and_c_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 20);
+        gba.cpu.set_register(2, (-20 as i32) as u32);
+        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 20);
-        cpu.set_register(2, (-20 as i32) as u32);
-        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0);
-        assert!(cpu.get_flag(FlagsRegister::C) == 1);
-        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 1);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_add_two_registers_together_and_set_z_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0);
+        gba.cpu.set_register(2, 0);
+        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0);
-        cpu.set_register(2, 0);
-        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0);
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 1);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_add_two_registers_together_and_set_v_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x1);
+        gba.cpu.set_register(2, 0x7FFF_FFFF);
+        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x1);
-        cpu.set_register(2, 0x7FFF_FFFF);
-        cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x8000_0000);
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 1);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 1);
+        assert_eq!(gba.cpu.get_register(0), 0x8000_0000);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 1);
     }
 
     #[test]
     fn should_add_register_and_immediate_and_set_n_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, -10 as i32 as u32);
+        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, -10 as i32 as u32);
-        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), -5 as i32 as u32);
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 1);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), -5 as i32 as u32);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_add_register_and_immediate_and_set_z_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, -5 as i32 as u32);
+        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, -5 as i32 as u32);
-        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0 as i32 as u32);
-        assert!(cpu.get_flag(FlagsRegister::C) == 1);
-        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 1);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), 0 as i32 as u32);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_add_register_and_immediate_and_set_v_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x7FFF_FFFF);
+        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x7FFF_FFFF);
-        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x8000_0004);
-        assert!(cpu.get_flag(FlagsRegister::C) == 0);
-        assert!(cpu.get_flag(FlagsRegister::N) == 1);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 1);
+        assert_eq!(gba.cpu.get_register(0), 0x8000_0004);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 1);
     }
 
     #[test]
     fn should_add_register_and_immediate_and_set_c_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0xFFFF_FFFF);
+        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0xFFFF_FFFF);
-        cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x0000_0004);
-        assert!(cpu.get_flag(FlagsRegister::C) == 1);
-        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), 0x0000_0004);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_sub_two_registers() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 50);
+        gba.cpu.set_register(2, 20);
+        gba.cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 50);
-        cpu.set_register(2, 20);
-        cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 30);
-        assert!(cpu.get_flag(FlagsRegister::C) == 1);
-        assert!(cpu.get_flag(FlagsRegister::N) == 0);
-        assert!(cpu.get_flag(FlagsRegister::Z) == 0);
-        assert!(cpu.get_flag(FlagsRegister::V) == 0);
+        assert_eq!(gba.cpu.get_register(0), 30);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
     }
 
     #[test]
     fn should_sub_two_registers_and_reset_c_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 25);
+        gba.cpu.set_register(2, 50);
+        gba.cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 25);
-        cpu.set_register(2, 50);
-        cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), -25 as i32 as u32);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::V), 0);
+        assert_eq!(gba.cpu.get_register(0), -25 as i32 as u32);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::V), 0);
     }
 }
 
@@ -676,155 +673,138 @@ mod thumb_add_and_subtract_tests {
 mod thumb_move_shifted_register_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_left_shift_a_register_and_set_c_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x0F00_0000);
+        gba.cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x0F00_0000);
-        cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x0F00_0000 << 5);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x0F00_0000 << 5);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_not_left_shift_register_and_not_change_c_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x0F00_0000);
+        gba.cpu.set_flag(FlagsRegister::C);
+        gba.cpu.prefetch[0] = Some(0x0008); // lsls r0, r1, 0
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x0F00_0000);
-        cpu.set_flag(FlagsRegister::C);
-        cpu.prefetch[0] = Some(0x0008); // lsls r0, r1, 0
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x0F00_0000);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x0F00_0000);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_lsl_register_and_not_affect_v_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0xF000_0000);
+        gba.cpu.set_flag(FlagsRegister::V);
+        gba.cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0xF000_0000);
-        cpu.set_flag(FlagsRegister::V);
-        cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x0);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::V), 1);
+        assert_eq!(gba.cpu.get_register(0), 0x0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::V), 1);
     }
 
     #[test]
     fn should_asr_register_and_set_c_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x0000_008F);
+        gba.cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x0000_008F);
-        cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x0000_0008);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x0000_0008);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_asr_register_and_maintain_sign() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x8000_008F);
+        gba.cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x8000_008F);
-        cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0xF800_0008);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0xF800_0008);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_asr_register_and_set_all_ones() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x8000_0000);
+        gba.cpu.prefetch[0] = Some(0x1008); // asrs r0, r1, 32
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x8000_0000);
-        cpu.prefetch[0] = Some(0x1008); // asrs r0, r1, 32
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0xFFFF_FFFF);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0xFFFF_FFFF);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_lsr_register() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x8000_008F);
+        gba.cpu.prefetch[0] = Some(0x0a88); // lsrs r0, r1, 10
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x8000_008F);
-        cpu.prefetch[0] = Some(0x0a88); // lsrs r0, r1, 10
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x8000_008F >> 10);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x8000_008F >> 10);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_lsr_register_and_clear_register() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(1, 0x8000_008F);
+        gba.cpu.prefetch[0] = Some(0x0808); // lsrs r0, r1, 32
+        gba.step();
+        gba.step();
 
-        cpu.set_register(1, 0x8000_008F);
-        cpu.prefetch[0] = Some(0x0808); // lsrs r0, r1, 32
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+        assert_eq!(gba.cpu.get_register(0), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
     }
 }
 
@@ -832,95 +812,84 @@ mod thumb_move_shifted_register_tests {
 mod thumb_move_compare_add_subtract_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_move_immediate_into_r0() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0x200f); // movs r0, 15
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0x200f); // movs r0, 15
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 15);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 15);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_move_immediate_into_r0_and_not_set_n_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0x2096); // movs r0, 150
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0x2096); // movs r0, 150
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 150);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 150);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_move_immediate_into_r0_and_set_z_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0x2000); // movs r0, 0
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0x2000); // movs r0, 0
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+        assert_eq!(gba.cpu.get_register(0), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
     }
 
     #[test]
     fn should_sub_imm_from_r0_and_set_z_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 15);
+        gba.cpu.prefetch[0] = Some(0x380f); // subs r0, 15
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 15);
-        cpu.prefetch[0] = Some(0x380f); // subs r0, 15
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+        assert_eq!(gba.cpu.get_register(0), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
     }
 
     #[test]
     fn should_add_imm_to_r0_and_set_n_flag() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 0x7FFF_FFFF);
+        gba.cpu.prefetch[0] = Some(0x300f); // adds r0, 15
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 0x7FFF_FFFF);
-        cpu.prefetch[0] = Some(0x300f); // adds r0, 15
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x8000_000E);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x8000_000E);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 }
 
@@ -928,82 +897,73 @@ mod thumb_move_compare_add_subtract_tests {
 mod thumb_alu_operations_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_and_two_numbers_together() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 0x8123_2344);
+        gba.cpu.set_register(1, 0x8000_2344);
+        gba.cpu.prefetch[0] = Some(0x4008); // ands r0, r1
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 0x8123_2344);
-        cpu.set_register(1, 0x8000_2344);
-        cpu.prefetch[0] = Some(0x4008); // ands r0, r1
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x8000_2344);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x8000_2344);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_eor_two_numbers_together() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 0x1010_1010);
+        gba.cpu.set_register(1, 0x0101_0101);
+        gba.cpu.prefetch[0] = Some(0x4048); // eors r0, r1
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 0x1010_1010);
-        cpu.set_register(1, 0x0101_0101);
-        cpu.prefetch[0] = Some(0x4048); // eors r0, r1
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x1111_1111);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x1111_1111);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_lsl_rd_by_5() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 0x0F11_1230);
+        gba.cpu.set_register(1, 5);
+        gba.cpu.prefetch[0] = Some(0x4088); // lsl r0, r1
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 0x0F11_1230);
-        cpu.set_register(1, 5);
-        cpu.prefetch[0] = Some(0x4088); // lsl r0, r1
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0xE222_4600);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0xE222_4600);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_lsr_rd_by_0() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 0x0F11_1230);
+        gba.cpu.set_register(1, 0);
+        gba.cpu.prefetch[0] = Some(0x40c8); // lsr r0, r1
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 0x0F11_1230);
-        cpu.set_register(1, 0);
-        cpu.prefetch[0] = Some(0x40c8); // lsr r0, r1
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 0x0F11_1230);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 0x0F11_1230);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 }
 
@@ -1011,64 +971,57 @@ mod thumb_alu_operations_tests {
 mod thumb_hi_reg_operations {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_add_two_regs_together_and_not_affect_flags() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 20);
+        gba.cpu.set_register(11, 15);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.prefetch[1] = Some(0x4458); // add r0, r11
+        gba.step();
 
-        cpu.set_register(0, 20);
-        cpu.set_register(11, 15);
-        cpu.set_flag(FlagsRegister::N);
-        cpu.prefetch[1] = Some(0x4458); // add r0, r11
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 35);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_register(0), 35);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
     }
 
     #[test]
     fn should_cmp_registers_and_set_flags() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 20);
+        gba.cpu.set_register(11, 20);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.prefetch[0] = Some(0x4558); // cmp r0, r11
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 20);
-        cpu.set_register(11, 20);
-        cpu.set_flag(FlagsRegister::N);
-        cpu.prefetch[0] = Some(0x4558); // cmp r0, r11
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 20);
-        assert_eq!(cpu.get_flag(FlagsRegister::N), 0);
-        assert_eq!(cpu.get_flag(FlagsRegister::C), 1);
-        assert_eq!(cpu.get_flag(FlagsRegister::Z), 1);
+        assert_eq!(gba.cpu.get_register(0), 20);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
     }
 
     #[test]
     fn should_mov_register() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(0, 20);
+        gba.cpu.set_register(11, 55);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.prefetch[0] = Some(0x4658); // cmp r0, r11
+        gba.step();
+        gba.step();
 
-        cpu.set_register(0, 20);
-        cpu.set_register(11, 55);
-        cpu.set_flag(FlagsRegister::N);
-        cpu.prefetch[0] = Some(0x4658); // cmp r0, r11
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(0), 55);
+        assert_eq!(gba.cpu.get_register(0), 55);
     }
 }
 
@@ -1076,40 +1029,35 @@ mod thumb_hi_reg_operations {
 mod thumb_bx_tests {
 
     use crate::{
-        arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_switch_to_arm_mode_and_align_address() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_register(5, 0x16);
+        gba.cpu.prefetch[0] = Some(0x4728); // bx r5
+        gba.step();
+        gba.step();
 
-        cpu.set_register(5, 0x16);
-        cpu.prefetch[0] = Some(0x4728); // bx r5
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_pc(), 0x1C);
-        assert!(matches!(cpu.get_instruction_mode(), InstructionMode::ARM));
+        assert_eq!(gba.cpu.get_pc(), 0x1C);
+        assert!(matches!(gba.cpu.get_instruction_mode(), InstructionMode::ARM));
     }
 
     #[test]
     fn should_switch_to_arm_mode_when_pc_operand() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.set_pc(0x16);
+        gba.cpu.prefetch[0] = Some(0x4778); // bx r15
+        gba.step();
+        gba.step();
 
-        cpu.set_pc(0x16);
-        cpu.prefetch[0] = Some(0x4778); // bx r15
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_pc(), 0x20);
-        assert!(matches!(cpu.get_instruction_mode(), InstructionMode::ARM));
+        assert_eq!(gba.cpu.get_pc(), 0x20);
+        assert!(matches!(gba.cpu.get_instruction_mode(), InstructionMode::ARM));
     }
 }
 
@@ -1117,68 +1065,59 @@ mod thumb_bx_tests {
 mod get_relative_address_tests {
 
     use crate::{
-        arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::GBAMemory,
+        arm7tdmi::cpu::{InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn should_add_12_to_pc() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0xa503); // add r5, pc, 12
+        gba.cpu.set_pc(2);
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0xa503); // add r5, pc, 12
-        cpu.set_pc(2);
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_pc(), 6);
-        assert_eq!(cpu.get_register(5), 16);
+        assert_eq!(gba.cpu.get_pc(), 6);
+        assert_eq!(gba.cpu.get_register(5), 16);
     }
 
     #[test]
     fn should_add_16_to_sp_and_store_in_r5() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0xad04); // add r5, sp, 16
+        gba.cpu.set_sp(2);
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0xad04); // add r5, sp, 16
-        cpu.set_sp(2);
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(5), 18);
+        assert_eq!(gba.cpu.get_register(5), 18);
     }
 
     #[test]
     fn should_add_500_to_sp() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0xb07d); // add sp, 500
+        gba.cpu.set_sp(2);
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0xb07d); // add sp, 500
-        cpu.set_sp(2);
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_sp(), 502);
+        assert_eq!(gba.cpu.get_sp(), 502);
     }
 
     #[test]
     fn should_sub_500_to_sp() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0xb0fd); // add sp, 500
+        gba.cpu.set_sp(2);
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0xb0fd); // add sp, 500
-        cpu.set_sp(2);
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_sp(), (2 - 500) as i32 as u32);
+        assert_eq!(gba.cpu.get_sp(), (2 - 500) as i32 as u32);
     }
 }

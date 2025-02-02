@@ -7,14 +7,12 @@ use std::{
 
 use crate::{
     memory::{
-        io_handlers::{IE, IF, IME, IO_BASE},
-        memory::MemoryBus,
+        memory::{GBAMemory},
     },
     types::*,
     utils::bits::Bits,
 };
 
-use super::interrupts::Exceptions;
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -60,6 +58,7 @@ pub struct CPU {
     registers_abt: [WORD; 2],
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
+    pub(super) is_halted: bool,
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
@@ -102,13 +101,18 @@ impl CPU {
             cycles: 0,
             relative_cycles: 3,
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
+            is_halted: false
         };
         cpu
     }
 
     #[no_mangle]
-    pub fn execute_cpu_cycle(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
+        if self.is_halted {
+            self.cycles += 1;
+             return 1;
+        }
         if self.status_history.len() >= HISTORY_SIZE {
             self.status_history.pop_front();
         }
@@ -116,16 +120,6 @@ impl CPU {
             INSTRUCTION_COUNT += 1;
         }
         self.status_history.push_back(self.get_status());
-        let ime = memory.readu16(IO_BASE + IME).data;
-        let interrupt_flags_register = memory.readu16(IO_BASE + IF).data;
-        let interrupt_enable_register = memory.readu16(IO_BASE + IE).data;
-
-        if (interrupt_flags_register & interrupt_enable_register) > 0
-            && ime > 0
-            && !self.cpsr.bit_is_set(7)
-        {
-            self.raise_exception(Exceptions::IRQ, memory);
-        }
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
@@ -143,7 +137,7 @@ impl CPU {
         execution_cycles as u8
     }
 
-    pub fn flush_pipeline(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn flush_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         self.prefetch[0] = None;
         self.prefetch[1] = None;
@@ -154,7 +148,7 @@ impl CPU {
         cycles
     }
 
-    pub fn advance_pipeline(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn advance_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.prefetch[1] = self.prefetch[0];
         self.fetch_instruction(memory)
     }
@@ -295,7 +289,7 @@ impl CPU {
         self.set_flag(flag);
     }
 
-    pub(super) fn fetch_instruction(&mut self, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub(super) fn fetch_instruction(&mut self, memory: &mut GBAMemory) -> CYCLES {
         let memory_fetch = {
             match self.get_instruction_mode() {
                 InstructionMode::ARM => memory.readu32(self.get_pc() as usize),
@@ -435,15 +429,14 @@ impl Drop for CPU {
 #[cfg(test)]
 mod cpu_tests {
 
-    use crate::{arm7tdmi::cpu::CPUMode, memory::memory::GBAMemory, utils::bits::Bits};
+    use crate::{arm7tdmi::cpu::CPUMode, utils::bits::Bits};
 
     use super::CPU;
 
     #[test]
     fn it_sets_and_resets_the_corrects_flags() {
-        let memory = GBAMemory::new();
 
-        let mut cpu = CPU::new(memory);
+        let mut cpu = CPU::new();
 
         cpu.set_flag(super::FlagsRegister::C);
         cpu.set_flag(super::FlagsRegister::N);
@@ -462,9 +455,7 @@ mod cpu_tests {
 
     #[test]
     fn cpu_starts_in_svc_mode() {
-        let memory = GBAMemory::new();
-
-        let cpu = CPU::new(memory);
+        let cpu = CPU::new();
 
         assert!(matches!(cpu.get_cpu_mode(), CPUMode::SVC));
     }

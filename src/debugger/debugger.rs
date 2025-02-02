@@ -23,7 +23,7 @@ use tui::{
 
 use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::{
-        debugger_memory::DebuggerMemory, io_handlers::{IO_BASE, VCOUNT}, memory::GBAMemory
+        io_handlers::{IO_BASE, VCOUNT}
     }, utils::bits::Bits
 };
 
@@ -35,42 +35,15 @@ pub struct Debugger {
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub terminal_enabled: bool,
     pub end_debugger: bool,
-    pub cpu: GBA,
+    pub gba: GBA,
     pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
     pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
 
 impl Debugger {
     pub fn new(bios: String, rom: String) -> Self {
-        let memory = GBAMemory::new();
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
-
-        let memory = {
-            let breakpoints = breakpoints.clone();
-            let triggered_watchpoints = triggered_watchpoints.clone();
-            let triggered_watchpoints_mem = triggered_watchpoints.clone();
-
-            DebuggerMemory::new(
-                memory,
-                Box::new(move |address| {
-                    for bp in breakpoints.borrow().iter() {
-                        if let BreakType::WatchAddress(adr1, adr2) = bp.break_type {
-                            if adr1 <= address && address <= adr2 {
-                                triggered_watchpoints
-                                    .borrow_mut()
-                                    .push(TriggeredWatchpoints::Address(address));
-                            }
-                        }
-                    }
-                }),
-                Box::new(move |memory_error| {
-                    triggered_watchpoints_mem
-                        .borrow_mut()
-                        .push(TriggeredWatchpoints::Error(memory_error))
-                }),
-            )
-        };
 
         let cpu = GBA::new(bios, rom);
 
@@ -80,7 +53,7 @@ impl Debugger {
             terminal_history: Vec::new(),
             terminal_enabled: true,
             end_debugger: false,
-            cpu,
+            gba: cpu,
             breakpoints,
             triggered_watchpoints,
         }
@@ -165,7 +138,7 @@ pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
             let terminal_chunk = horizontal_chunks_1[1];
 
             {
-                let cpu = &debugger.cpu;
+                let cpu = &debugger.gba;
                 draw_cpu(f, cpu_chunk, &cpu.cpu).unwrap();
                 draw_ppu(f, ppu_chunk, cpu).unwrap();
                 draw_registers(f, register_chunk, 0, &cpu.cpu).unwrap();
@@ -363,7 +336,7 @@ fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
 
 fn handle_normal_mode_events(debugger: &mut Debugger, event: KeyEvent) {
     match event.code {
-        KeyCode::Char('n') => debugger.cpu.step(),
+        KeyCode::Char('n') => debugger.gba.step(),
         KeyCode::Char('M') => debugger.memory_start_address -= 0x100,
         KeyCode::Char('m') => debugger.memory_start_address += 0x100,
         _ => {}

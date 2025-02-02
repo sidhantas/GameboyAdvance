@@ -1,4 +1,6 @@
-use super::memory::{GBAMemory, MemoryError};
+use crate::arm7tdmi::cpu::CPU;
+
+use super::memory::{CPUCallbacks, GBAMemory, MemoryError};
 
 pub const IO_BASE: usize = 0x4000000;
 const DISPCNT: usize = 0x000;
@@ -83,6 +85,7 @@ const HALTCNT: usize = 0x301;
 struct IORegisterDefinition {
     pub mask: BitMask,
     needs_special_handling: bool,
+    pub callback: Option<fn(&mut GBAMemory, u16, u16) -> ()>,
 }
 
 #[derive(Clone, Copy)]
@@ -98,7 +101,13 @@ impl IORegisterDefinition {
         Self {
             mask,
             needs_special_handling,
+            callback: None,
         }
+    }
+
+    pub const fn with_callback(mut self, callback: fn(&mut GBAMemory, u16, u16) -> ()) -> Self {
+        self.callback = Some(callback);
+        self
     }
 
     #[inline(always)]
@@ -399,7 +408,9 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
         false,
     ));
     definitions[POSTFLG] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x01, 0x01), false));
-    definitions[HALTCNT] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x80, 0x80), false));
+    definitions[HALTCNT] = Some(
+        IORegisterDefinition::new(BitMask::EIGHT(0x80, 0x80), false).with_callback(GBAMemory::halt),
+    );
     definitions[0x110] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x0000, 0x0000),
         false,
@@ -498,90 +509,6 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
 };
 
 #[inline(always)]
-pub fn io_load(region: &Vec<u16>, address: usize) -> u16 {
-    *region.get(address >> 1).unwrap_or(&0)
-}
-
-fn masked_io_load(region: &Vec<u16>, address: usize) -> Result<u16, MemoryError> {
-    let Ok(def) = get_io_definition(address) else {
-        return Ok(0);
-    };
-    if def.requires_special_handling() {
-        match address {
-            IF => {},
-            KEYINPUT => {}
-            _ => todo!(),
-        }
-    }
-    let data = io_load(region, address);
-    Ok(match def.mask {
-        BitMask::EIGHT(lower_mask, _) => {
-            let upper_mask = get_io_definition(address + 1).map_or(0, |def| {
-                let BitMask::EIGHT(mask, _) = def.mask else {
-                    panic!("Upper mask isn't 8 bit")
-                };
-                mask
-            });
-            let full_mask: u16 = ((upper_mask as u16) << 8) | lower_mask as u16;
-
-            data & full_mask
-        }
-        BitMask::SIXTEEN(mask, _) => mask & data,
-        BitMask::THIRTYTWO(mask, _) => {
-            let shifted_mask = (mask >> (8 * address & 0b10)) as u16;
-            data & shifted_mask
-        }
-    })
-}
-
-#[inline(always)]
-pub fn io_store(region: &mut Vec<u16>, address: usize, value: u16) {
-    let store_address = address >> 1;
-    if store_address < region.len() {
-        region[store_address] = value;
-    }
-}
-
-fn masked_io_store(region: &mut Vec<u16>, address: usize, value: u16) -> Result<(), MemoryError> {
-    let mut value = value;
-    let Ok(def) = get_io_definition(address) else {
-        return Ok(());
-    };
-    if def.requires_special_handling() {
-        match address {
-            IF => {
-                value = io_load(region, address) & !value;
-            },
-            KEYINPUT => {
-                return Ok(())
-            }
-            _ => return Err(MemoryError::NoIODefinition(address)),
-        }
-    }
-    let store_value = match def.mask {
-        BitMask::EIGHT(_, lower_mask) => {
-            let upper_mask = get_io_definition(address + 1).map_or(0, |def| {
-                let BitMask::EIGHT(_, mask) = def.mask else {
-                    panic!("Upper mask isn't 8 bit")
-                };
-                mask
-            });
-            let full_mask: u16 = (upper_mask as u16) << 8 | lower_mask as u16;
-
-            value & full_mask
-        }
-        BitMask::SIXTEEN(_, mask) => value & mask,
-        BitMask::THIRTYTWO(_, mask) => {
-            let shifted_mask = (mask >> (8 * address & 0b10)) as u16;
-            value & shifted_mask
-        }
-    };
-
-    io_store(region, address, store_value);
-    Ok(())
-}
-
-#[inline(always)]
 fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError> {
     if let Some(io_definition) = IO_REGISTER_DEFINITIONS[offset] {
         return Ok(io_definition);
@@ -594,31 +521,31 @@ fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError>
 
 impl GBAMemory {
     pub(super) fn io_readu8(&self, address: usize) -> Result<u8, MemoryError> {
-        let load_value = masked_io_load(&self.ioram, address & 0xFFE)?;
+        let load_value = self.masked_io_load(address & 0xFFE)?;
         Ok((load_value >> (8 * (address & 0b1))) as u8)
     }
 
     pub(super) fn io_readu16(&self, address: usize) -> Result<u16, MemoryError> {
-        Ok(masked_io_load(&self.ioram, address & 0xFFE)?)
+        Ok(self.masked_io_load(address & 0xFFE)?)
     }
 
     pub(super) fn io_readu32(&self, address: usize) -> Result<u32, MemoryError> {
         let word_aligned_offset = address & 0xFFC;
-        let lower = masked_io_load(&self.ioram, word_aligned_offset).unwrap_or(0) as u32;
-        let upper = masked_io_load(&self.ioram, word_aligned_offset + 2).unwrap_or(0) as u32;
+        let lower = self.masked_io_load(word_aligned_offset).unwrap_or(0) as u32;
+        let upper = self.masked_io_load(word_aligned_offset + 2).unwrap_or(0) as u32;
 
         Ok(upper << 16 | lower)
     }
 
     pub(super) fn io_writeu8(&mut self, address: usize, value: u8) -> Result<(), MemoryError> {
-        let mut current_value = io_load(&self.ioram, address & 0xFFE);
+        let mut current_value = self.io_load(address & 0xFFE);
         current_value &= 0xFF << (8 * !(address & 0b1));
         current_value |= (value as u16) << (8 * (address & 0b1));
-        masked_io_store(&mut self.ioram, address & 0xFFF, current_value)
+        self.masked_io_store(address & 0xFFF, current_value)
     }
 
     pub(super) fn io_writeu16(&mut self, address: usize, value: u16) -> Result<(), MemoryError> {
-        masked_io_store(&mut self.ioram, address & 0xFFE, value)
+        self.masked_io_store(address & 0xFFE, value)
     }
 
     pub(super) fn io_writeu32(&mut self, address: usize, value: u32) -> Result<(), MemoryError> {
@@ -633,8 +560,8 @@ impl GBAMemory {
                     todo!();
                 }
                 let store_value = mask & value;
-                io_store(&mut self.ioram, offset, (store_value >> 16) as u16);
-                io_store(&mut self.ioram, offset, (store_value & 0xFFFF) as u16);
+                self.io_store(offset, (store_value >> 16) as u16);
+                self.io_store(offset, (store_value & 0xFFFF) as u16);
             }
             _ => {
                 self.io_writeu16(offset + 2, (value >> 16) as u16)?;
@@ -646,6 +573,102 @@ impl GBAMemory {
 
         Ok(())
     }
+
+    #[inline(always)]
+    pub fn io_load(&self, address: usize) -> u16 {
+        *self.ioram.get(address >> 1).unwrap_or(&0)
+    }
+
+    fn masked_io_load(&self, address: usize) -> Result<u16, MemoryError> {
+        let Ok(def) = get_io_definition(address) else {
+            return Ok(0);
+        };
+        if def.requires_special_handling() {
+            match address {
+                IF => {}
+                KEYINPUT => {}
+                _ => todo!(),
+            }
+        }
+        let data = self.io_load(address);
+        Ok(match def.mask {
+            BitMask::EIGHT(lower_mask, _) => {
+                let upper_mask = get_io_definition(address + 1).map_or(0, |def| {
+                    let BitMask::EIGHT(mask, _) = def.mask else {
+                        panic!("Upper mask isn't 8 bit")
+                    };
+                    mask
+                });
+                let full_mask: u16 = ((upper_mask as u16) << 8) | lower_mask as u16;
+
+                data & full_mask
+            }
+            BitMask::SIXTEEN(mask, _) => mask & data,
+            BitMask::THIRTYTWO(mask, _) => {
+                let shifted_mask = (mask >> (8 * address & 0b10)) as u16;
+                data & shifted_mask
+            }
+        })
+    }
+
+    #[inline(always)]
+    pub(super) fn io_store(&mut self, address: usize, value: u16) {
+        let store_address = address >> 1;
+        if store_address < self.ioram.len() {
+            self.ioram[store_address] = value;
+        }
+    }
+
+    fn masked_io_store(&mut self, address: usize, value: u16) -> Result<(), MemoryError> {
+        let mut value = value;
+        let Ok(def) = get_io_definition(address) else {
+            return Ok(());
+        };
+        if def.requires_special_handling() {
+            match address {
+                IF => {
+                    value = self.io_load(address) & !value;
+                }
+                KEYINPUT => return Ok(()),
+                _ => return Err(MemoryError::NoIODefinition(address)),
+            }
+        }
+        let store_value = match def.mask {
+            BitMask::EIGHT(_, lower_mask) => {
+                let upper_mask = get_io_definition(address + 1).map_or(0, |def| {
+                    let BitMask::EIGHT(_, mask) = def.mask else {
+                        panic!("Upper mask isn't 8 bit")
+                    };
+                    mask
+                });
+                let full_mask: u16 = (upper_mask as u16) << 8 | lower_mask as u16;
+
+                value & full_mask
+            }
+            BitMask::SIXTEEN(_, mask) => value & mask,
+            BitMask::THIRTYTWO(_, mask) => {
+                let shifted_mask = (mask >> (8 * address & 0b10)) as u16;
+                value & shifted_mask
+            }
+        };
+        if let Some(callback) = def.callback {
+            let old_value = self.io_load(address);
+            callback(self, old_value, store_value);
+        }
+
+        self.io_store(address, store_value);
+        Ok(())
+    }
+
+    pub(super) fn halt(&mut self, _old_value: u16, value: u16) {
+        if value & 0x8000 > 0 {
+            self.cpu_commands.push(CPUCallbacks::STOP);
+            return;
+        }
+        self.cpu_commands.push(CPUCallbacks::HALT);
+    }
+
+    pub(super) fn update_interrupts_from_dispstat(&mut self, old_value: u16, value: u16) {}
 }
 
 #[cfg(test)]
@@ -669,7 +692,7 @@ mod tests {
         #[case] expected_value: u8,
     ) {
         let mut memory = GBAMemory::new();
-        io_store(&mut memory.ioram, address, write_value);
+        memory.io_store(address, write_value);
         assert_eq!(memory.io_readu8(address).unwrap(), expected_value);
     }
 
@@ -689,7 +712,7 @@ mod tests {
         #[case] expected_value: u16,
     ) {
         let mut memory = GBAMemory::new();
-        io_store(&mut memory.ioram, address, write_value);
+        memory.io_store(address, write_value);
         assert_eq!(memory.io_readu16(address).unwrap(), expected_value);
     }
 
@@ -707,12 +730,8 @@ mod tests {
         #[case] expected_value: u32,
     ) {
         let mut memory = GBAMemory::new();
-        io_store(&mut memory.ioram, address, (write_value & 0xFFFF) as u16);
-        io_store(
-            &mut memory.ioram,
-            address + 2,
-            ((write_value >> 16) & 0xFFFF) as u16,
-        );
+        memory.io_store(address, (write_value & 0xFFFF) as u16);
+        memory.io_store(address + 2, ((write_value >> 16) & 0xFFFF) as u16);
         assert_eq!(memory.io_readu32(address).unwrap(), expected_value);
     }
 
@@ -727,7 +746,7 @@ mod tests {
         let mut memory = GBAMemory::new();
         memory.io_writeu16(address, write_value).unwrap();
 
-        assert_eq!(io_load(&memory.ioram, address), expected_value);
+        assert_eq!(memory.io_load(address), expected_value);
     }
 
     #[rstest]
@@ -739,18 +758,18 @@ mod tests {
         #[case] expected_val: u16,
     ) {
         let mut memory = GBAMemory::new();
-        io_store(&mut memory.ioram, IF, if_val);
+        memory.io_store(IF, if_val);
         memory.io_writeu16(IF, write_val).unwrap();
 
-        assert_eq!(io_load(&memory.ioram, IF), expected_val);
+        assert_eq!(memory.io_load(IF), expected_val);
     }
 
     #[rstest]
     fn test_write_io8() {
         let mut memory = GBAMemory::new();
-        io_store(&mut memory.ioram, SOUNDBIAS, 0x200);
+        memory.io_store(SOUNDBIAS, 0x200);
         memory.io_writeu8(SOUNDBIAS + 1, 0x42).unwrap();
 
-        assert_eq!(io_load(&memory.ioram, SOUNDBIAS), 0x4200);
+        assert_eq!(memory.io_load(SOUNDBIAS), 0x4200);
     }
 }

@@ -1,10 +1,10 @@
 
 use crate::{
-    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER}, utils::bits::Bits
+    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER}, memory::memory::{GBAMemory}, types::{CYCLES, REGISTER}, utils::bits::Bits
 };
 
 impl CPU {
-    pub fn ldr_pc_relative(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn ldr_pc_relative(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
         let rd = (instruction & 0x0700) >> 8;
         let offset = (instruction & 0x00FF) * 4;
@@ -21,7 +21,7 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_register_offset(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn sdt_register_offset(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let ro = (instruction & 0x01C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
@@ -44,7 +44,7 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_sign_extend_byte_or_halfword(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn sdt_sign_extend_byte_or_halfword(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let opcode = (instruction & 0x0C00) >> 10;
         let ro = (instruction & 0x01C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
@@ -64,7 +64,7 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_imm_offset(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn sdt_imm_offset(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let opcode = (instruction & 0x1800) >> 11;
         let imm = (instruction & 0x07C0) >> 6;
@@ -93,7 +93,7 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_halfword_imm_offset(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn sdt_halfword_imm_offset(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let imm = (instruction & 0x07C0) >> 5;
         let rb = (instruction & 0x0038) >> 3;
@@ -110,7 +110,7 @@ impl CPU {
         operation(self, rd, address, memory)
     }
 
-    pub fn thumb_sdt_sp_imm(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_sdt_sp_imm(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rd = (instruction & 0x0700) >> 8;
         let imm = instruction & 0x00FF;
@@ -125,7 +125,7 @@ impl CPU {
         operation(self, rd, address, false, memory)
     }
 
-    pub fn thumb_push_pop(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_push_pop(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let opcode = instruction.get_bit(11);
 
@@ -161,7 +161,7 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_multiple_load_or_store(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_multiple_load_or_store(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rb = (instruction & 0x0700) >> 8;
 
@@ -187,23 +187,21 @@ impl CPU {
 mod thumb_ldr_str_tests {
 
     use crate::{
-        arm7tdmi::cpu::{InstructionMode, CPU},
-        memory::memory::{GBAMemory, MemoryBus},
+        arm7tdmi::cpu::InstructionMode, gba::GBA
     };
 
     #[test]
     fn should_load_data_relative_to_pc() {
-        let memory = GBAMemory::new();
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
-        cpu.memory.writeu32(0x3000024, 0x55);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.memory.writeu32(0x3000024, 0x55);
 
-        cpu.set_pc(0x3000016);
-        cpu.prefetch[0] = Some(0x4d03); // ldr r5, [pc, 12]
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.cpu.set_pc(0x3000016);
+        gba.cpu.prefetch[0] = Some(0x4d03); // ldr r5, [pc, 12]
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(5), 0x55);
+        assert_eq!(gba.cpu.get_register(5), 0x55);
     }
 }

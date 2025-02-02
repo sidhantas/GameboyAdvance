@@ -1,11 +1,11 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{CPUMode, CPU, PC_REGISTER}, memory::memory::MemoryBus, types::{CYCLES, REGISTER, WORD}, utils::{bits::{sign_extend, Bits}, utils::print_vec}
+    arm7tdmi::cpu::{CPUMode, CPU, PC_REGISTER}, memory::memory::{GBAMemory}, types::{CYCLES, REGISTER, WORD}, utils::{bits::{sign_extend, Bits}, utils::print_vec}
 };
 
 impl CPU {
-    pub fn sdt_instruction_execution(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn sdt_instruction_execution(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let offset;
         let offset_address;
@@ -75,7 +75,7 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
         if byte_transfer {
@@ -92,7 +92,7 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let mut cycles = 1;
         let data = {
@@ -116,7 +116,7 @@ impl CPU {
         cycles
     }
 
-    pub fn hw_or_signed_data_transfer(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn hw_or_signed_data_transfer(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let pre_indexed_addressing = instruction.bit_is_set(24);
         let add_offset = instruction.bit_is_set(23);
         let use_immediate_offset = instruction.bit_is_set(22);
@@ -170,7 +170,7 @@ impl CPU {
         cycles
     }
 
-    pub fn strh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn strh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
         let data: WORD = self.get_register(rd);
         let cycles = { memory.writeu16(address as usize, data as u16) };
         self.set_executed_instruction(format_args!("STRH {} [{:#X}]", rd, address));
@@ -178,7 +178,7 @@ impl CPU {
         cycles
     }
 
-    pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
         let memory_fetch = { memory.readu16(address as usize) };
 
@@ -194,7 +194,7 @@ impl CPU {
         cycles
     }
 
-    pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
         let memory_fetch = { memory.read(address as usize) };
 
@@ -210,7 +210,7 @@ impl CPU {
         cycles
     }
 
-    pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
         let memory_fetch = { memory.readu16(address as usize) };
 
@@ -226,7 +226,7 @@ impl CPU {
         cycles
     }
 
-    pub fn block_dt_execution(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn block_dt_execution(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         if instruction.bit_is_set(22) {
             todo!("Implement S bit");
@@ -274,7 +274,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let mut cycles = 0;
         let mut curr_address = base_address;
@@ -299,7 +299,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let mut cycles = 1;
         let mut curr_address = base_address;
@@ -326,7 +326,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let mut cycles = 0;
         let mut curr_address = base_address;
@@ -351,7 +351,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let mut cycles = 1;
         let mut curr_address = base_address;
@@ -378,7 +378,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.stmia_execution(base_address, register_list, None, memory);
@@ -399,7 +399,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.ldmia_execution(base_address, register_list, None, memory);
@@ -420,7 +420,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.stmib_execution(base_address, register_list, None, memory);
@@ -442,7 +442,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut Box<dyn MemoryBus>
+        memory: &mut GBAMemory
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.ldmib_execution(base_address, register_list, None, memory);
@@ -463,505 +463,504 @@ impl CPU {
 #[cfg(test)]
 mod sdt_tests {
     use crate::{
-        arm7tdmi::cpu::CPU,
-        memory::memory::{GBAMemory, MemoryBus},
+        arm7tdmi::cpu::CPU, gba::GBA, memory::memory::GBAMemory
     };
 
     #[test]
     fn ldr_should_return_data_at_specified_address() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize, value);
+        let _res = gba.memory.writeu32(address as usize, value);
 
-        cpu.set_register(1, address);
+        gba.cpu.set_register(1, address);
 
-        cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
+        gba.cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), value);
+        assert_eq!(gba.cpu.get_register(2), value);
     }
 
     #[test]
     fn ldr_should_return_data_at_specified_address_plus_offset() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize + 8, value);
+        let _res = gba.memory.writeu32(address as usize + 8, value);
 
-        cpu.set_register(1, address);
+        gba.cpu.set_register(1, address);
 
-        cpu.prefetch[0] = Some(0xe5912008); // ldr r2, [r1, 8]
+        gba.cpu.prefetch[0] = Some(0xe5912008); // ldr r2, [r1, 8]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), value);
+        assert_eq!(gba.cpu.get_register(2), value);
     }
 
     #[test]
     fn ldr_should_return_data_at_specified_address_minus_offset() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000208;
 
-        let _res = cpu.memory.writeu32(address as usize - 8, value);
+        let _res = gba.memory.writeu32(address as usize - 8, value);
 
-        cpu.set_register(1, address);
+        gba.cpu.set_register(1, address);
 
-        cpu.prefetch[0] = Some(0xe5112008); // ldr r2, [r1, -8]
+        gba.cpu.prefetch[0] = Some(0xe5112008); // ldr r2, [r1, -8]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), value);
+        assert_eq!(gba.cpu.get_register(2), value);
     }
 
     #[test]
     fn ldr_should_return_data_at_lsl_shifted_address() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize + 8, value);
+        let _res = gba.memory.writeu32(address as usize + 8, value);
 
-        cpu.set_register(1, address);
-        cpu.set_register(3, 4);
+        gba.cpu.set_register(1, address);
+        gba.cpu.set_register(3, 4);
 
-        cpu.prefetch[0] = Some(0xe7912083); //  ldr r2, [r1, r3, lsl 1]
+        gba.cpu.prefetch[0] = Some(0xe7912083); //  ldr r2, [r1, r3, lsl 1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), value);
+        assert_eq!(gba.cpu.get_register(2), value);
     }
 
     #[test]
     fn ldr_should_return_a_byte_at_address() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize, value);
+        let _res = gba.memory.writeu32(address as usize, value);
 
-        cpu.set_register(1, address);
+        gba.cpu.set_register(1, address);
 
-        cpu.prefetch[0] = Some(0xe5d12000); //  ldrb r2, [r1]
+        gba.cpu.prefetch[0] = Some(0xe5d12000); //  ldrb r2, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), value & 0xFF);
+        assert_eq!(gba.cpu.get_register(2), value & 0xFF);
 
-        cpu.prefetch[0] = Some(0xe5d12001); //  ldrb r2, [r1, 1]
+        gba.cpu.prefetch[0] = Some(0xe5d12001); //  ldrb r2, [r1, 1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), (value & 0xFF00) >> 8);
+        assert_eq!(gba.cpu.get_register(2), (value & 0xFF00) >> 8);
     }
 
     #[test]
     fn ldr_should_rotate_value_when_not_word_aligned() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000202;
 
-        let _res = cpu.memory.writeu32(0x3000200, value);
+        let _res = gba.memory.writeu32(0x3000200, value);
 
-        cpu.set_register(1, address);
+        gba.cpu.set_register(1, address);
 
-        cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
+        gba.cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), 0xD321FABC);
+        assert_eq!(gba.cpu.get_register(2), 0xD321FABC);
 
-        cpu.set_register(1, 0x3000203);
+        gba.cpu.set_register(1, 0x3000203);
 
-        cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
+        gba.cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-        assert_eq!(cpu.get_register(2), 0xBCD321FA);
+        gba.step();
+        gba.step();
+        assert_eq!(gba.cpu.get_register(2), 0xBCD321FA);
     }
 
     #[test]
     fn ldr_should_writeback_when_post_indexed() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize, value);
+        let _res = gba.memory.writeu32(address as usize, value);
 
-        cpu.set_register(1, address);
+        gba.cpu.set_register(1, address);
 
-        cpu.prefetch[0] = Some(0xe4912004); // ldr r2, [r1], 4
+        gba.cpu.prefetch[0] = Some(0xe4912004); // ldr r2, [r1], 4
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(2), value);
-        assert_eq!(cpu.get_register(1), address + 4);
+        assert_eq!(gba.cpu.get_register(2), value);
+        assert_eq!(gba.cpu.get_register(1), address + 4);
     }
 
     #[test]
     fn str_should_store_word_at_memory_address() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(1, address);
-        cpu.set_register(2, value);
+        gba.cpu.set_register(1, address);
+        gba.cpu.set_register(2, value);
 
-        cpu.prefetch[0] = Some(0xe5812000); // str r2, [r1]
+        gba.cpu.prefetch[0] = Some(0xe5812000); // str r2, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        let stored_value = cpu.memory.readu32(address as usize).data;
+        let stored_value = gba.memory.readu32(address as usize).data;
 
         assert_eq!(value, stored_value);
     }
 
     #[test]
     fn str_should_store_byte_at_address() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value: u8 = 0x21;
         let address: u32 = 0x3000203;
 
-        cpu.set_register(1, address);
-        cpu.set_register(2, value.into());
+        gba.cpu.set_register(1, address);
+        gba.cpu.set_register(2, value.into());
 
-        cpu.prefetch[0] = Some(0xe5c12000); // strb r2, [r1]
+        gba.cpu.prefetch[0] = Some(0xe5c12000); // strb r2, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        let stored_value = cpu.memory.read(address as usize).data;
+        let stored_value = gba.memory.read(address as usize).data;
 
         assert_eq!(value, stored_value);
     }
 
     #[test]
     fn strh_should_store_hw_at_address() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value: u16 = 0x21;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(1, address);
-        cpu.set_register(3, value.into());
+        gba.cpu.set_register(1, address);
+        gba.cpu.set_register(3, value.into());
 
-        cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
+        gba.cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        let stored_value = cpu.memory.readu16(address as usize).data;
+        let stored_value = gba.memory.readu16(address as usize).data;
 
         assert_eq!(value as u16, stored_value);
     }
 
     #[test]
     fn strh_should_only_store_bottom_half_of_register() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value: u32 = 0x1234_5678;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(1, address);
-        cpu.set_register(3, value);
+        gba.cpu.set_register(1, address);
+        gba.cpu.set_register(3, value);
 
-        cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
+        gba.cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        let stored_value = cpu.memory.readu32(address as usize).data;
+        let stored_value = gba.memory.readu32(address as usize).data;
 
         assert_eq!(value & 0x0000_FFFF, stored_value);
     }
 
     #[test]
     fn ldrh_should_only_load_bottom_half_of_register() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize, value);
+        let _res = gba.memory.writeu32(address as usize, value);
 
-        cpu.set_register(1, address);
-        cpu.prefetch[0] = Some(0xe1d130b0); // ldrh r3, [r1]
+        gba.cpu.set_register(1, address);
+        gba.cpu.prefetch[0] = Some(0xe1d130b0); // ldrh r3, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(3), value & 0x0000_FFFF);
+        assert_eq!(gba.cpu.get_register(3), value & 0x0000_FFFF);
     }
 
     #[test]
     fn ldrsh_should_return_a_signed_hw() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_FABC;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize, value);
+        let _res = gba.memory.writeu32(address as usize, value);
 
-        cpu.set_register(1, address);
-        cpu.prefetch[0] = Some(0xe1d130f0); // ldrsh r3, [r1]
+        gba.cpu.set_register(1, address);
+        gba.cpu.prefetch[0] = Some(0xe1d130f0); // ldrsh r3, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(3), value | 0xFFFF_0000);
+        assert_eq!(gba.cpu.get_register(3), value | 0xFFFF_0000);
     }
 
     #[test]
     fn ldrsh_should_return_a_signed_byte() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
-        let _res = cpu.memory.writeu32(address as usize, value);
+        let _res = gba.memory.writeu32(address as usize, value);
 
-        cpu.set_register(1, address);
-        cpu.prefetch[0] = Some(0xe1d130d0); // ldrsb r3, [r1]
+        gba.cpu.set_register(1, address);
+        gba.cpu.prefetch[0] = Some(0xe1d130d0); // ldrsb r3, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(3), value | 0xFFFF_FF00);
+        assert_eq!(gba.cpu.get_register(3), value | 0xFFFF_FF00);
     }
 
     #[test]
     fn ldm_should_load_multiple_registers() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
+        gba.cpu.set_register(5, address);
 
-        cpu.memory.writeu32(address as usize, value);
+        gba.memory.writeu32(address as usize, value);
 
-        cpu.memory.writeu32(address as usize + 4, 0x55);
+        gba.memory.writeu32(address as usize + 4, 0x55);
 
-        cpu.prefetch[0] = Some(0xe8950003); // ldmia r5, {r0, r1}
+        gba.cpu.prefetch[0] = Some(0xe8950003); // ldmia r5, {r0, r1}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(0), value);
-        assert_eq!(cpu.get_register(1), 0x55);
+        assert_eq!(gba.cpu.get_register(0), value);
+        assert_eq!(gba.cpu.get_register(1), 0x55);
     }
 
     #[test]
     fn ldmib_should_load_multiple_registers_and_modify_base_register() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
+        gba.cpu.set_register(5, address);
 
-        cpu.memory.writeu32(address as usize + 4, value);
+        gba.memory.writeu32(address as usize + 4, value);
 
-        cpu.memory.writeu32(address as usize + 8, 0x55);
+        gba.memory.writeu32(address as usize + 8, 0x55);
 
-        cpu.prefetch[0] = Some(0xe9b500c0); // ldmib r5!, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe9b500c0); // ldmib r5!, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(6), value);
-        assert_eq!(cpu.get_register(7), 0x55);
-        assert_eq!(cpu.get_register(5), address + 8);
+        assert_eq!(gba.cpu.get_register(6), value);
+        assert_eq!(gba.cpu.get_register(7), 0x55);
+        assert_eq!(gba.cpu.get_register(5), address + 8);
     }
 
     #[test]
     fn ldmda_should_load_multiple_registers_and_modify_base_register() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
+        gba.cpu.set_register(5, address);
 
-        cpu.memory.writeu32(address as usize, value);
+        gba.memory.writeu32(address as usize, value);
 
-        cpu.memory.writeu32(address as usize - 4, 0x55);
+        gba.memory.writeu32(address as usize - 4, 0x55);
 
-        cpu.prefetch[0] = Some(0xe83500c0); // ldmda r5!, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe83500c0); // ldmda r5!, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(6), 0x55);
-        assert_eq!(cpu.get_register(7), value);
-        assert_eq!(cpu.get_register(5), address - 8);
+        assert_eq!(gba.cpu.get_register(6), 0x55);
+        assert_eq!(gba.cpu.get_register(7), value);
+        assert_eq!(gba.cpu.get_register(5), address - 8);
     }
 
     #[test]
     fn ldmdb_should_load_multiple_registers_and_modify_base_register() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
+        gba.cpu.set_register(5, address);
 
-        cpu.memory.writeu32(address as usize - 4, value);
+        gba.memory.writeu32(address as usize - 4, value);
 
-        cpu.memory.writeu32(address as usize - 8, 0x55);
+        gba.memory.writeu32(address as usize - 8, 0x55);
 
-        cpu.prefetch[0] = Some(0xe93500c0); // ldmdb r5!, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe93500c0); // ldmdb r5!, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(6), 0x55);
-        assert_eq!(cpu.get_register(7), value);
-        assert_eq!(cpu.get_register(5), address - 8);
+        assert_eq!(gba.cpu.get_register(6), 0x55);
+        assert_eq!(gba.cpu.get_register(7), value);
+        assert_eq!(gba.cpu.get_register(5), address - 8);
     }
 
     #[test]
     fn stm_should_store_multiple_registers() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
-        cpu.set_register(6, 123);
-        cpu.set_register(7, 456);
+        gba.cpu.set_register(5, address);
+        gba.cpu.set_register(6, 123);
+        gba.cpu.set_register(7, 456);
 
-        cpu.prefetch[0] = Some(0xe88500c0); // stm r5, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe88500c0); // stm r5, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.memory.readu32(address as usize).data, 123);
-        assert_eq!(cpu.memory.readu32(address as usize + 4).data, 456);
+        assert_eq!(gba.memory.readu32(address as usize).data, 123);
+        assert_eq!(gba.memory.readu32(address as usize + 4).data, 456);
     }
 
     #[test]
     fn stmib_should_store_multiple_registers_and_writeback() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
-        cpu.set_register(6, 123);
-        cpu.set_register(7, 456);
+        gba.cpu.set_register(5, address);
+        gba.cpu.set_register(6, 123);
+        gba.cpu.set_register(7, 456);
 
-        cpu.prefetch[0] = Some(0xe9a500c0); // stmib r5!, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe9a500c0); // stmib r5!, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.memory.readu32(address as usize + 4).data, 123);
-        assert_eq!(cpu.memory.readu32(address as usize + 8).data, 456);
-        assert_eq!(cpu.get_register(5), address + 8);
+        assert_eq!(gba.memory.readu32(address as usize + 4).data, 123);
+        assert_eq!(gba.memory.readu32(address as usize + 8).data, 456);
+        assert_eq!(gba.cpu.get_register(5), address + 8);
     }
 
     #[test]
     fn stmdb_should_store_multiple_registers_and_writeback() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
-        cpu.set_register(6, 123);
-        cpu.set_register(7, 456);
+        gba.cpu.set_register(5, address);
+        gba.cpu.set_register(6, 123);
+        gba.cpu.set_register(7, 456);
 
-        cpu.prefetch[0] = Some(0xe92500c0); // stmdb r5!, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe92500c0); // stmdb r5!, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.memory.readu32((address - 4) as usize).data, 456);
-        assert_eq!(cpu.memory.readu32((address - 8) as usize).data, 123);
-        assert_eq!(cpu.get_register(5), address - 8);
+        assert_eq!(gba.memory.readu32((address - 4) as usize).data, 456);
+        assert_eq!(gba.memory.readu32((address - 8) as usize).data, 123);
+        assert_eq!(gba.cpu.get_register(5), address - 8);
     }
 
     #[test]
     fn stmda_should_store_multiple_registers_and_writeback() {
-        let memory = GBAMemory::new();
+        
 
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
 
-        cpu.set_register(5, address);
-        cpu.set_register(6, 123);
-        cpu.set_register(7, 456);
+        gba.cpu.set_register(5, address);
+        gba.cpu.set_register(6, 123);
+        gba.cpu.set_register(7, 456);
 
-        cpu.prefetch[0] = Some(0xe82500c0); // stmda r5!, {r6, r7}
+        gba.cpu.prefetch[0] = Some(0xe82500c0); // stmda r5!, {r6, r7}
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.memory.readu32((address) as usize).data, 456);
-        assert_eq!(cpu.memory.readu32((address - 4) as usize).data, 123);
-        assert_eq!(cpu.get_register(5), address - 8);
+        assert_eq!(gba.memory.readu32((address) as usize).data, 456);
+        assert_eq!(gba.memory.readu32((address - 4) as usize).data, 123);
+        assert_eq!(gba.cpu.get_register(5), address - 8);
     }
 }

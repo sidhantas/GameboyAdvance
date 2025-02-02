@@ -1,22 +1,14 @@
-use std::sync::{Arc, Mutex};
-
-use gameboy_advance::{arm7tdmi::cpu::CPU, memory::memory::{GBAMemory, MemoryBus}};
+use gameboy_advance::gba::GBA;
 
 #[test]
 fn test_thumb_long_branch() {
     let bios = String::from("test_files/thumb_long_branch.bin");
-    let mut memory = GBAMemory::new();
-    memory
-        .initialize_bios(bios)
-        .expect("Unable to initialize bios for CPU");
-
-    let cpu = Arc::new(Mutex::new(CPU::new(memory)));
+    let mut gba = GBA::new(bios.clone(), bios);
 
     {
-        let mut cpu = cpu.lock().unwrap();
         for _ in 0..7 {
-            cpu.execute_cpu_cycle();
+            gba.step();
         }
-        assert_eq!(cpu.get_pc(), 0x9c6);
+        assert_eq!(gba.cpu.get_pc(), 0x9c6);
     }
 }

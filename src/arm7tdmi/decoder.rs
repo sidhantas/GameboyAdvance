@@ -2,7 +2,10 @@ use instructions::ARMDecodedInstruction;
 
 use crate::types::*;
 
-use super::{arm::*, cpu::{FlagsRegister, InstructionMode, CPU}};
+use super::{
+    arm::*,
+    cpu::{FlagsRegister, InstructionMode, CPU},
+};
 
 impl CPU {
     #[no_mangle]
@@ -100,12 +103,10 @@ impl CPU {
                     executable: CPU::sdt_instruction_execution,
                 }
             }
-            _ if arm_decoders::is_software_interrupt(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::arm_software_interrupt,
-                }
-            }
+            _ if arm_decoders::is_software_interrupt(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::arm_software_interrupt,
+            },
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
                 instruction,
@@ -119,123 +120,89 @@ impl CPU {
             _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
-                    executable: CPU::thumb_add_or_subtract_instruction
+                    executable: CPU::thumb_add_or_subtract_instruction,
                 }
             }
-            _ if thumb_decoders::is_move_shifted_register(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_move_shifted_register_instruction
-                }
-            }
+            _ if thumb_decoders::is_move_shifted_register(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_move_shifted_register_instruction,
+            },
             _ if thumb_decoders::is_move_compare_add_subtract_immediate(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
-                    executable: CPU::thumb_move_add_compare_add_subtract_immediate
+                    executable: CPU::thumb_move_add_compare_add_subtract_immediate,
                 }
             }
-            _ if thumb_decoders::is_alu_operation(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_alu_instructions
-                }
-            }
-            _ if thumb_decoders::is_thumb_bx(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_bx
-                }
-            }
-            _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_hi_reg_operations
-                }
-            }
-            _ if thumb_decoders::is_load_pc_relative(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::ldr_pc_relative
-                }
-            }
-            _ if thumb_decoders::is_sdt_register_offset(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::sdt_register_offset
-                }
-            }
+            _ if thumb_decoders::is_alu_operation(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_alu_instructions,
+            },
+            _ if thumb_decoders::is_thumb_bx(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_bx,
+            },
+            _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_hi_reg_operations,
+            },
+            _ if thumb_decoders::is_load_pc_relative(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::ldr_pc_relative,
+            },
+            _ if thumb_decoders::is_sdt_register_offset(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::sdt_register_offset,
+            },
             _ if thumb_decoders::is_sdt_sign_extend_byte_or_halfword(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
-                    executable: CPU::sdt_sign_extend_byte_or_halfword
+                    executable: CPU::sdt_sign_extend_byte_or_halfword,
                 }
             }
-            _ if thumb_decoders::is_sdt_imm_offset(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::sdt_imm_offset
-                }
-            }
-            _ if thumb_decoders::is_sdt_halfword(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::sdt_halfword_imm_offset
-                }
-            }
-            _ if thumb_decoders::is_sdt_sp_imm(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_sdt_sp_imm
-                }
-            }
-            _ if thumb_decoders::is_get_relative_address(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_get_relative_address
-                }
-            }
-            _ if thumb_decoders::is_add_offset_to_sp(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_add_offset_to_sp
-                }
-            }
-            _ if thumb_decoders::is_push_pop(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_push_pop
-                }
-            }
-            _ if thumb_decoders::is_thumb_block_dt(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_multiple_load_or_store
-                }
-            }
-            _ if thumb_decoders::is_conditional_branch(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_conditional_branch
-                }
-            }
-            _ if thumb_decoders::is_unconditional_branch(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_unconditional_branch
-                }
-            }
-            _ if thumb_decoders::is_set_link_register(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_set_link_register
-                }
-            }
-            _ if thumb_decoders::is_long_branch_with_link(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_long_branch_with_link
-                }
-            }
+            _ if thumb_decoders::is_sdt_imm_offset(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::sdt_imm_offset,
+            },
+            _ if thumb_decoders::is_sdt_halfword(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::sdt_halfword_imm_offset,
+            },
+            _ if thumb_decoders::is_sdt_sp_imm(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_sdt_sp_imm,
+            },
+            _ if thumb_decoders::is_get_relative_address(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_get_relative_address,
+            },
+            _ if thumb_decoders::is_add_offset_to_sp(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_add_offset_to_sp,
+            },
+            _ if thumb_decoders::is_push_pop(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_push_pop,
+            },
+            _ if thumb_decoders::is_thumb_block_dt(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_multiple_load_or_store,
+            },
+            _ if thumb_decoders::is_conditional_branch(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_conditional_branch,
+            },
+            _ if thumb_decoders::is_unconditional_branch(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_unconditional_branch,
+            },
+            _ if thumb_decoders::is_set_link_register(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_set_link_register,
+            },
+            _ if thumb_decoders::is_long_branch_with_link(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::thumb_long_branch_with_link,
+            },
             _ => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::arm_not_implemented,
@@ -380,10 +347,7 @@ mod thumb_decoders {
 }
 
 mod sub_decoders {
-    use crate::{
-        arm7tdmi::{cpu::CPU },
-        utils::bits::Bits,
-    };
+    use crate::{arm7tdmi::cpu::CPU, utils::bits::Bits};
 
     use super::{instructions::ARMDecodedInstruction, ARMByteCode};
 
@@ -407,10 +371,10 @@ mod sub_decoders {
 
 #[cfg(test)]
 mod arm_decoders_tests {
-    
+
     use arm_decoders::*;
 
-    use crate::memory::memory::GBAMemory;
+    use crate::{gba::GBA, memory::memory::GBAMemory};
 
     use super::*;
 
@@ -494,292 +458,252 @@ mod arm_decoders_tests {
 
     #[test]
     fn it_finds_single_data_swap() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction = 0xe1014093;
-        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
+        assert!(gba.cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
     }
 
     #[test]
     fn it_finds_block_data_transfer() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction = 0xe895001f;
-        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
+        assert!(gba.cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
     }
     #[test]
     fn it_finds_a_branch_and_exchange_instruction() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction = 0xe12fff10;
-        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange)
+        assert!(
+            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange
+        )
     }
 
     #[test]
     fn it_finds_swi_instruction() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction = 0xef001234;
 
-        assert!(cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt);
-
+        assert!(
+            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt
+        );
     }
 }
 
 #[cfg(test)]
 mod sub_decoder_tests {
-    
 
-    use crate::{arm7tdmi::decoder::*, memory::memory::GBAMemory};
+    use crate::{arm7tdmi::decoder::*, gba::GBA, memory::memory::GBAMemory};
 
     #[test]
     fn it_decodes_an_instruction_if_eq_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x028210c8; // addeq r1, r2, 200
-        cpu.set_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_not_decode_an_instruction_if_eq_not_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x028210c8; // addeq r1, r2, 200
-        cpu.reset_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable == CPU::arm_nop);
         assert!(decoded_instruction.executable != CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_decode_an_instruction_if_ne_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x128210c8; // addne r1, r2, 200
-        cpu.reset_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_not_decode_an_instruction_if_ne_not_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x128210c8; // addne r1, r2, 200
-        cpu.set_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable == CPU::arm_nop);
         assert!(decoded_instruction.executable != CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_decode_an_instruction_if_cs_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x228210c8; // addcs r1, r2, 200
-        cpu.set_flag(FlagsRegister::C);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::C);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_cc_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x328210c8; // addcc r1, r2, 200
-        cpu.reset_flag(FlagsRegister::C);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::C);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_mi_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x428210c8; // addmi r1, r2, 200
-        cpu.set_flag(FlagsRegister::N);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::N);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_pl_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x528210c8; // addpl r1, r2, 200
-        cpu.reset_flag(FlagsRegister::C);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::C);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_vs_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x628210c8; // addvs r1, r2, 200
-        cpu.set_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_vc_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x728210c8; // addvc r1, r2, 200
-        cpu.reset_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_hi_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x828210c8; // addhi r1, r2, 200
-        cpu.set_flag(FlagsRegister::C);
-        cpu.reset_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::C);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_ls_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0x928210c8; // addls r1, r2, 200
-        cpu.reset_flag(FlagsRegister::C);
-        cpu.reset_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::C);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.set_flag(FlagsRegister::C);
-        cpu.set_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::C);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.reset_flag(FlagsRegister::C);
-        cpu.set_flag(FlagsRegister::Z);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::C);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_decode_an_instruction_if_ge_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0xa28210c8; // addge r1, r2, 200
-        cpu.set_flag(FlagsRegister::N);
-        cpu.set_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.set_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.reset_flag(FlagsRegister::N);
-        cpu.reset_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::N);
+        gba.cpu.reset_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_lt_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0xb28210c8; // addlt r1, r2, 200
-        cpu.reset_flag(FlagsRegister::N);
-        cpu.set_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::N);
+        gba.cpu.set_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.set_flag(FlagsRegister::N);
-        cpu.reset_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.reset_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_decode_an_instruction_if_gt_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0xc28210c8; // addgt r1, r2, 200
-        cpu.reset_flag(FlagsRegister::Z);
-        cpu.set_flag(FlagsRegister::N);
-        cpu.set_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.set_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.reset_flag(FlagsRegister::Z);
-        cpu.reset_flag(FlagsRegister::N);
-        cpu.reset_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        gba.cpu.reset_flag(FlagsRegister::N);
+        gba.cpu.reset_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
 
     #[test]
     fn it_does_decode_an_instruction_if_le_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0xd28210c8; // addle r1, r2, 200
 
-        cpu.set_flag(FlagsRegister::Z);
-        cpu.reset_flag(FlagsRegister::N);
-        cpu.reset_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        gba.cpu.reset_flag(FlagsRegister::N);
+        gba.cpu.reset_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.reset_flag(FlagsRegister::Z);
-        cpu.set_flag(FlagsRegister::N);
-        cpu.reset_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        gba.cpu.set_flag(FlagsRegister::N);
+        gba.cpu.reset_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
 
-        cpu.reset_flag(FlagsRegister::Z);
-        cpu.reset_flag(FlagsRegister::N);
-        cpu.set_flag(FlagsRegister::V);
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        gba.cpu.reset_flag(FlagsRegister::Z);
+        gba.cpu.reset_flag(FlagsRegister::N);
+        gba.cpu.set_flag(FlagsRegister::V);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
     #[test]
     fn it_does_decode_an_instruction_if_al_satisfied() {
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
         let instruction: ARMByteCode = 0xe28210c8; // addal r1, r2, 200
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::data_processing_instruction);
     }
@@ -787,8 +711,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_a_multiply_instruction() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xE0230192;
     //        let decoded_instruction = cpu.decode_instruction(instruction);
@@ -801,8 +725,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_a_branch_instruction() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xea000005;
     //        let decoded_instruction = cpu.decode_instruction(instruction);
@@ -812,8 +736,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_a_cmp_instruction() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe1530312; //  cmp r3, r2, lsl r3
     //                                                   //  shift by register in
@@ -828,8 +752,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_imm_op2() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe2812020; // add r
     //        let decoded_instruction = cpu.decode_instruction(instruction);
@@ -842,8 +766,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_an_lsl_operand2() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0831102; // add r1, r3, r2 LSL 2
     //        cpu.set_register(2, 1);
@@ -857,8 +781,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_ror_10() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0831562; // add r1, r3, r2 ROR#10
     //        cpu.set_register(2, 5);
@@ -872,8 +796,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_asr_10() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0831542; // add r1, r3, r2 ASR#10
     //        cpu.set_register(2, 0xB000_0000);
@@ -887,8 +811,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_lsr_10() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0831522; // add r1, r3, r2 LSR#10
     //        cpu.set_register(2, 0xB000_0000);
@@ -902,8 +826,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_lsr_32() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0931022; // adds r1, r3, r2 LSR#32
     //        cpu.set_register(2, u32::MAX);
@@ -918,8 +842,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_asr_32_negative() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0931042; // adds r1, r3, r2 ASR#32
     //        cpu.set_register(2, 0xF000_1000);
@@ -934,8 +858,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_an_asr_32_positive() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0831042; // add r1, r3, r2 ASR#32
     //        cpu.set_register(2, 0x0000_1000);
@@ -950,8 +874,8 @@ mod sub_decoder_tests {
     //    #[test]
     //    fn it_returns_an_add_instruction_with_op2_shifted_by_register() {
     //        let memory = Memory::new().unwrap();
-    //        
-    //        let mut cpu = CPU::new(memory);
+    //
+    //        let mut gba = GBA::new_no_bios();
     //
     //        let instruction: ARMByteCode = 0xe0831412; // add r1, r3, r2 LSL r4
     //        cpu.set_register(2, 0x0000_1000);
@@ -966,81 +890,70 @@ mod sub_decoder_tests {
 
 #[cfg(test)]
 mod thumb_decoder_tests {
-    
 
-    use crate::{arm7tdmi::cpu::{InstructionMode, CPU}, memory::memory::GBAMemory};
+    use crate::{
+        arm7tdmi::cpu::{InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
+    };
 
     #[test]
     fn it_recognizes_sdt_imm_offset() {
-
         let instruction = 0x68cd; // ldr r5, [r1, 12]
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
+
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::sdt_imm_offset);
-
     }
 
     #[test]
     fn it_recognizes_sdt_sp_imm_offset() {
-
         let instruction = 0x9d03; // ldr r5, [sp, 12]
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
+
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::thumb_sdt_sp_imm);
-
     }
 
     #[test]
     fn it_recognizes_add_offset_to_sp() {
-
         let instruction = 0xb07d; // add sp, 500
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
+
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::thumb_add_offset_to_sp);
     }
 
     #[test]
     fn it_recognizes_thumb_push() {
-
         let instruction = 0xb503; // push {r0-r1, lr}
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
+
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::thumb_push_pop);
     }
 
     #[test]
     fn it_recognizes_thumb_bdt() {
-
         let instruction = 0xc107; // stmia r1 {r0-r2}
-        let memory = GBAMemory::new();
-        
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let decoded_instruction = cpu.decode_instruction(instruction);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
+
+        let decoded_instruction = gba.cpu.decode_instruction(instruction);
         assert!(decoded_instruction.executable != CPU::arm_nop);
         assert!(decoded_instruction.executable == CPU::thumb_multiple_load_or_store);
     }
-
-
 }

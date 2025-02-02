@@ -1,10 +1,12 @@
 use crate::{
-    arm7tdmi::cpu::CPU, memory::memory::MemoryBus, types::{CYCLES, WORD}, utils::bits::Bits
+    arm7tdmi::cpu::CPU,
+    memory::memory::GBAMemory,
+    types::{CYCLES, WORD},
+    utils::bits::Bits,
 };
 
-
 impl CPU {
-    pub fn single_data_swap(&mut self, instruction: WORD, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn single_data_swap(&mut self, instruction: WORD, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1; // 1 I cycle
         let is_byte_swap = instruction.bit_is_set(22);
         let rn = (instruction & 0x000F_0000) >> 16;
@@ -35,93 +37,81 @@ impl CPU {
 
 #[cfg(test)]
 mod single_data_swap_test {
-    use crate::{arm7tdmi::cpu::CPU, memory::memory::{GBAMemory, MemoryBus}};
+    use crate::gba::GBA;
 
     #[test]
     fn swap_instruction_should_store_and_load_at_the_same_time() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
 
-        
-        let mut cpu = CPU::new(memory);
+        gba.cpu.set_register(1, 0x3000200);
+        gba.cpu.set_register(3, 10);
+        gba.memory.writeu32(0x3000200, 5);
 
-        cpu.set_register(1, 0x3000200);
-        cpu.set_register(3, 10);
-        cpu.memory.writeu32(0x3000200, 5);
+        gba.cpu.prefetch[0] = Some(0xe1014093); // swp r4, r3, [r1]
 
-        cpu.prefetch[0] = Some(0xe1014093); // swp r4, r3, [r1]
+        gba.step();
+        gba.step();
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(cpu.memory.readu32(0x3000200).data, 10);
+        assert_eq!(gba.cpu.get_register(4), 5);
+        assert_eq!(gba.memory.readu32(0x3000200).data, 10);
     }
 
     #[test]
     fn swap_instruction_should_work_with_equal_rn_and_rm() {
-        let memory = GBAMemory::new();
-
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address = 0x3000200;
 
-        cpu.set_register(1, address);
-        cpu.memory.writeu32(address as usize, 5);
+        gba.cpu.set_register(1, address);
+        gba.memory.writeu32(address as usize, 5);
 
-        cpu.prefetch[0] = Some(0xe1014091); // swp r4, r1, [r1]
+        gba.cpu.prefetch[0] = Some(0xe1014091); // swp r4, r1, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(cpu.memory.readu32(0x3000200).data, 0x3000200);
+        assert_eq!(gba.cpu.get_register(4), 5);
+        assert_eq!(gba.memory.readu32(0x3000200).data, 0x3000200);
     }
 
     #[test]
     fn swap_should_work_with_equal_rm_and_rd() {
-        let memory = GBAMemory::new();
-
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address = 0x3000200;
 
-        cpu.set_register(4, 15);
+        gba.cpu.set_register(4, 15);
 
-        cpu.set_register(1, address);
-        cpu.memory.writeu32(address as usize, 5);
+        gba.cpu.set_register(1, address);
+        gba.memory.writeu32(address as usize, 5);
 
-        cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
+        gba.cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(4), 5);
-        assert_eq!(cpu.memory.readu32(0x3000200).data, 15);
+        assert_eq!(gba.cpu.get_register(4), 5);
+        assert_eq!(gba.memory.readu32(0x3000200).data, 15);
     }
 
     #[test]
     fn swpb_should_only_store_and_load_a_byte_and_clear_upper_rd() {
-        let memory = GBAMemory::new();
-
-        
-        let mut cpu = CPU::new(memory);
+        let mut gba = GBA::new_no_bios();
 
         let address = 0x3000200;
 
-        cpu.set_register(3, 0x1234_FABC);
-        cpu.set_register(4, 0xFFFF_FFFF);
+        gba.cpu.set_register(3, 0x1234_FABC);
+        gba.cpu.set_register(4, 0xFFFF_FFFF);
 
-        cpu.set_register(1, address);
-        cpu.memory.writeu32(address as usize, 0x7890_DD12);
+        gba.cpu.set_register(1, address);
+        gba.memory.writeu32(address as usize, 0x7890_DD12);
 
-        cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
+        gba.cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
 
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_register(4), 0x12);
-        assert_eq!(cpu.memory.read(0x3000200).data, 0xBC);
+        assert_eq!(gba.cpu.get_register(4), 0x12);
+        assert_eq!(gba.memory.read(0x3000200).data, 0xBC);
     }
 }

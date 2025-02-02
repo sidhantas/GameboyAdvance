@@ -1,9 +1,12 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER}, memory::memory::MemoryBus, types::CYCLES, utils::bits::sign_extend
+    arm7tdmi::cpu::{FlagsRegister, CPU, LINK_REGISTER},
+    memory::memory::GBAMemory,
+    types::CYCLES,
+    utils::bits::sign_extend,
 };
 
 impl CPU {
-    pub fn thumb_conditional_branch(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_conditional_branch(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let condition = (instruction & 0x0F00) >> 8;
         let offset = (instruction & 0x00FF) << 1;
@@ -43,11 +46,14 @@ impl CPU {
         self.set_pc(destination);
         cycles += self.flush_pipeline(memory);
 
-
         cycles
     }
 
-    pub fn thumb_unconditional_branch(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_unconditional_branch(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut cycles = 1;
         let offset: u32 = sign_extend((instruction & 0x07FF) << 1, 11);
         self.set_pc(self.get_pc() + offset);
@@ -57,7 +63,7 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_set_link_register(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_set_link_register(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let value = self.get_pc() + sign_extend((instruction & 0x07FF) << 12, 22);
         self.set_executed_instruction(format_args!("SET LR: {:#X}", value));
         self.set_register(LINK_REGISTER, value);
@@ -65,7 +71,11 @@ impl CPU {
         0
     }
 
-    pub fn thumb_long_branch_with_link(&mut self, instruction: u32, memory: &mut Box<dyn MemoryBus>) -> CYCLES {
+    pub fn thumb_long_branch_with_link(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut cycles = 0;
         let link_register_val = self.get_register(LINK_REGISTER);
         self.set_register(LINK_REGISTER, (self.get_pc() - 2) | 1);
@@ -87,6 +97,7 @@ mod branch_tests {
 
     use crate::{
         arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, LINK_REGISTER},
+        gba::GBA,
         memory::memory::GBAMemory,
     };
 
@@ -94,49 +105,45 @@ mod branch_tests {
     fn should_branch_ahead() {
         let memory = GBAMemory::new();
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        cpu.prefetch[0] = Some(0xd006); // beq 12
-        cpu.set_pc(0x1a);
-        cpu.set_flag(FlagsRegister::Z);
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
+        gba.cpu.prefetch[0] = Some(0xd006); // beq 12
+        gba.cpu.set_pc(0x1a);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        gba.step();
+        gba.step();
 
-        assert_eq!(cpu.get_pc(), 0x2c);
+        assert_eq!(gba.cpu.get_pc(), 0x2c);
     }
 
     #[test]
     fn should_branch_behind() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0xd0f9); // beq 12
+        gba.cpu.set_pc(0x24);
+        gba.cpu.set_flag(FlagsRegister::Z);
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0xd0f9); // beq 12
-        cpu.set_pc(0x24);
-        cpu.set_flag(FlagsRegister::Z);
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_pc(), 0x1c);
+        assert_eq!(gba.cpu.get_pc(), 0x1c);
     }
 
     #[test]
     fn should_set_link_register_and_branch() {
-        let memory = GBAMemory::new();
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        let mut cpu = CPU::new(memory);
-        cpu.set_instruction_mode(InstructionMode::THUMB);
+        gba.cpu.prefetch[0] = Some(0xf000); // set link_register
+        gba.cpu.set_pc(0x1a);
+        gba.step();
+        gba.cpu.prefetch[0] = Some(0xf802); // bl 0x20
+        gba.step();
+        gba.step();
 
-        cpu.prefetch[0] = Some(0xf000); // set link_register
-        cpu.set_pc(0x1a);
-        cpu.execute_cpu_cycle();
-        cpu.prefetch[0] = Some(0xf802); // bl 0x20
-        cpu.execute_cpu_cycle();
-        cpu.execute_cpu_cycle();
-
-        assert_eq!(cpu.get_pc(), 0x24);
-        assert_eq!(cpu.get_register(LINK_REGISTER), 0x1d);
+        assert_eq!(gba.cpu.get_pc(), 0x24);
+        assert_eq!(gba.cpu.get_register(LINK_REGISTER), 0x1d);
     }
 }

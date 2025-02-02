@@ -1,4 +1,4 @@
-use crate::{memory::memory::MemoryBus, types::CYCLES, utils::bits::Bits};
+use crate::{memory::memory::GBAMemory, types::CYCLES, utils::bits::Bits};
 
 use super::cpu::{CPUMode, InstructionMode, CPU, LINK_REGISTER};
 
@@ -22,12 +22,16 @@ impl From<Exceptions> for CPUMode {
 }
 
 impl CPU {
-    pub fn raise_exception(&mut self, exception: Exceptions, memory: &mut Box<dyn MemoryBus>) -> CYCLES{
+    pub fn raise_exception(&mut self, exception: Exceptions, memory: &mut GBAMemory) -> CYCLES {
+        if self.cpsr.bit_is_set(7) && matches!(exception, Exceptions::IRQ) {
+            return 0;
+        }
+        self.is_halted = false;
         let instruction_size = match self.get_instruction_mode() {
             super::cpu::InstructionMode::ARM => 4,
             super::cpu::InstructionMode::THUMB => 0,
         };
-        
+
         // Store CPSR in SPSR_new_mode
         let cpsr = self.cpsr;
         self.set_mode(exception.into());
@@ -46,11 +50,11 @@ impl CPU {
                 self.cpsr.set_bit(7);
                 self.cpsr.set_bit(6);
                 0x00
-            },
+            }
             Exceptions::Undefined => {
                 self.cpsr.set_bit(7);
                 0x04
-            },
+            }
             Exceptions::Software => {
                 self.cpsr.set_bit(7);
                 0x08
@@ -58,10 +62,14 @@ impl CPU {
             Exceptions::IRQ => {
                 self.cpsr.set_bit(7);
                 0x18
-            },
+            }
         };
 
         self.set_pc(exception_vector);
         self.flush_pipeline(memory)
+    }
+
+    pub fn halt(&mut self) {
+        self.is_halted = true;
     }
 }
