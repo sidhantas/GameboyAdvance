@@ -23,9 +23,6 @@ impl From<Exceptions> for CPUMode {
 
 impl CPU {
     pub fn raise_exception(&mut self, exception: Exceptions, memory: &mut GBAMemory) -> CYCLES {
-        if self.cpsr.bit_is_set(7) && matches!(exception, Exceptions::IRQ) {
-            return 0;
-        }
         self.is_halted = false;
         let instruction_size = match self.get_instruction_mode() {
             super::cpu::InstructionMode::ARM => 4,
@@ -71,5 +68,11 @@ impl CPU {
 
     pub fn halt(&mut self) {
         self.is_halted = true;
+    }
+
+    pub fn raise_irq(&mut self, memory: &mut GBAMemory) {
+        if !self.cpsr.bit_is_set(7) {
+            self.raise_exception(Exceptions::IRQ, memory);
+        }
     }
 }

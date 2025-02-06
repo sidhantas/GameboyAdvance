@@ -123,10 +123,10 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
         false,
     ));
-    definitions[DISPSTAT] = Some(IORegisterDefinition::new(
-        BitMask::SIXTEEN(0xFF3F, 0xFF38),
-        false,
-    ));
+    definitions[DISPSTAT] = Some(
+        IORegisterDefinition::new(BitMask::SIXTEEN(0xFF3F, 0xFF38), false)
+            .with_callback(GBAMemory::dispstat_callback),
+    );
     definitions[VCOUNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x0000),
         false,
@@ -391,10 +391,10 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
         BitMask::SIXTEEN(0xC3FE, 0xC3FE),
         false,
     ));
-    definitions[IME] = Some(IORegisterDefinition::new(
-        BitMask::SIXTEEN(0x0001, 0x0001),
-        false,
-    ));
+    definitions[IME] = Some(
+        IORegisterDefinition::new(BitMask::SIXTEEN(0x0001, 0x0001), false)
+            .with_callback(GBAMemory::check_interrupts),
+    );
     definitions[IE] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x3FFF, 0x3FFF),
         false,
@@ -520,6 +520,17 @@ fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError>
 }
 
 impl GBAMemory {
+    pub fn ppu_io_write(&mut self, address: usize, value: u16) {
+        let old_value = self.ioram[(address & 0xFFF) >> 1];
+        self.ioram[(address & 0xFFF) >> 1] = value;
+        let Ok(def) = get_io_definition(address & 0xFFF) else {
+            return;
+        };
+
+        if let Some(callback) = def.callback {
+            callback(self, old_value, value);
+        }
+    }
     pub(super) fn io_readu8(&self, address: usize) -> Result<u8, MemoryError> {
         let load_value = self.masked_io_load(address & 0xFFE)?;
         Ok((load_value >> (8 * (address & 0b1))) as u8)
@@ -651,24 +662,45 @@ impl GBAMemory {
                 value & shifted_mask
             }
         };
+        let old_value = self.io_load(address);
+        self.io_store(address, store_value);
         if let Some(callback) = def.callback {
-            let old_value = self.io_load(address);
             callback(self, old_value, store_value);
         }
 
-        self.io_store(address, store_value);
         Ok(())
     }
 
     pub(super) fn halt(&mut self, _old_value: u16, value: u16) {
         if value & 0x8000 > 0 {
-            self.cpu_commands.push(CPUCallbacks::STOP);
+            self.cpu_commands.push(CPUCallbacks::Stop);
             return;
         }
-        self.cpu_commands.push(CPUCallbacks::HALT);
+        self.cpu_commands.push(CPUCallbacks::Halt);
     }
 
-    pub(super) fn update_interrupts_from_dispstat(&mut self, old_value: u16, value: u16) {}
+    pub(super) fn check_interrupts(&mut self, _old_value: u16, _value: u16) {
+        if self.io_load(IME) == 0 {
+            return;
+        }
+        if self.io_load(IF) & self.io_load(IE) > 0 {
+            self.cpu_commands.push(CPUCallbacks::RaiseIrq);
+        }
+    }
+
+    pub(super) fn dispstat_callback(&mut self, old_value: u16, value: u16) {
+        let triggered_flags = (!old_value & value) & 0x7;
+        if triggered_flags == 0 {
+            return;
+        }
+        let toggled_interrupts = (value >> 3) & 0x7;
+        let available_interrupts = triggered_flags & toggled_interrupts;
+        let mut current_if = self.io_load(IF);
+        current_if &= !0x7;
+        current_if |= available_interrupts;
+        self.io_store(IF, current_if);
+        self.check_interrupts(old_value, value);
+    }
 }
 
 #[cfg(test)]

@@ -63,8 +63,9 @@ const SRAM_SIZE: usize = 0x10000;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CPUCallbacks {
-    HALT,
-    STOP,
+    Halt,
+    Stop,
+    RaiseIrq
 }
 
 pub struct GBAMemory {
@@ -454,25 +455,25 @@ impl GBAMemory {
         self.try_writeu32(address, value).unwrap()
     }
 
-    pub fn ppu_io_write(&mut self, address: usize, value: u16) {
-        let old_value = self.ioram[(address & 0xFFF) >> 1];
-        self.ioram[(address & 0xFFF) >> 1] = value;
-        match address {
-            DISPSTAT => {
-                if old_value ^ value == 0 {
-                    return;
-                }
-                let possible_interrupts = value & 0x7;
-                let toggled_interrupts = (value >> 3) & 0x7;
-                let available_interrupts = possible_interrupts & toggled_interrupts;
-                let mut current_if = self.ioram[(IF & 0xFFF) >> 1];
-                current_if &= !0x7;
-                current_if |= available_interrupts;
-                self.ioram[(IF & 0xFFF) >> 1] = current_if;
-            }
-            _ => {}
-        }
-    }
+    //pub fn ppu_io_write(&mut self, address: usize, value: u16) {
+    //    let old_value = self.ioram[(address & 0xFFF) >> 1];
+    //    self.ioram[(address & 0xFFF) >> 1] = value;
+    //    match address {
+    //        DISPSTAT => {
+    //            if old_value ^ value == 0 {
+    //                return;
+    //            }
+    //            let possible_interrupts = value & 0x7;
+    //            let toggled_interrupts = (value >> 3) & 0x7;
+    //            let available_interrupts = possible_interrupts & toggled_interrupts;
+    //            let mut current_if = self.ioram[(IF & 0xFFF) >> 1];
+    //            current_if &= !0x7;
+    //            current_if |= available_interrupts;
+    //            self.ioram[(IF & 0xFFF) >> 1] = current_if;
+    //        }
+    //        _ => {}
+    //    }
+    //}
 }
 
 #[cfg(test)]

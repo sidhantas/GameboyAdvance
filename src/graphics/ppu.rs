@@ -1,5 +1,5 @@
 use crate::memory::{
-    io_handlers::{DISPSTAT, IF, IO_BASE, VCOUNT},
+    io_handlers::{DISPSTAT, IO_BASE, VCOUNT},
     memory::GBAMemory,
 };
 

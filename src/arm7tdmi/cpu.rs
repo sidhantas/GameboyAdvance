@@ -68,6 +68,7 @@ pub struct CPU {
     pub cycles: u64,
     pub relative_cycles: u64,
     status_history: VecDeque<Status>,
+    pub interrupt_triggered: bool
 }
 
 
@@ -101,7 +102,8 @@ impl CPU {
             cycles: 0,
             relative_cycles: 3,
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
-            is_halted: false
+            is_halted: false,
+            interrupt_triggered: false
         };
         cpu
     }
@@ -109,10 +111,6 @@ impl CPU {
     #[no_mangle]
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
-        if self.is_halted {
-            self.cycles += 1;
-             return 1;
-        }
         if self.status_history.len() >= HISTORY_SIZE {
             self.status_history.pop_front();
         }
@@ -120,6 +118,14 @@ impl CPU {
             INSTRUCTION_COUNT += 1;
         }
         self.status_history.push_back(self.get_status());
+        if self.interrupt_triggered {
+            self.raise_irq(memory);
+            self.interrupt_triggered = false;
+        }
+        if self.is_halted {
+            self.cycles += 1;
+             return 1;
+        }
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
