@@ -10,6 +10,7 @@ use std::{
     cell::RefCell,
     io::{self, Stdout},
     rc::Rc,
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -22,9 +23,11 @@ use tui::{
 };
 
 use crate::{
-    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::{
-        io_handlers::{IO_BASE, VCOUNT}
-    }, utils::bits::Bits
+    arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
+    gba::GBA,
+    graphics::display::CANVAS_AREA,
+    memory::io_handlers::{IO_BASE, VCOUNT},
+    utils::bits::Bits,
 };
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
@@ -41,11 +44,11 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    pub fn new(bios: String, rom: String) -> Self {
+    pub fn new(bios: String, rom: String, pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) -> Self {
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
-        let cpu = GBA::new(bios, rom);
+        let cpu = GBA::new(bios, rom, pixel_buffer);
 
         Self {
             memory_start_address: 0x0000000,
@@ -60,14 +63,18 @@ impl Debugger {
     }
 }
 
-pub fn start_debugger(bios: String, rom: String) -> Result<(), std::io::Error> {
+pub fn start_debugger(
+    bios: String,
+    rom: String,
+    pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>,
+) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let debugger = &mut Debugger::new(bios, rom);
+    let debugger = &mut Debugger::new(bios, rom, pixel_buffer);
 
     while !debugger.end_debugger {
         loop {
@@ -195,7 +202,8 @@ fn draw_ppu(
     );
 
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.memory.readu16(IO_BASE + VCOUNT).data)).alignment(Alignment::Center),
+        Paragraph::new(format!("{}", cpu.memory.readu16(IO_BASE + VCOUNT).data))
+            .alignment(Alignment::Center),
         ppu_values[1],
     );
 
@@ -342,7 +350,6 @@ fn handle_normal_mode_events(debugger: &mut Debugger, event: KeyEvent) {
         _ => {}
     }
 }
-
 
 fn draw_registers(
     f: &mut Frame<'_, CrosstermBackend<Stdout>>,

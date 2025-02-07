@@ -1,12 +1,16 @@
+use std::sync::MutexGuard;
+
 use crate::memory::{
     io_handlers::{DISPSTAT, IO_BASE, VCOUNT},
     memory::GBAMemory,
 };
 
-const HDRAW: u64 = 240;
-const HBLANK: u64 = 68;
-const VDRAW: u64 = 160;
-const VBLANK: u64 = 68;
+use super::display::CANVAS_AREA;
+
+pub const HDRAW: u32 = 240;
+const HBLANK: u32 = 68;
+pub const VDRAW: u32 = 160;
+const VBLANK: u32 = 68;
 
 const VBLANK_FLAG: u16 = 1 << 0;
 const HBLANK_FLAG: u16 = 1 << 1;
@@ -16,14 +20,14 @@ const HBLANK_ENABLE: u16 = 1 << 4;
 
 #[derive(Default, Debug)]
 pub struct PPU {
-    usable_cycles: u64,
-    pub x: u64,
-    pub y: u64,
+    usable_cycles: u32,
+    pub x: u32,
+    pub y: u32,
 }
 
 impl PPU {
-    pub fn advance_ppu(&mut self, cycles: u8, memory: &mut GBAMemory) {
-        self.usable_cycles += cycles as u64;
+    pub fn advance_ppu<'a>(&mut self, cycles: u8, memory: &mut GBAMemory, display_buffer: &mut MutexGuard<'a, [u32; CANVAS_AREA]>) {
+        self.usable_cycles += cycles as u32;
         let dots = self.usable_cycles / 4;
         if dots < 1 {
             return;
