@@ -1,7 +1,9 @@
 use std::sync::MutexGuard;
 
+use num_traits::pow;
+
 use crate::memory::{
-    io_handlers::{DISPSTAT, IO_BASE, VCOUNT},
+    io_handlers::{DISPCNT, DISPSTAT, IO_BASE, VCOUNT},
     memory::GBAMemory,
 };
 
@@ -26,14 +28,67 @@ pub struct PPU {
 }
 
 impl PPU {
-    pub fn advance_ppu<'a>(&mut self, cycles: u8, memory: &mut GBAMemory, display_buffer: &mut MutexGuard<'a, [u32; CANVAS_AREA]>) {
+    pub fn advance_ppu(
+        &mut self,
+        cycles: u8,
+        memory: &mut GBAMemory,
+        display_buffer: &mut MutexGuard<'_, [u32; CANVAS_AREA]>,
+    ) {
         self.usable_cycles += cycles as u32;
         let dots = self.usable_cycles / 4;
         if dots < 1 {
             return;
         }
+
+        // get background pixels with priority
+        // get window pixels with priority
+        // get obj pixels with priority
+        // overlay on top of each other
+
+        self.update_display(dots, memory, display_buffer);
         self.usable_cycles %= 4;
-        self.x += dots;
+        self.update_dots(memory);
+    }
+
+    #[inline(always)]
+    fn get_background_pixel(&self, bg_mode: u16) -> u32 {
+        // placeholder
+        match bg_mode {
+            0x2 => pow(self.x * self.y, 2),
+            _ => 0,
+        }
+    }
+
+    #[inline(always)]
+    fn check_vblank(&mut self, disp_stat: &mut u16) {
+        if self.y == VDRAW {
+            *disp_stat |= VBLANK_FLAG;
+        } else if self.y < VDRAW {
+            *disp_stat &= !VBLANK_FLAG;
+        }
+        self.y %= VDRAW + VBLANK;
+    }
+
+    fn update_display(
+        &mut self,
+        mut dots: u32,
+        memory: &mut GBAMemory,
+        display_buffer: &mut MutexGuard<'_, [u32; CANVAS_AREA]>,
+    ) {
+        while dots > 0 {
+            self.x += dots;
+            dots -= 1;
+        }
+        if self.x >= HDRAW || self.y >= VDRAW {
+            return;
+        }
+        let dispcnt = memory.io_load(DISPCNT);
+        let bg_mode = Self::get_mode(dispcnt);
+        display_buffer[(self.y * HDRAW + self.x) as usize] = self.get_background_pixel(bg_mode)
+    }
+
+    #[inline(always)]
+    fn update_dots(&mut self, memory: &mut GBAMemory) {
         let mut disp_stat = memory.readu16(IO_BASE + DISPSTAT).data;
         if self.x >= (HDRAW + HBLANK) {
             self.y += 1;
@@ -47,13 +102,8 @@ impl PPU {
     }
 
     #[inline(always)]
-    fn check_vblank(&mut self, disp_stat: &mut u16) {
-        if self.y == VDRAW {
-            *disp_stat |= VBLANK_FLAG;
-        } else if self.y < VDRAW {
-            *disp_stat &= !VBLANK_FLAG;
-        }
-        self.y %= VDRAW + VBLANK;
+    fn get_mode(dispcnt: u16) -> u16 {
+        dispcnt & 0x7
     }
 }
 

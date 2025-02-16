@@ -3,13 +3,7 @@ use std::{
     time::Duration,
 };
 
-use sdl2::{
-    event::Event,
-    pixels::PixelFormatEnum,
-    rect::Rect,
-    render::Texture,
-    surface::Surface,
-};
+use sdl2::{event::Event, pixels::PixelFormatEnum, rect::Rect, render::Texture, surface::Surface};
 
 use super::ppu::{HDRAW, VDRAW};
 
@@ -34,14 +28,14 @@ pub fn start_display(pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) {
     let texture_creator = canvas.texture_creator();
     let surface = Surface::new(HDRAW, VDRAW, PixelFormatEnum::RGB24).unwrap();
     let mut texture = Texture::from_surface(&surface, &texture_creator).unwrap();
-    let pixel_data: MutexGuard<'_, [u8; CANVAS_AREA * 4]> =
-        unsafe { std::mem::transmute(pixel_buffer.lock().unwrap()) };
     canvas.set_logical_size(HDRAW, VDRAW).unwrap();
 
     canvas.present();
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         canvas.clear();
+        let pixel_data: MutexGuard<'_, [u8; CANVAS_AREA * 4]> =
+            unsafe { std::mem::transmute(pixel_buffer.lock().unwrap()) };
         texture
             .update(
                 Rect::new(0, 0, HDRAW, VDRAW),
@@ -63,6 +57,7 @@ pub fn start_display(pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) {
             }
         }
         canvas.present();
+        drop(pixel_data);
         std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }

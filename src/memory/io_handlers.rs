@@ -3,7 +3,7 @@ use crate::arm7tdmi::cpu::CPU;
 use super::memory::{CPUCallbacks, GBAMemory, MemoryError};
 
 pub const IO_BASE: usize = 0x4000000;
-const DISPCNT: usize = 0x000;
+pub const DISPCNT: usize = 0x000;
 pub const DISPSTAT: usize = 0x004;
 pub const VCOUNT: usize = 0x006;
 const BG0CNT: usize = 0x008;
