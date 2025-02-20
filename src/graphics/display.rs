@@ -1,4 +1,5 @@
 use std::{
+    mem::size_of,
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
@@ -34,14 +35,10 @@ pub fn start_display(pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) {
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         canvas.clear();
-        let pixel_data: MutexGuard<'_, [u8; CANVAS_AREA * 4]> =
-            unsafe { std::mem::transmute(pixel_buffer.lock().unwrap()) };
+        let pixel_data: [u8; CANVAS_AREA * size_of::<u32>()] =
+            unsafe { std::mem::transmute(*pixel_buffer.lock().unwrap()) };
         texture
-            .update(
-                Rect::new(0, 0, HDRAW, VDRAW),
-                &*pixel_data,
-                HDRAW as usize * size_of::<u32>(),
-            )
+            .update(None, &pixel_data, HDRAW as usize * size_of::<u32>())
             .unwrap();
         canvas.copy(&texture, None, None).unwrap();
         for event in event_pump.poll_iter() {
@@ -57,7 +54,6 @@ pub fn start_display(pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) {
             }
         }
         canvas.present();
-        drop(pixel_data);
         std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }

@@ -20,7 +20,7 @@ impl GBA {
             memory: GBAMemory::new(),
             cpu: CPU::new(),
             ppu: PPU::default(),
-            display_buffer: Arc::new(Mutex::new([0; CANVAS_AREA])),
+            display_buffer: Arc::new(Mutex::new([0xFFFFFFFF; CANVAS_AREA])),
         }
     }
 

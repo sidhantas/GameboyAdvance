@@ -5,14 +5,7 @@ use std::{
     io::Write,
 };
 
-use crate::{
-    memory::{
-        memory::{GBAMemory},
-    },
-    types::*,
-    utils::bits::Bits,
-};
-
+use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -58,7 +51,7 @@ pub struct CPU {
     registers_abt: [WORD; 2],
     registers_irq: [WORD; 2],
     registers_und: [WORD; 2],
-    pub(super) is_halted: bool,
+    pub is_halted: bool,
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
@@ -68,9 +61,8 @@ pub struct CPU {
     pub cycles: u64,
     pub relative_cycles: u64,
     status_history: VecDeque<Status>,
-    pub interrupt_triggered: bool
+    pub interrupt_triggered: bool,
 }
-
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
 const HISTORY_SIZE: usize = 100_000;
@@ -103,7 +95,7 @@ impl CPU {
             relative_cycles: 3,
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
             is_halted: false,
-            interrupt_triggered: false
+            interrupt_triggered: false,
         };
         cpu
     }
@@ -124,7 +116,7 @@ impl CPU {
         }
         if self.is_halted {
             self.cycles += 1;
-             return 1;
+            return 1;
         }
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
@@ -132,7 +124,8 @@ impl CPU {
             self.executed_instruction_hex = decoded_instruction.instruction;
             self.prefetch[1] = None;
             execution_cycles +=
-                ((decoded_instruction.executable)(self, decoded_instruction.instruction, memory)) as u64;
+                ((decoded_instruction.executable)(self, decoded_instruction.instruction, memory))
+                    as u64;
         }
 
         if let None = self.prefetch[1] {
@@ -441,7 +434,6 @@ mod cpu_tests {
 
     #[test]
     fn it_sets_and_resets_the_corrects_flags() {
-
         let mut cpu = CPU::new();
 
         cpu.set_flag(super::FlagsRegister::C);

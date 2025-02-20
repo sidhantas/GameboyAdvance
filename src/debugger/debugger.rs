@@ -432,12 +432,12 @@ fn draw_cpsr(
 
     let flag_names = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1); 9])
+        .constraints([Constraint::Length(1); 10])
         .split(flags_sections[0]);
 
     let flag_values = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1); 9])
+        .constraints([Constraint::Length(1); 10])
         .split(flags_sections[1]);
 
     f.render_widget(
@@ -525,6 +525,10 @@ fn draw_cpsr(
     f.render_widget(
         Paragraph::new(format!("{}", cpu.cpsr.get_bit(7))).alignment(Alignment::Center),
         flag_values[8],
+    );
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.is_halted)).alignment(Alignment::Center),
+        flag_values[9],
     );
     f.render_widget(block, flags_chunk);
 

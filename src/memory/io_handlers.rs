@@ -1,5 +1,3 @@
-use crate::arm7tdmi::cpu::CPU;
-
 use super::memory::{CPUCallbacks, GBAMemory, MemoryError};
 
 pub const IO_BASE: usize = 0x4000000;
