@@ -1,4 +1,4 @@
-use crate::types::{BYTE, CYCLES, HWORD, WORD};
+use crate::{graphics::oam::OAM, types::{BYTE, CYCLES, HWORD, WORD}};
 use std::{
     fmt::Display,
     fs::File,
@@ -75,7 +75,7 @@ pub struct GBAMemory {
     pub(super) ioram: Vec<u16>,
     bgram: Vec<u32>,
     vram: Vec<u32>,
-    oam: Vec<u32>,
+    pub oam: Vec<u32>,
     rom: Vec<u32>,
     sram: Vec<u32>,
     wait_cycles_u16: [u8; 15],
@@ -455,25 +455,6 @@ impl GBAMemory {
         self.try_writeu32(address, value).unwrap()
     }
 
-    //pub fn ppu_io_write(&mut self, address: usize, value: u16) {
-    //    let old_value = self.ioram[(address & 0xFFF) >> 1];
-    //    self.ioram[(address & 0xFFF) >> 1] = value;
-    //    match address {
-    //        DISPSTAT => {
-    //            if old_value ^ value == 0 {
-    //                return;
-    //            }
-    //            let possible_interrupts = value & 0x7;
-    //            let toggled_interrupts = (value >> 3) & 0x7;
-    //            let available_interrupts = possible_interrupts & toggled_interrupts;
-    //            let mut current_if = self.ioram[(IF & 0xFFF) >> 1];
-    //            current_if &= !0x7;
-    //            current_if |= available_interrupts;
-    //            self.ioram[(IF & 0xFFF) >> 1] = current_if;
-    //        }
-    //        _ => {}
-    //    }
-    //}
 }
 
 #[cfg(test)]
@@ -565,6 +546,19 @@ mod tests {
 
         // Test that reads happen in little endian byte order
         for i in 0..4 {
+            let mem_fetch = memory.read(address + i);
+            assert_eq!(mem_fetch.data, ((value >> (i * 8)) & 0xFF) as u8);
+            assert_eq!(mem_fetch.cycles, 1);
+        }
+    }
+
+    #[test]
+    fn can_write_byte_to_oam() {
+        let mut memory = GBAMemory::new();
+        let address = 0x07000034;
+        let value = 0x12345678;
+        for i in 0..4 {
+            memory.write(address + i, (value >> (i * 8)) as u8);
             let mem_fetch = memory.read(address + i);
             assert_eq!(mem_fetch.data, ((value >> (i * 8)) & 0xFF) as u8);
             assert_eq!(mem_fetch.cycles, 1);

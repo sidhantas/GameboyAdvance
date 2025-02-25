@@ -32,18 +32,18 @@ use crate::{
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
-pub struct Debugger {
+pub struct Debugger<'a> {
     pub memory_start_address: u32,
     pub terminal_buffer: String,
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub terminal_enabled: bool,
     pub end_debugger: bool,
-    pub gba: GBA,
+    pub gba: GBA<'a>,
     pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
     pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
 
-impl Debugger {
+impl<'a> Debugger<'a> {
     pub fn new(bios: String, rom: String, pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) -> Self {
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));

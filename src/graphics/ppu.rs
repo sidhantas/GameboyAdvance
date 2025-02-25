@@ -7,7 +7,7 @@ use crate::memory::{
     memory::GBAMemory,
 };
 
-use super::display::CANVAS_AREA;
+use super::{display::CANVAS_AREA, oam::{NUM_OAM_ENTRIES, OAM}};
 
 pub const HDRAW: u32 = 240;
 const HBLANK: u32 = 68;
@@ -29,15 +29,16 @@ enum PPUModes {
 }
 
 #[derive(Debug)]
-pub struct PPU {
+pub struct PPU<'a> {
     usable_cycles: u32,
     available_dots: u32,
     current_mode: PPUModes,
     pub x: u32,
     pub y: u32,
+    current_line_objects: Vec<&'a OAM<'a>>
 }
 
-impl Default for PPU {
+impl Default for PPU<'_> {
     fn default() -> Self {
         Self {
             usable_cycles: 0,
@@ -45,11 +46,12 @@ impl Default for PPU {
             current_mode: PPUModes::HDRAW,
             x: 0,
             y: 0,
+            current_line_objects: Vec::new()
         }
     }
 }
 
-impl PPU {
+impl PPU<'_> {
     pub fn advance_ppu(
         &mut self,
         cycles: u8,
@@ -67,7 +69,7 @@ impl PPU {
 
         self.available_dots = match self.current_mode {
             PPUModes::HDRAW => self.hdraw(self.available_dots, memory, display_buffer),
-            PPUModes::HBLANK => self.hblank(self.available_dots, &mut dispstat),
+            PPUModes::HBLANK => self.hblank(self.available_dots, memory, &mut dispstat),
             PPUModes::VBLANK => self.vblank(self.available_dots, &mut dispstat),
         };
 
@@ -85,12 +87,13 @@ impl PPU {
         memory: &mut GBAMemory,
         display_buffer: &mut MutexGuard<'_, [u32; CANVAS_AREA]>,
     ) -> u32 {
+        let dispcnt = memory.io_load(DISPCNT);
         while dots > 0 {
             if self.x >= HDRAW {
                 self.current_mode = PPUModes::HBLANK;
                 return dots;
             }
-            display_buffer[(self.y * HDRAW + self.x) as usize] = 0xFFFFFFFF;
+            display_buffer[(self.y * HDRAW + self.x) as usize] = self.get_background_pixel(dispcnt);
             dots -= 1;
             self.x += 1;
         }
@@ -98,7 +101,11 @@ impl PPU {
         return 0;
     }
 
-    fn hblank(&mut self, mut dots: u32, disp_stat: &mut u16) -> u32 {
+    pub fn oam_read(&mut self, memory: &mut GBAMemory, oam_num: usize) -> OAM {
+        todo!()
+    }
+
+    fn hblank(&mut self, mut dots: u32, memory: &mut GBAMemory, disp_stat: &mut u16) -> u32 {
         while dots > 0 {
             if self.x >= HDRAW + HBLANK {
                 self.y += 1;
@@ -107,6 +114,8 @@ impl PPU {
                     *disp_stat |= VBLANK_FLAG;
                     self.current_mode = PPUModes::VBLANK;
                 } else {
+                    for i in 0..NUM_OAM_ENTRIES {
+                    }
                     self.current_mode = PPUModes::HDRAW;
                 }
                 return dots;
@@ -137,59 +146,12 @@ impl PPU {
     }
 
     #[inline(always)]
-    fn get_background_pixel(&self, bg_mode: u16) -> u32 {
+    fn get_background_pixel(&self, dispcnt: u16) -> u32 {
         // placeholder
-        match bg_mode {
+        match dispcnt & 0x3 {
             0x2 => 0xFFFFFFFF,
             _ => 0,
         }
-    }
-
-    #[inline(always)]
-    fn check_vblank(&mut self, disp_stat: &mut u16) {
-        if self.y == VDRAW {
-            *disp_stat |= VBLANK_FLAG;
-        } else if self.y < VDRAW {
-            *disp_stat &= !VBLANK_FLAG;
-        }
-        self.y %= VDRAW + VBLANK;
-    }
-
-    fn update_display(
-        &mut self,
-        memory: &mut GBAMemory,
-        display_buffer: &mut MutexGuard<'_, [u32; CANVAS_AREA]>,
-    ) {
-        // try and get a background pixel
-        let dispcnt = memory.io_load(DISPCNT);
-        let bg_mode = Self::get_bg_mode(dispcnt);
-        while self.available_dots > 0 {
-            self.x += 1;
-            self.available_dots -= 1;
-            if self.x >= HDRAW || self.y >= VDRAW {
-                display_buffer[(self.y * HDRAW + self.x) as usize] =
-                    self.get_background_pixel(bg_mode)
-            }
-        }
-    }
-
-    #[inline(always)]
-    fn update_dots(&mut self, memory: &mut GBAMemory) {
-        //let mut disp_stat = memory.readu16(IO_BASE + DISPSTAT).data;
-        //if self.x >= (HDRAW + HBLANK) {
-        //    self.y += 1;
-        //    self.x %= HDRAW + HBLANK;
-
-        //    self.check_vblank(&mut disp_stat);
-
-        //    memory.ppu_io_write(VCOUNT, self.y as u16);
-        //}
-        //memory.ppu_io_write(DISPSTAT, disp_stat);
-    }
-
-    #[inline(always)]
-    fn get_bg_mode(dispcnt: u16) -> u16 {
-        dispcnt & 0x7
     }
 }
 
@@ -209,7 +171,7 @@ mod tests {
         gba.memory.writeu16(IO_BASE + DISPSTAT, VBLANK_ENABLE); // Enable VBLANK
         assert_eq!(gba.memory.readu16(IO_BASE + DISPSTAT).data, 0x8);
 
-        for _ in 0..(VDRAW * (HDRAW + HBLANK) * 4) {
+        for _ in 0..((VDRAW + 1) * (HDRAW + HBLANK) * 4) {
             gba.step();
         }
 

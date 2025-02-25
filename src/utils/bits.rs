@@ -1,8 +1,38 @@
-use std::mem::size_of;
+use std::{
+    mem::size_of,
+    ops::{BitAnd, BitOr, BitOrAssign, Shr}, process::Output,
+};
+
+use num_traits::{PrimInt, Unsigned};
 
 use crate::types::{BYTE, HWORD, WORD};
 
-pub trait Bits {
+pub trait Bits2
+where
+    Self: Shr<u8, Output = Self>,
+    Self: BitAnd<Self, Output = Self>,
+    Self: BitOrAssign<Self>,
+    Self: PartialEq<Self>,
+    Self: Sized,
+    Self: PrimInt,
+    Self: Unsigned,
+    Self: Copy
+{
+    fn bit_is_set(&self, bit: u8) -> bool {
+        assert!(bit < (size_of::<Self>() * 8) as u8);
+        let shift = self.shr(bit);
+        let and = self.bitand(shift);
+        and != Self::zero()
+    }
+    fn set_bit(&mut self, bit: u8) {
+        assert!(bit < (size_of::<Self>() * 8) as u8);
+        *self |= Self::one() << bit as usize;
+    }
+}
+
+impl Bits2 for HWORD {}
+
+pub trait Bits: PrimInt + Shr<u8> + BitAnd + Eq {
     fn twos_complement(self) -> Self;
     fn bit_is_set(&self, bit: u8) -> bool;
     fn set_bit(&mut self, bit: u8);
@@ -30,35 +60,35 @@ impl Bits for WORD {
         assert!(bit < 32);
         return (self >> bit & 0x01) as WORD;
     }
-    
+
     fn twos_complement(self) -> WORD {
-        return !self + 1
+        return !self + 1;
     }
 }
 
 impl Bits for HWORD {
     fn bit_is_set(&self, bit: u8) -> bool {
-        assert!(bit < size_of::<Self>() as u8);
+        assert!(bit < (size_of::<Self>() * 8) as u8);
         return self >> bit & 0x01 != 0;
     }
 
     fn set_bit(&mut self, bit: u8) {
-        assert!(bit < size_of::<Self>() as u8);
+        assert!(bit < (size_of::<Self>() * 8) as u8);
         *self |= 1 << bit;
     }
 
     fn reset_bit(&mut self, bit: u8) {
-        assert!(bit < size_of::<Self>() as u8);
+        assert!(bit < (size_of::<Self>() * 8) as u8);
         *self &= !(1 << bit);
     }
 
     fn get_bit(self, bit: u8) -> Self {
-        assert!(bit < size_of::<Self>() as u8);
+        assert!(bit < (size_of::<Self>() * 8) as u8);
         return (self >> bit & 0x01) as Self;
     }
-    
+
     fn twos_complement(self) -> Self {
-        return !self + 1
+        return !self + 1;
     }
 }
 
@@ -82,9 +112,9 @@ impl Bits for BYTE {
         assert!(bit < 8);
         return (self >> bit & 0x01) as BYTE;
     }
-    
+
     fn twos_complement(self) -> BYTE {
-        return !self + 1
+        return !self + 1;
     }
 }
 

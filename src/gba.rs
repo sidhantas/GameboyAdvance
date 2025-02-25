@@ -6,14 +6,14 @@ use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
 use crate::graphics::ppu::PPU;
 
-pub struct GBA {
+pub struct GBA<'a> {
     pub cpu: CPU,
     pub memory: GBAMemory,
-    pub ppu: PPU,
+    pub ppu: PPU<'a>,
     display_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>,
 }
 
-impl GBA {
+impl<'a> GBA<'a> {
     #[cfg(test)]
     pub fn new_no_bios() -> Self {
         Self {
