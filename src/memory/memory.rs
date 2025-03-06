@@ -1,8 +1,15 @@
-use crate::{graphics::oam::OAM, types::{BYTE, CYCLES, HWORD, WORD}};
+use num_traits::{ToBytes, Unsigned};
+
+use crate::{
+    graphics::oam::OAM,
+    types::{BYTE, CYCLES, HWORD, WORD},
+};
 use std::{
+    collections::HashMap,
     fmt::Display,
     fs::File,
     io::{Read, Seek},
+    usize,
 };
 
 use super::io_handlers::{DISPSTAT, IF, KEYINPUT};
@@ -65,7 +72,7 @@ const SRAM_SIZE: usize = 0x10000;
 pub enum CPUCallbacks {
     Halt,
     Stop,
-    RaiseIrq
+    RaiseIrq,
 }
 
 pub struct GBAMemory {
@@ -93,6 +100,13 @@ fn memory_store(region: &mut Vec<u32>, address: usize, value: u32) {
     let store_address = address >> 2;
     if store_address < region.len() {
         region[store_address] = value;
+    }
+}
+
+#[inline]
+fn memory_store2(region: &mut Vec<u8>, address: usize, value: u8) {
+    if address < region.len() {
+        region[address] = value;
     }
 }
 
@@ -454,7 +468,278 @@ impl GBAMemory {
     pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         self.try_writeu32(address, value).unwrap()
     }
+}
 
+pub struct GBAMemory2 {
+    bios: Vec<u8>,
+    exwram: Vec<u8>,
+    iwram: Vec<u8>,
+    pub(super) ioram: Vec<u16>,
+    bgram: Vec<u8>,
+    vram: Vec<u8>,
+    pub oam: Vec<u8>,
+    rom: Vec<u8>,
+    sram: Vec<u8>,
+    wait_cycles_u16: [u8; 15],
+    wait_cycles_u32: [u8; 15],
+    pub cpu_commands: Vec<CPUCallbacks>,
+}
+
+impl GBAMemory2 {
+    pub fn new() -> Self {
+        let mut wait_cycles_u16 = [0; 15];
+        wait_cycles_u16[BIOS_REGION] = 1;
+        wait_cycles_u16[IWRAM_REGION] = 1;
+        wait_cycles_u16[EXWRAM_REGION] = 3;
+        wait_cycles_u16[IORAM_REGION] = 1;
+        wait_cycles_u16[OAM_REGION] = 1;
+        wait_cycles_u16[BGRAM_REGION] = 1;
+        wait_cycles_u16[VRAM_REGION] = 1;
+        wait_cycles_u16[ROM0A_REGION] = 5;
+        wait_cycles_u16[ROM0B_REGION] = 5;
+        wait_cycles_u16[ROM1A_REGION] = 5;
+        wait_cycles_u16[ROM1B_REGION] = 5;
+        wait_cycles_u16[ROM2A_REGION] = 5;
+        wait_cycles_u16[ROM2B_REGION] = 5;
+        wait_cycles_u16[SRAM_REGION] = 5;
+
+        let mut wait_cycles_u32 = [0; 15];
+        wait_cycles_u32[BIOS_REGION] = 1;
+        wait_cycles_u32[IWRAM_REGION] = 1;
+        wait_cycles_u32[EXWRAM_REGION] = 6;
+        wait_cycles_u32[IORAM_REGION] = 1;
+        wait_cycles_u32[OAM_REGION] = 1;
+        wait_cycles_u32[BGRAM_REGION] = 2;
+        wait_cycles_u32[VRAM_REGION] = 2;
+        wait_cycles_u32[ROM0A_REGION] = 8;
+        wait_cycles_u32[ROM0B_REGION] = 8;
+        wait_cycles_u32[ROM1A_REGION] = 8;
+        wait_cycles_u32[ROM1B_REGION] = 8;
+        wait_cycles_u32[ROM2A_REGION] = 8;
+        wait_cycles_u32[ROM2B_REGION] = 8;
+
+        let memory = Self {
+            bios: vec![0; BIOS_SIZE],
+            exwram: vec![0; EXWRAM_SIZE],
+            iwram: vec![0; IWRAM_SIZE],
+            ioram: vec![0; IORAM_SIZE >> 1],
+            bgram: vec![0; BGRAM_SIZE],
+            vram: vec![0; VRAM_SIZE],
+            oam: vec![0; OAM_SIZE],
+            rom: vec![0; ROM_SIZE],
+            sram: vec![0; SRAM_SIZE],
+            wait_cycles_u16,
+            wait_cycles_u32,
+            cpu_commands: Vec::new(),
+        };
+
+        memory
+    }
+
+    const fn get_slice_alignment(size: usize) -> usize {
+        match size {
+            1 => !0x0,
+            2 => !0x1,
+            4 => !0x3,
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn get_memory_slice_mut<const SIZE: usize>(
+        &mut self,
+        region: usize,
+        address: usize,
+    ) -> Option<&mut [u8; SIZE]> {
+        let address = address & Self::get_slice_alignment(SIZE);
+
+        let (mirror_masked_address, slice): (usize, &mut Vec<u8>) = match region {
+            BIOS_REGION => return None,
+            EXWRAM_REGION => {
+                let mirror_masked_address = address & EX_WRAM_MIRROR_MASK;
+                (mirror_masked_address, self.exwram.as_mut())
+            }
+            _ => return None,
+        };
+
+        Some(
+            slice[mirror_masked_address..][..SIZE]
+                .as_mut()
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    #[inline]
+    fn get_memory_slice<const SIZE: usize>(
+        &self,
+        region: usize,
+        address: usize,
+    ) -> Option<&[u8; SIZE]> {
+        let address = address & Self::get_slice_alignment(SIZE);
+
+        let (mirror_masked_address, slice): (usize, &Vec<u8>) = match region {
+            BIOS_REGION => (address, self.bios.as_ref()),
+            EXWRAM_REGION => {
+                let mirror_masked_address = address & EX_WRAM_MIRROR_MASK;
+                (mirror_masked_address, self.exwram.as_ref())
+            }
+            _ => return None,
+        };
+
+        Some(
+            slice[mirror_masked_address..][..SIZE]
+                .as_ref()
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    pub fn writeu8(&mut self, address: usize, value: u8) -> CYCLES {
+        let region = address >> 24;
+        let memory_reference = self
+            .get_memory_slice_mut::<{ std::mem::size_of::<u8>() }>(region, address)
+            .unwrap();
+
+        memory_reference[0] = value;
+        self.wait_cycles_u16[region]
+    }
+
+    pub fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
+        let region = address >> 24;
+        let memory_reference = self
+            .get_memory_slice_mut::<{ std::mem::size_of::<u16>() }>(region, address)
+            .unwrap();
+
+        memory_reference.copy_from_slice(&value.to_le_bytes());
+        self.wait_cycles_u16[region]
+    }
+
+    pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
+        let region = address >> 24;
+        let memory_reference = self
+            .get_memory_slice_mut::<{ std::mem::size_of::<u32>() }>(region, address)
+            .unwrap();
+
+        memory_reference.copy_from_slice(&value.to_le_bytes());
+        self.wait_cycles_u32[region]
+    }
+
+    pub fn readu8(&self, address: usize) -> MemoryFetch<u8> {
+        let region = address >> 24;
+        let memory_reference = self
+            .get_memory_slice::<{ std::mem::size_of::<u8>() }>(region, address)
+            .unwrap();
+
+        MemoryFetch {
+            cycles: self.wait_cycles_u16[region],
+            data: memory_reference[0],
+        }
+    }
+
+    pub fn readu16(&self, address: usize) -> MemoryFetch<u16> {
+        let region = address >> 24;
+        let memory_reference = self
+            .get_memory_slice::<{ std::mem::size_of::<u16>() }>(region, address)
+            .unwrap();
+
+        MemoryFetch {
+            cycles: self.wait_cycles_u16[region],
+            data: u16::from_le_bytes(*memory_reference),
+        }
+    }
+
+    pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
+        let region = address >> 24;
+        let memory_reference = self
+            .get_memory_slice::<{ std::mem::size_of::<u32>() }>(region, address)
+            .unwrap();
+        let data = u32::from_le_bytes(*memory_reference);
+        MemoryFetch {
+            cycles: self.wait_cycles_u32[region],
+            data: data.rotate_right(8 * (address as u32 & 0b11)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod memory2_tests {
+    use super::GBAMemory2;
+
+    #[test]
+    fn can_writeu32() {
+        let mut memory = GBAMemory2::new();
+        let address = 0x2000004;
+        let value = 0x12345678;
+        memory.writeu32(address, value);
+
+        let readu32 = memory.readu32(address).data;
+        assert_eq!(readu32, value);
+
+        let readu16 = memory.readu16(address).data;
+        assert_eq!(readu16, 0x5678);
+        let readu16 = memory.readu16(address + 2).data;
+        assert_eq!(readu16, 0x1234);
+
+        let read = memory.readu8(address).data;
+        assert_eq!(read, 0x78);
+        let read = memory.readu8(address + 2).data;
+        assert_eq!(read, 0x34);
+
+        assert_eq!(memory.exwram[0x4], 0x78);
+        assert_eq!(memory.exwram[0x5], 0x56);
+        assert_eq!(memory.exwram[0x6], 0x34);
+        assert_eq!(memory.exwram[0x7], 0x12);
+    }
+
+    #[test]
+    fn can_writeu16() {
+        let mut memory = GBAMemory2::new();
+        let address = 0x2000004;
+        let value = 0x1234;
+        memory.writeu16(address, value);
+        let readu32 = memory.readu32(address).data;
+        assert_eq!(readu32, 0x1234);
+
+        let readu16 = memory.readu16(address).data;
+        assert_eq!(readu16, 0x1234);
+
+        let read = memory.readu8(address).data;
+        assert_eq!(read, 0x34);
+        let read = memory.readu8(address + 1).data;
+        assert_eq!(read, 0x12);
+
+        assert_eq!(memory.exwram[0x4], 0x34);
+        assert_eq!(memory.exwram[0x5], 0x12);
+        assert_eq!(memory.exwram[0x6], 0x00);
+        assert_eq!(memory.exwram[0x7], 0x00);
+    }
+
+    #[test]
+    fn can_writeu8() {
+        let mut memory = GBAMemory2::new();
+        let address = 0x2000004;
+        memory.writeu8(address, 0x12);
+        memory.writeu8(address + 1, 0x34);
+        memory.writeu8(address + 2, 0x56);
+        memory.writeu8(address + 3, 0x78);
+
+        let readu32 = memory.readu32(address).data;
+        assert_eq!(readu32, 0x78563412);
+
+        let readu16 = memory.readu16(address).data;
+        assert_eq!(readu16, 0x3412);
+
+        let read = memory.readu8(address).data;
+        assert_eq!(read, 0x12);
+        let read = memory.readu8(address + 1).data;
+        assert_eq!(read, 0x34);
+
+        assert_eq!(memory.exwram[0x4], 0x12);
+        assert_eq!(memory.exwram[0x5], 0x34);
+        assert_eq!(memory.exwram[0x6], 0x56);
+        assert_eq!(memory.exwram[0x7], 0x78);
+    }
 }
 
 #[cfg(test)]
