@@ -229,13 +229,13 @@ fn draw_ppu(
 
     f.render_widget(
         Paragraph::new(format!("1D")).alignment(Alignment::Center),
-        ppu_regs[3],
+        ppu_regs[4],
     );
 
     f.render_widget(
         Paragraph::new(format!("{}", cpu.memory.io_load(DISPCNT).bit_is_set(6)))
             .alignment(Alignment::Center),
-        ppu_values[3],
+        ppu_values[4],
     );
 
     f.render_widget(block, ppu_chunk);

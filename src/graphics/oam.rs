@@ -4,7 +4,7 @@ pub const OAM_START: usize = 0x7000000;
 pub const NUM_OAM_ENTRIES: usize = 128;
 
 #[derive(Debug)]
-pub struct OAM<'a>(pub &'a [u16; 3]);
+pub struct Oam<'a>(pub &'a [u16; 3]);
 
 #[derive(Debug)]
 pub enum OBJMode {
@@ -46,7 +46,7 @@ impl Into<OBJShape> for u16 {
     }
 }
 
-impl<'a> OAM<'a> {
+impl<'a> Oam<'a> {
     pub fn y(&self) -> u32 {
         (self.0[0] & 0xFF).into()
     }
@@ -71,8 +71,8 @@ impl<'a> OAM<'a> {
         self.0[0].bit_is_set(12)
     }
 
-    pub fn color_pallete(&self) -> u16 {
-        self.0[0].get_bit(13)
+    pub fn color_pallete(&self) -> usize {
+        (self.0[0].get_bit(13)).into()
     }
 
     pub fn obj_shape(&self) -> OBJShape {
@@ -164,8 +164,8 @@ impl<'a> OAM<'a> {
         (self.0[2] >> 10) & 0x3
     }
 
-    pub fn pallete_number(&self) -> u16 {
-        (self.0[2] >> 12) & 0xF
+    pub fn pallete_number(&self) -> usize {
+        ((self.0[2] >> 12) & 0xF).into()
     }
 }
 
@@ -173,69 +173,69 @@ impl<'a> OAM<'a> {
 mod oam_tests {
     use crate::graphics::oam::OBJMode;
 
-    use super::OAM;
+    use super::Oam;
 
     #[test]
     fn can_get_y_from_bits() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.y(), 0x20);
     }
 
     #[test]
     fn can_check_if_rotation_scaling_enabled() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.rotation_and_scaling_enabled(), false);
-        let oam = OAM(&[0x2720, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2720, 0xc2ad, 0x0a40]);
         assert_eq!(oam.rotation_and_scaling_enabled(), true);
     }
 
     #[test]
     fn can_check_if_double_sized() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.double_sized(), false);
-        let oam = OAM(&[0x2720, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2720, 0xc2ad, 0x0a40]);
         assert_eq!(oam.double_sized(), true);
-        let oam = OAM(&[0x2520, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2520, 0xc2ad, 0x0a40]);
         assert_eq!(oam.double_sized(), false);
     }
 
     #[test]
     fn can_check_obj_disabled() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.obj_disabled(), true);
-        let oam = OAM(&[0x2720, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2720, 0xc2ad, 0x0a40]);
         assert_eq!(oam.obj_disabled(), false);
-        let oam = OAM(&[0x2320, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2320, 0xc2ad, 0x0a40]);
         assert_eq!(oam.obj_disabled(), false);
     }
 
     #[test]
     fn can_get_obj_mode() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert!(matches!(oam.obj_mode(), OBJMode::SemiTransparent));
-        let oam = OAM(&[0x2E20, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2E20, 0xc2ad, 0x0a40]);
         assert!(matches!(oam.obj_mode(), OBJMode::Prohibited));
-        let oam = OAM(&[0x2A20, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2A20, 0xc2ad, 0x0a40]);
         assert!(matches!(oam.obj_mode(), OBJMode::OBJWindow));
-        let oam = OAM(&[0x2220, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2220, 0xc2ad, 0x0a40]);
         assert!(matches!(oam.obj_mode(), OBJMode::Normal));
     }
 
     #[test]
     fn can_get_obj_mosaic() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.obj_mosaic(), false);
 
-        let oam = OAM(&[0x3620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x3620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.obj_mosaic(), true);
     }
 
     #[test]
     fn can_get_x() {
-        let oam = OAM(&[0x2620, 0xc2ad, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc2ad, 0x0a40]);
         assert_eq!(oam.x(), 0xad);
 
-        let oam = OAM(&[0x2620, 0xc3fd, 0x0a40]);
+        let oam = Oam(&[0x2620, 0xc3fd, 0x0a40]);
         assert_eq!(oam.x(), 0x1fd);
     }
 }

@@ -13,8 +13,8 @@ use crate::{
 
 use super::{
     display::CANVAS_AREA,
-    oam::{NUM_OAM_ENTRIES, OAM},
-    pallete::PalleteData,
+    oam::{Oam, NUM_OAM_ENTRIES},
+    pallete::PalleteData, tile::Tile,
 };
 
 pub const HDRAW: u32 = 240;
@@ -109,15 +109,15 @@ impl PPU {
                     let offset_y = (self.y - oam.y()) / 8;
                     let pixel_x = (self.x - oam.x()) % 8;
                     let pixel_y = (self.y - oam.y()) % 8;
-                    let tile = Self::get_tile_relative(memory, oam.tile_number(), offset_x, offset_y);
-                    let pixel_color = tile[(pixel_y * 8 + pixel_x) as usize];
+                    let tile = Tile::get_tile_relative(memory, &oam, offset_x, offset_y);
 
                     let pallete_region = &memory.bgram[0x00..][..0x400].try_into().unwrap();
                     let pallete = PalleteData(pallete_region);
-                    if let Some(color) = pallete.get_obj_color(
-                        pixel_color as usize,
-                        oam.pallete_number().into(),
-                        oam.color_pallete().into(),
+                    if let Some(color) = pallete.get_pixel_from_tile(
+                        &oam,
+                        &tile,
+                        pixel_x as usize,
+                        pixel_y as usize
                     ) {
                         display_buffer[(self.y * HDRAW + self.x) as usize] = color;
                     };
@@ -184,15 +184,15 @@ impl PPU {
         // placeholder
         match dispcnt & 0x3 {
             0x2 => 0xFFFFFFFF,
-            _ => 0,
+            _ => 0xFFFFFFFF,
         }
     }
 
-    fn oam_read<'a>(memory: &'a GBAMemory, oam_num: usize) -> OAM<'a> {
+    fn oam_read<'a>(memory: &'a GBAMemory, oam_num: usize) -> Oam<'a> {
         let oam_slice: &[u8; 6] = memory.oam[oam_num * 0x08..][..6].try_into().unwrap();
         let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
 
-        return OAM(oam_slice);
+        return Oam(oam_slice);
     }
 
     fn get_tile_relative<'a>(memory: &'a GBAMemory, tile_num: usize, offset_x: u32, offset_y: u32) -> &'a [u8; 64] {
