@@ -26,24 +26,24 @@ use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
     gba::GBA,
     graphics::display::CANVAS_AREA,
-    memory::io_handlers::{IO_BASE, VCOUNT},
+    memory::io_handlers::{DISPCNT, IO_BASE, VCOUNT},
     utils::bits::Bits,
 };
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
-pub struct Debugger<'a> {
+pub struct Debugger {
     pub memory_start_address: u32,
     pub terminal_buffer: String,
     pub terminal_history: Vec<TerminalHistoryEntry>,
     pub terminal_enabled: bool,
     pub end_debugger: bool,
-    pub gba: GBA<'a>,
+    pub gba: GBA,
     pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
     pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
 
-impl<'a> Debugger<'a> {
+impl Debugger {
     pub fn new(bios: String, rom: String, pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) -> Self {
         let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
@@ -224,6 +224,17 @@ fn draw_ppu(
 
     f.render_widget(
         Paragraph::new(format!("{}", cpu.ppu.y)).alignment(Alignment::Center),
+        ppu_values[3],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("1D")).alignment(Alignment::Center),
+        ppu_regs[3],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.memory.io_load(DISPCNT).bit_is_set(6)))
+            .alignment(Alignment::Center),
         ppu_values[3],
     );
 

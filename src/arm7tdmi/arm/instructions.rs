@@ -143,7 +143,6 @@ impl CPU {
     ) -> CYCLES {
         self.set_executed_instruction(format_args!("NOT IMPLEMENTED"));
         panic!("NOT IMPLEMENTED: {:#X}", instruction);
-        return 0;
     }
 }
 

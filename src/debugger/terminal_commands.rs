@@ -2,7 +2,10 @@ use super::{
     breakpoints::{BreakType, Breakpoint, TriggeredWatchpoints},
     debugger::Debugger,
 };
-use crate::utils::utils::{try_parse_num, try_parse_reg, ParsingError};
+use crate::{
+    graphics::oam::OAM,
+    utils::utils::{try_parse_num, try_parse_reg, ParsingError},
+};
 use std::fmt::Display;
 
 pub enum TerminalCommandErrors {
@@ -40,7 +43,7 @@ pub struct TerminalHistoryEntry {
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 8] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 10] = [
     TerminalCommand {
         name: "next",
         _arguments: 1,
@@ -88,6 +91,18 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 8] = [
         _arguments: 1,
         _description: "Sets start memory address",
         handler: set_mem_start,
+    },
+    TerminalCommand {
+        name: "doam",
+        _arguments: 6,
+        _description: "Dissassembles and gives oam info",
+        handler: dissassemble_oam,
+    },
+    TerminalCommand {
+        name: "tile-obj",
+        _arguments: 1,
+        _description: "Goes to memory location of a tile",
+        handler: go_to_obj_tile,
     },
 ];
 
@@ -143,11 +158,13 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
         for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
             match watchpoint {
                 TriggeredWatchpoints::Address(address) => {
-                    encountered_watchpoints.push_str(&format!("Watchpoint encountered {:#X}\n", address));
+                    encountered_watchpoints
+                        .push_str(&format!("Watchpoint encountered {:#X}\n", address));
                 }
-                TriggeredWatchpoints::Error(memory_error) =>{
-                    encountered_watchpoints.push_str(&format!("Memory Error encountered\n{}\n", memory_error));
-                },
+                TriggeredWatchpoints::Error(memory_error) => {
+                    encountered_watchpoints
+                        .push_str(&format!("Memory Error encountered\n{}\n", memory_error));
+                }
             }
         }
 
@@ -231,8 +248,9 @@ fn list_breakpoint_handler(
             BreakType::WatchRegister(reg, value) => {
                 breakpoint_list.push_str(format!("{}: watch r{reg} {:#X}\n", i + 1, value).as_str())
             }
-            BreakType::WatchAddress(address, address2) => breakpoint_list
-                .push_str(format!("{}: watch address: {:#X}-{:#X}\n", i + 1, address, address2).as_str()),
+            BreakType::WatchAddress(address, address2) => breakpoint_list.push_str(
+                format!("{}: watch address: {:#X}-{:#X}\n", i + 1, address, address2).as_str(),
+            ),
         }
     }
 
@@ -300,6 +318,63 @@ fn set_mem_start(
     let mem_start = try_parse_num(args[0])?;
 
     debugger.memory_start_address = mem_start;
+
+    Ok(String::new())
+}
+
+fn dissassemble_oam(
+    _debugger: &mut Debugger,
+    args: Vec<&str>,
+) -> Result<String, TerminalCommandErrors> {
+    if args.len() < 6 {
+        return Err(TerminalCommandErrors::NotEnoughArguments);
+    }
+    let oam_slice = [
+        try_parse_num::<u8>(args[0])?,
+        try_parse_num(args[1])?,
+        try_parse_num(args[2])?,
+        try_parse_num(args[3])?,
+        try_parse_num(args[4])?,
+        try_parse_num(args[5])?,
+    ];
+    let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
+    let oam = OAM(oam_slice);
+    Ok(format!(
+        "Attributes:\n\
+        y: {},\n\
+        height: {},\n\
+        x: {},\n\
+        width: {},\n\
+        orient: {:#?},\n\
+        tile: {}\n\
+        double size: {}\n\
+        disabled: {}\n\
+        mode: {:#?}
+        ",
+        oam.y(),
+        oam.height(),
+        oam.x(),
+        oam.width(),
+        oam.obj_shape(),
+        oam.tile_number(),
+        oam.double_sized(),
+        oam.obj_disabled(),
+        oam.obj_mode(),
+    ))
+}
+
+fn go_to_obj_tile(
+    debugger: &mut Debugger,
+    args: Vec<&str>,
+) -> Result<String, TerminalCommandErrors> {
+    if args.len() < 1 {
+        return Err(TerminalCommandErrors::NotEnoughArguments);
+    }
+    let tile_num: u32 = try_parse_num(args[0])?;
+
+    let tile_start_address = 0x6010000 + tile_num * 32;
+
+    debugger.memory_start_address = tile_start_address;
 
     Ok(String::new())
 }

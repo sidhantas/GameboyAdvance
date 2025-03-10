@@ -7,7 +7,7 @@ pub const NUM_OAM_ENTRIES: usize = 128;
 pub struct OAM<'a>(pub &'a [u16; 3]);
 
 #[derive(Debug)]
-enum OBJMode {
+pub enum OBJMode {
     Normal,
     SemiTransparent,
     OBJWindow,
@@ -26,7 +26,8 @@ impl Into<OBJMode> for u16 {
     }
 }
 
-enum OBJShape {
+#[derive(Debug)]
+pub enum OBJShape {
     Square,
     Horizonatal,
     Vertical,
@@ -46,43 +47,70 @@ impl Into<OBJShape> for u16 {
 }
 
 impl<'a> OAM<'a> {
-    fn y(&self) -> u16 {
-        self.0[0] & 0xFF
+    pub fn y(&self) -> u32 {
+        (self.0[0] & 0xFF).into()
     }
 
-    fn rotation_and_scaling_enabled(&self) -> bool {
+    pub fn rotation_and_scaling_enabled(&self) -> bool {
         self.0[0].bit_is_set(8)
     }
 
-    fn double_sized(&self) -> bool {
+    pub fn double_sized(&self) -> bool {
         self.rotation_and_scaling_enabled() && self.0[0] & 0x200 > 0
     }
 
-    fn obj_disabled(&self) -> bool {
+    pub fn obj_disabled(&self) -> bool {
         !self.rotation_and_scaling_enabled() && self.0[0] & 0x200 > 0
     }
 
-    fn obj_mode(&self) -> OBJMode {
+    pub fn obj_mode(&self) -> OBJMode {
         ((self.0[0] >> 10) & 0x3).into()
     }
 
-    fn obj_mosaic(&self) -> bool {
+    pub fn obj_mosaic(&self) -> bool {
         self.0[0].bit_is_set(12)
     }
 
-    fn color_pallete(&self) -> u16 {
+    pub fn color_pallete(&self) -> u16 {
         self.0[0].get_bit(13)
     }
 
-    fn obj_shape(&self) -> OBJShape {
+    pub fn obj_shape(&self) -> OBJShape {
         ((self.0[0] >> 14) & 0x3).into()
     }
 
-    fn x(&self) -> u16 {
-        self.0[1] & 0x1FF
+    pub fn x(&self) -> u32 {
+        (self.0[1] & 0x1FF).into()
     }
 
-    fn height(&self) -> u16 {
+    pub fn width(&self) -> u32 {
+        match self.obj_shape() {
+            OBJShape::Square => match self.obj_size() {
+                0 => 8,
+                1 => 16,
+                2 => 32,
+                3 => 64,
+                _ => panic!("Invalid obj size"),
+            },
+            OBJShape::Horizonatal => match self.obj_size() {
+                0 => 16,
+                1 => 32,
+                2 => 32,
+                3 => 64,
+                _ => panic!("Invalid obj size"),
+            },
+            OBJShape::Vertical => match self.obj_size() {
+                0 => 8,
+                1 => 8,
+                2 => 16,
+                3 => 32,
+                _ => panic!("Invalid obj size"),
+            },
+            OBJShape::Prohibited => panic!("Invalid obj shape"),
+        }
+    }
+
+    pub fn height(&self) -> u32 {
         match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
                 0 => 8,
@@ -109,34 +137,34 @@ impl<'a> OAM<'a> {
         }
     }
 
-    fn rotation_scaling_parameter(&self) -> u16 {
+    pub fn rotation_scaling_parameter(&self) -> u16 {
         if self.rotation_and_scaling_enabled() {
             return self.0[1] & 0x3E00;
         }
         0
     }
 
-    fn horizontal_flip(&self) -> bool {
+    pub fn horizontal_flip(&self) -> bool {
         self.0[1].bit_is_set(12)
     }
 
-    fn vertical_flip(&self) -> bool {
+    pub fn vertical_flip(&self) -> bool {
         self.0[1].bit_is_set(13)
     }
 
-    fn obj_size(&self) -> u16 {
+    pub fn obj_size(&self) -> u16 {
         (self.0[1] >> 14) & 0x3
     }
 
-    fn tile_number(&self) -> u16 {
-        self.0[2] & 0x3FF
+    pub fn tile_number(&self) -> usize {
+        self.0[2] as usize & 0x3FF
     }
 
-    fn priority(&self) -> u16 {
+    pub fn priority(&self) -> u16 {
         (self.0[2] >> 10) & 0x3
     }
 
-    fn pallete_number(&self) -> u16 {
+    pub fn pallete_number(&self) -> u16 {
         (self.0[2] >> 12) & 0xF
     }
 }
