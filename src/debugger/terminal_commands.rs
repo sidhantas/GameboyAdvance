@@ -3,7 +3,7 @@ use super::{
     debugger::Debugger,
 };
 use crate::{
-    graphics::oam::Oam,
+    graphics::wrappers::oam::Oam,
     utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
 use std::fmt::Display;
@@ -349,7 +349,8 @@ fn dissassemble_oam(
         tile: {}\n\
         double size: {}\n\
         disabled: {}\n\
-        mode: {:#?}
+        mode: {:#?}\n\
+        priority: {}
         ",
         oam.y(),
         oam.height(),
@@ -360,6 +361,7 @@ fn dissassemble_oam(
         oam.double_sized(),
         oam.obj_disabled(),
         oam.obj_mode(),
+        oam.priority()
     ))
 }
 

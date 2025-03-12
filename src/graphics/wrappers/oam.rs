@@ -1,6 +1,5 @@
 use crate::utils::bits::Bits;
 
-pub const OAM_START: usize = 0x7000000;
 pub const NUM_OAM_ENTRIES: usize = 128;
 
 #[derive(Debug)]
@@ -171,9 +170,7 @@ impl<'a> Oam<'a> {
 
 #[cfg(test)]
 mod oam_tests {
-    use crate::graphics::oam::OBJMode;
-
-    use super::Oam;
+    use super::{Oam, OBJMode};
 
     #[test]
     fn can_get_y_from_bits() {

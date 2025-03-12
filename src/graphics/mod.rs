@@ -1,5 +1,12 @@
 pub mod display;
 pub mod ppu;
-pub mod oam;
 pub mod pallete;
-mod tile;
+pub mod wrappers;
+mod color_effects;
+mod background;
+
+#[derive(Clone, Copy)]
+struct PixelPriority {
+    pub pixel: u32,
+    pub priority: u16,
+}

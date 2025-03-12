@@ -7,40 +7,40 @@ use num_traits::{PrimInt, Unsigned};
 
 use crate::types::{BYTE, HWORD, WORD};
 
-pub trait Bits2
-where
-    Self: Shr<u8, Output = Self>,
-    Self: BitAnd<Self, Output = Self>,
-    Self: BitOrAssign<Self>,
-    Self: PartialEq<Self>,
-    Self: Sized,
-    Self: PrimInt,
-    Self: Unsigned,
-    Self: Copy
-{
-    fn twos_complement(self) -> Self {
-        !self + Self::one()
-    }
-    fn bit_is_set(&self, bit: u8) -> bool {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
-        let shift = self.shr(bit);
-        let and = shift.bitand(Self::one());
-        and != Self::zero()
-    }
-    fn set_bit(&mut self, bit: u8) {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
-        *self |= Self::one() << bit as usize;
-    }
-
-    fn get_bit(&self, bit: u8) -> Self {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
-        let shift = self.shr(bit);
-        let and = shift.bitand(Self::one());
-        return and;
-    }
-}
-
-impl Bits2 for HWORD {}
+//pub trait Bits2
+//where
+//    Self: Shr<u8, Output = Self>,
+//    Self: BitAnd<Self, Output = Self>,
+//    Self: BitOrAssign<Self>,
+//    Self: PartialEq<Self>,
+//    Self: Sized,
+//    Self: PrimInt,
+//    Self: Unsigned,
+//    Self: Copy
+//{
+//    fn twos_complement(self) -> Self {
+//        !self + Self::one()
+//    }
+//    fn bit_is_set(&self, bit: u8) -> bool {
+//        assert!(bit < (size_of::<Self>() * 8) as u8);
+//        let shift = self.shr(bit);
+//        let and = shift.bitand(Self::one());
+//        and != Self::zero()
+//    }
+//    fn set_bit(&mut self, bit: u8) {
+//        assert!(bit < (size_of::<Self>() * 8) as u8);
+//        *self |= Self::one() << bit as usize;
+//    }
+//
+//    fn get_bit(&self, bit: u8) -> Self {
+//        assert!(bit < (size_of::<Self>() * 8) as u8);
+//        let shift = self.shr(bit);
+//        let and = shift.bitand(Self::one());
+//        return and;
+//    }
+//}
+//
+//impl Bits2 for HWORD {}
 
 pub trait Bits: PrimInt + Shr<u8> + BitAnd + Eq {
     fn twos_complement(self) -> Self;

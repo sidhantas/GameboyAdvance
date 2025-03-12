@@ -1,20 +1,22 @@
-use core::slice;
-use std::{default, sync::MutexGuard};
+use std::sync::MutexGuard;
 
-use num_traits::pow;
-
-use crate::{
-    memory::{
-        io_handlers::{DISPCNT, DISPSTAT, IO_BASE, VCOUNT},
-        memory::GBAMemory,
+use crate::memory::{
+    io_handlers::{BG0CNT, DISPCNT, DISPSTAT, IO_BASE, VCOUNT},
+    memory::GBAMemory,
+    wrappers::{
+        bgcnt::{BGCnt, MAP_SIZE_BYTES, TILE_DATA_SIZE_BYTES},
+        dispcnt::Dispcnt,
     },
-    utils::bits::Bits,
 };
 
 use super::{
-    display::CANVAS_AREA,
-    oam::{Oam, NUM_OAM_ENTRIES},
-    pallete::PalleteData, tile::Tile,
+    background::{self, Background},
+    display::{self, CANVAS_AREA},
+    pallete::{BGPalleteData, OBJPalleteData},
+    wrappers::{
+        oam::{Oam, NUM_OAM_ENTRIES},
+        tile::Tile,
+    },
 };
 
 pub const HDRAW: u32 = 240;
@@ -101,27 +103,14 @@ impl PPU {
                 self.current_mode = PPUModes::HBLANK;
                 return dots;
             }
-            display_buffer[(self.y * HDRAW + self.x) as usize] = self.get_background_pixel(dispcnt);
-            for obj in &self.current_line_objects {
-                let oam = Self::oam_read(memory, *obj);
-                if oam.x() < self.x && self.x <= oam.x() + oam.width() {
-                    let offset_x = (self.x - oam.x()) / 8;
-                    let offset_y = (self.y - oam.y()) / 8;
-                    let pixel_x = (self.x - oam.x()) % 8;
-                    let pixel_y = (self.y - oam.y()) % 8;
-                    let tile = Tile::get_tile_relative(memory, &oam, offset_x, offset_y);
+            let background_pixel =
+                self.get_background_pixel(memory, &Dispcnt(&dispcnt));
+            let obj_pixel = self.get_obj_pixel(memory);
 
-                    let pallete_region = &memory.bgram[0x00..][..0x400].try_into().unwrap();
-                    let pallete = PalleteData(pallete_region);
-                    if let Some(color) = pallete.get_pixel_from_tile(
-                        &oam,
-                        &tile,
-                        pixel_x as usize,
-                        pixel_y as usize
-                    ) {
-                        display_buffer[(self.y * HDRAW + self.x) as usize] = color;
-                    };
-                }
+            if let Some(pixel) = obj_pixel {
+                display_buffer[(self.y * HDRAW + self.x) as usize] = pixel;
+            } else {
+                display_buffer[(self.y * HDRAW + self.x) as usize] = background_pixel;
             }
 
             dots -= 1;
@@ -179,13 +168,60 @@ impl PPU {
         return 0;
     }
 
-    #[inline(always)]
-    fn get_background_pixel(&self, dispcnt: u16) -> u32 {
-        // placeholder
-        match dispcnt & 0x3 {
-            0x2 => 0xFFFFFFFF,
-            _ => 0xFFFFFFFF,
+    #[inline]
+    fn get_background_pixel(&self, memory: &GBAMemory, dispcnt: &Dispcnt) -> u32 {
+        let tile_x = self.x / 8;
+        let tile_y = self.y / 8;
+        let pixel_x = self.x % 8;
+        let pixel_y = self.y % 8;
+
+        let highest_priority_bg = self.get_highest_priority_bgcnt(memory, dispcnt);
+        let pallete_region = &memory.pallete_ram[0x00..][..0x200].try_into().unwrap();
+        let pallete = BGPalleteData(pallete_region);
+
+        let Some(highest_priority_bg) = highest_priority_bg else {
+            return pallete.get_bg_color(0, 0, 1, true).unwrap_or(0xFFFF0000);
+        };
+
+        let tile = match dispcnt.get_bg_mode() {
+            0x2 => Tile::get_tile_relative_bg(
+                memory,
+                &highest_priority_bg,
+                dispcnt,
+                tile_y as usize,
+                tile_x as usize,
+            ),
+            _ => return 0xFFFF0000,
+        };
+
+
+
+        return pallete
+            .get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
+            .unwrap_or(0xFFFFFFFF);
+    }
+
+    #[inline]
+    fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<u32> {
+        for obj in &self.current_line_objects {
+            let oam = Self::oam_read(memory, *obj);
+            if oam.x() < self.x && self.x <= oam.x() + oam.width() {
+                let tile_x = (self.x - oam.x()) / 8;
+                let tile_y = (self.y - oam.y()) / 8;
+                let pixel_x = (self.x - oam.x()) % 8;
+                let pixel_y = (self.y - oam.y()) % 8;
+                let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
+
+                let pallete_region = &memory.pallete_ram[0x200..][..0x200].try_into().unwrap();
+                let pallete = OBJPalleteData(pallete_region);
+                return pallete.get_pixel_from_tile(
+                    &tile,
+                    pixel_x as usize,
+                    pixel_y as usize,
+                );
+            }
         }
+        return None;
     }
 
     fn oam_read<'a>(memory: &'a GBAMemory, oam_num: usize) -> Oam<'a> {
@@ -195,15 +231,22 @@ impl PPU {
         return Oam(oam_slice);
     }
 
-    fn get_tile_relative<'a>(memory: &'a GBAMemory, tile_num: usize, offset_x: u32, offset_y: u32) -> &'a [u8; 64] {
-        let relative_tile = tile_num as u32 + offset_y * 0x20 + offset_x * 2;
-        Self::get_tile_single(memory, relative_tile as usize)
-    }
+    fn get_highest_priority_bgcnt(&self, memory: &GBAMemory, dispcnt: &Dispcnt) -> Option<BGCnt> {
+        let enabled_backgrounds = dispcnt.enabled_backgrounds();
+        let mut highest_priority_background: Option<BGCnt> = None;
 
-    fn get_tile_single<'a>(memory: &'a GBAMemory, tile_num: usize) -> &'a [u8; 64] {
-        memory.vram[0x10000 + tile_num * 32..][..64]
-            .try_into()
-            .unwrap()
+        for layer in enabled_backgrounds {
+            let new_bgcnt = BGCnt(memory.io_load(0x08 + 2 * layer));
+
+            if let Some(current_bgcnt) = highest_priority_background {
+                if current_bgcnt.priority() > new_bgcnt.priority() {
+                    highest_priority_background = Some(new_bgcnt);
+                }
+            } else {
+                highest_priority_background = Some(new_bgcnt)
+            }
+        }
+        highest_priority_background
     }
 }
 
