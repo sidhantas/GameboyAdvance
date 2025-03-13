@@ -1,16 +1,18 @@
 use std::sync::{Arc, Mutex};
 
 use crate::graphics::display::CANVAS_AREA;
+use crate::io::timers::Timers;
 use crate::memory::memory::CPUCallbacks;
 use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
-
 use crate::graphics::ppu::PPU;
+
 
 pub struct GBA {
     pub cpu: CPU,
     pub memory: GBAMemory,
     pub ppu: PPU,
     display_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>,
+    pub timers: Timers
 }
 
 impl GBA {
@@ -21,6 +23,7 @@ impl GBA {
             cpu: CPU::new(),
             ppu: PPU::default(),
             display_buffer: Arc::new(Mutex::new([0xFFFFFFFF; CANVAS_AREA])),
+            timers: Timers::new()
         }
     }
 
@@ -32,7 +35,8 @@ impl GBA {
             memory,
             cpu: CPU::new(),
             ppu: PPU::default(),
-            display_buffer
+            display_buffer,
+            timers: Timers::new()
         };
         gba.cpu.flush_pipeline(&mut gba.memory);
         gba
@@ -40,6 +44,7 @@ impl GBA {
 
     pub fn step(&mut self) {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
+        self.timers.tick(cpu_cycles.into(), &mut self.memory);
         self.ppu.advance_ppu(
             cpu_cycles,
             &mut self.memory,
@@ -55,5 +60,6 @@ impl GBA {
                 _ => panic!("{:#?}", command),
             }
         }
+
     }
 }

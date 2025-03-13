@@ -12,7 +12,7 @@ use crate::memory::{
 use super::{
     background::{self, Background},
     display::{self, CANVAS_AREA},
-    pallete::{BGPalleteData, OBJPalleteData},
+    pallete::{BGPalleteData, OBJPaletteData},
     wrappers::{
         oam::{Oam, NUM_OAM_ENTRIES},
         tile::Tile,
@@ -213,7 +213,7 @@ impl PPU {
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
                 let pallete_region = &memory.pallete_ram[0x200..][..0x200].try_into().unwrap();
-                let pallete = OBJPalleteData(pallete_region);
+                let pallete = OBJPaletteData(pallete_region);
                 return pallete.get_pixel_from_tile(
                     &tile,
                     pixel_x as usize,

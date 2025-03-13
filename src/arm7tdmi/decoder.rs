@@ -8,7 +8,6 @@ use super::{
 };
 
 impl CPU {
-    #[no_mangle]
     pub fn decode_instruction(&mut self, instruction: WORD) -> ARMDecodedInstruction {
         return match self.get_instruction_mode() {
             InstructionMode::ARM => self.decode_arm_instruction(instruction),

@@ -14,6 +14,7 @@ mod graphics;
 mod memory;
 mod types;
 mod utils;
+mod io;
 
 fn main() -> Result<(), std::io::Error> {
     let args: Vec<String> = env::args().collect();

@@ -1,15 +1,16 @@
 use super::wrappers::tile::Tile;
 
-pub struct OBJPalleteData<'a>(pub &'a [u8; 0x200]);
+pub struct OBJPaletteData<'a>(pub &'a [u8; 0x200]);
 
-impl<'a> OBJPalleteData<'a> {
+impl<'a> OBJPaletteData<'a> {
     pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<u32> {
         match tile {
             Tile::FourBit { tile, pallete_num } => {
-                let palette_index: usize = (tile[y * 4 + x / 2] >> ((x & 0x1) * 4)).into();
-                let palette_index = palette_index & 0xF;
+                let palette_index = tile[y * 4 + x / 2];
+                let palette_index = palette_index >> ((x & 0x1) * 4);
+                let palette_index: usize = (palette_index & 0xF).into();
                 self.get_obj_color(palette_index, *pallete_num, 0)
-            },
+            }
             Tile::EightBit { tile } => {
                 let palette_index: usize = tile[y * 8 + x].into();
                 self.get_obj_color(palette_index, 0, 1)
@@ -72,7 +73,6 @@ impl<'a> BGPalleteData<'a> {
         return Some(color);
     }
 }
-
 
 fn rgb555_to_rgb24(rgb555: u16) -> u32 {
     let r5 = (rgb555 >> 10) & 0x1F;

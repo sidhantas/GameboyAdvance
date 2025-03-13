@@ -59,7 +59,6 @@ pub struct CPU {
     pub spsr: [WORD; 5],
     pub output_file: File,
     pub cycles: u64,
-    pub relative_cycles: u64,
     status_history: VecDeque<Status>,
     pub interrupt_triggered: bool,
 }
@@ -92,7 +91,6 @@ impl CPU {
                 .open(OUTPUT_FILE)
                 .unwrap(),
             cycles: 0,
-            relative_cycles: 3,
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
             is_halted: false,
             interrupt_triggered: false,
@@ -100,7 +98,6 @@ impl CPU {
         cpu
     }
 
-    #[no_mangle]
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
         if self.status_history.len() >= HISTORY_SIZE {

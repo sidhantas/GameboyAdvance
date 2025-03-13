@@ -5,3 +5,4 @@ pub mod graphics;
 pub(crate) mod utils;
 pub(crate) mod types;
 pub mod gba;
+pub mod io;
