@@ -55,11 +55,11 @@ impl<'a> Oam<'a> {
     }
 
     pub fn double_sized(&self) -> bool {
-        self.rotation_and_scaling_enabled() && self.0[0] & 0x200 > 0
+        self.rotation_and_scaling_enabled() && self.0[0].bit_is_set(9)
     }
 
     pub fn obj_disabled(&self) -> bool {
-        !self.rotation_and_scaling_enabled() && self.0[0] & 0x200 > 0
+        !self.rotation_and_scaling_enabled() && self.0[0].bit_is_set(9)
     }
 
     pub fn obj_mode(&self) -> OBJMode {

@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use crate::graphics::display::CANVAS_AREA;
 use crate::graphics::ppu::PPU;
-use crate::io::timers::Timers;
 use crate::memory::memory::CPUCallbacks;
 use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 

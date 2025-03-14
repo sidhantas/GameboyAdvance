@@ -1,3 +1,5 @@
+use crate::{memory::wrappers::tmcnt::TMCntH, utils::bits::Bits};
+
 use super::memory::{CPUCallbacks, GBAMemory, MemoryError};
 
 pub const IO_BASE: usize = 0x4000000;
@@ -351,7 +353,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM0CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FB, 0x00FB),
-        false,
+        true,
     ));
     definitions[TM1CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
@@ -359,7 +361,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM1CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x00FF),
-        false,
+        true,
     ));
     definitions[TM2CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
@@ -367,7 +369,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM2CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x00FF),
-        false,
+        true,
     ));
     definitions[TM3CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
@@ -375,7 +377,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM3CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x00FF),
-        false,
+        true,
     ));
     definitions[KEYINPUT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x03FF, 0x0000),
@@ -397,10 +399,10 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
         BitMask::SIXTEEN(0x3FFF, 0x3FFF),
         false,
     ));
-    definitions[IF] = Some(IORegisterDefinition::new(
-        BitMask::SIXTEEN(0x3FFF, 0x3FFF),
-        true,
-    ).with_callback(GBAMemory::check_interrupts));
+    definitions[IF] = Some(
+        IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), true)
+            .with_callback(GBAMemory::check_interrupts),
+    );
     definitions[WAITCNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xDFFF, 0xDFFF),
         false,
@@ -600,6 +602,7 @@ impl GBAMemory {
                     let timer = (address & 0xF) / 4;
                     return Ok(self.timers.as_ref().unwrap().read_timer(timer) as u16);
                 }
+                TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {}
                 _ => todo!(),
             }
         }
@@ -643,6 +646,19 @@ impl GBAMemory {
                     value = self.io_load(address) & !value;
                 }
                 KEYINPUT => return Ok(()),
+                TM0CNT_L | TM1CNT_L | TM2CNT_L | TM3CNT_L => {}
+                TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {
+                    let old_value = self.io_load(address);
+                    let timer_enabled = !old_value & value;
+                    let timer_num = ((address - 0x2) & 0xF) / 4;
+                    if timer_enabled.bit_is_set(7) {
+                        // The timer enabled bit has been set to 1
+                        if let Some(mut timers) = self.timers.take() {
+                            timers.reload_timer(timer_num, self.io_load(address - 0x2));
+                            self.timers.replace(timers);
+                        }
+                    }
+                }
                 _ => return Err(MemoryError::NoIODefinition(address)),
             }
         }
@@ -827,5 +843,20 @@ mod tests {
         }
 
         assert_eq!(gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(), 5);
+    }
+
+    #[rstest]
+    #[case(0)]
+    #[case(1)]
+    #[case(2)]
+    #[case(3)]
+    fn timers_reload_on_timer_enable(#[case] timer_num: usize) {
+        let mut gba = GBA::new_no_bios();
+        gba.memory.io_writeu16(0x100 + 0x4 * timer_num, 0xFF);
+        let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
+        tmcnt.set_bit(7); // enables timer
+        gba.memory.io_writeu16(0x102 + 0x4 * timer_num, tmcnt).unwrap();
+
+        assert_eq!(gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(), 0xFF);
     }
 }

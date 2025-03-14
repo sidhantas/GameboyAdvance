@@ -29,5 +29,4 @@ impl<'a> Background<'a> {
 
         current_pixel.pixel
     }
-
 }
