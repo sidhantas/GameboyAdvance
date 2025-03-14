@@ -1,4 +1,4 @@
-use crate::types::{BYTE, CYCLES, HWORD, WORD};
+use crate::{io::timers::Timers, types::{BYTE, CYCLES, HWORD, WORD}};
 use std::{
     fmt::Display,
     fs::File,
@@ -108,6 +108,7 @@ pub struct GBAMemory {
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
     pub cpu_commands: Vec<CPUCallbacks>,
+    pub timers: Option<Timers>
 }
 
 impl GBAMemory {
@@ -156,6 +157,7 @@ impl GBAMemory {
             wait_cycles_u16,
             wait_cycles_u32,
             cpu_commands: Vec::new(),
+            timers: Some(Timers::new())
         };
 
         memory.io_store(0x088, 0x200);

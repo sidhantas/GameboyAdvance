@@ -347,7 +347,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM0CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
-        false,
+        true,
     ));
     definitions[TM0CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FB, 0x00FB),
@@ -355,7 +355,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM1CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
-        false,
+        true,
     ));
     definitions[TM1CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x00FF),
@@ -363,7 +363,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM2CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
-        false,
+        true,
     ));
     definitions[TM2CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x00FF),
@@ -371,7 +371,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[TM3CNT_L] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xFFFF, 0xFFFF),
-        false,
+        true,
     ));
     definitions[TM3CNT_H] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x00FF),
@@ -400,7 +400,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     definitions[IF] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x3FFF, 0x3FFF),
         true,
-    ));
+    ).with_callback(GBAMemory::check_interrupts));
     definitions[WAITCNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xDFFF, 0xDFFF),
         false,
@@ -596,6 +596,10 @@ impl GBAMemory {
             match address {
                 IF => {}
                 KEYINPUT => {}
+                TM0CNT_L | TM1CNT_L | TM2CNT_L | TM3CNT_L => {
+                    let timer = (address & 0xF) / 4;
+                    return Ok(self.timers.as_ref().unwrap().read_timer(timer) as u16);
+                }
                 _ => todo!(),
             }
         }
@@ -705,7 +709,11 @@ impl GBAMemory {
 mod tests {
     use rstest::rstest;
 
-    use crate::memory::{io_handlers::*, memory::GBAMemory};
+    use crate::{
+        gba::GBA,
+        memory::{io_handlers::*, memory::GBAMemory},
+        utils::bits::Bits,
+    };
 
     #[rstest]
     #[case(DISPCNT, 0xAB, 0xAB)]
@@ -801,5 +809,23 @@ mod tests {
         memory.io_writeu8(SOUNDBIAS + 1, 0x42).unwrap();
 
         assert_eq!(memory.io_load(SOUNDBIAS), 0x4200);
+    }
+
+    #[rstest]
+    #[case(0)]
+    #[case(1)]
+    #[case(2)]
+    #[case(3)]
+    fn can_read_timers(#[case] timer_num: usize) {
+        let mut gba = GBA::new_no_bios();
+        let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
+        tmcnt.set_bit(7); // enables timer
+        gba.memory.ppu_io_write(0x102 + 0x4 * timer_num, tmcnt);
+
+        for _ in 0..5 {
+            gba.step();
+        }
+
+        assert_eq!(gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(), 5);
     }
 }

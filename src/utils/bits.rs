@@ -1,9 +1,9 @@
 use std::{
     mem::size_of,
-    ops::{BitAnd, BitOr, BitOrAssign, Shr}, process::Output,
+    ops::{BitAnd, Shr},
 };
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::PrimInt;
 
 use crate::types::{BYTE, HWORD, WORD};
 
