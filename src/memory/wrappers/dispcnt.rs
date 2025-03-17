@@ -1,8 +1,8 @@
 use crate::utils::bits::Bits;
 
-pub struct Dispcnt<'a>(pub &'a u16);
+pub struct Dispcnt(pub u16);
 
-impl<'a> Dispcnt<'a> {
+impl Dispcnt {
     pub fn get_bg_mode(&self) -> u16 {
         self.0 & 0b111
     }
@@ -40,14 +40,32 @@ impl Iterator for EnabledBackgrounds {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.enabled_backgrounds & 0b1 == 0 {
-            if self.count >= 4 {
-                return None;
-            }
+        while self.count < 4 {
+            let current_count = self.count;
+            let current_enabled_backgounds = self.enabled_backgrounds;
             self.enabled_backgrounds >>= 1;
             self.count += 1;
+            if current_enabled_backgounds & 0b1 > 0 {
+                return Some(current_count);
+            }
         }
 
-        Some(self.count)
+        None
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Dispcnt;
+
+    #[test]
+    fn test_gets_enabled_backgrounds() {
+        let dispcnt = Dispcnt(0x9802);
+
+        for layer in dispcnt.enabled_backgrounds() {
+            dbg!(layer);
+        }
+
+        assert_eq!(1, 1);
     }
 }

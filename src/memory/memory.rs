@@ -1,8 +1,12 @@
-use crate::{io::timers::Timers, types::{BYTE, CYCLES, HWORD, WORD}};
+use crate::{
+    io::timers::Timers,
+    types::{BYTE, CYCLES, HWORD, WORD},
+};
 use std::{
     fmt::Display,
     fs::File,
     io::{Read, Seek},
+    sync::Arc,
     usize,
 };
 
@@ -108,7 +112,8 @@ pub struct GBAMemory {
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
     pub cpu_commands: Vec<CPUCallbacks>,
-    pub timers: Option<Timers>
+    pub timers: Option<Timers>,
+    pub(crate) breakpoint_checker: Option<Box<dyn Fn(usize) -> ()>>,
 }
 
 impl GBAMemory {
@@ -157,7 +162,8 @@ impl GBAMemory {
             wait_cycles_u16,
             wait_cycles_u32,
             cpu_commands: Vec::new(),
-            timers: Some(Timers::new())
+            timers: Some(Timers::new()),
+            breakpoint_checker: None,
         };
 
         memory.io_store(0x088, 0x200);
@@ -270,6 +276,7 @@ impl GBAMemory {
 
     pub fn write(&mut self, address: usize, value: u8) -> CYCLES {
         let region = address >> 24;
+
         if region == IORAM_REGION {
             self.io_writeu8(address, value);
         }
@@ -277,6 +284,9 @@ impl GBAMemory {
             self.get_memory_slice_mut::<{ std::mem::size_of::<u8>() }>(region, address)
         {
             memory_reference[0] = value;
+        }
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(address);
         }
 
         self.wait_cycles_u16[region]
@@ -292,6 +302,9 @@ impl GBAMemory {
         {
             memory_reference.copy_from_slice(&value.to_le_bytes());
         }
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(address);
+        }
 
         self.wait_cycles_u16[region]
     }
@@ -306,6 +319,9 @@ impl GBAMemory {
         {
             memory_reference.copy_from_slice(&value.to_le_bytes());
         }
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(address);
+        }
 
         self.wait_cycles_u32[region]
     }
@@ -319,9 +335,23 @@ impl GBAMemory {
                 .map_or(0, |slice| slice[0])
         };
 
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(address);
+        }
+
         MemoryFetch {
             cycles: self.wait_cycles_u16[region],
             data: read,
+        }
+    }
+
+    pub fn read_raw(&self, address: usize) -> u8 {
+        let region = address >> 24;
+        if region == IORAM_REGION {
+            self.io_readu8(address).unwrap()
+        } else {
+            self.get_memory_slice::<{ std::mem::size_of::<u8>() }>(region, address)
+                .map_or(0, |slice| slice[0])
         }
     }
 
@@ -333,6 +363,9 @@ impl GBAMemory {
             self.get_memory_slice::<{ std::mem::size_of::<u16>() }>(region, address)
                 .map_or(0, |slice| u16::from_le_bytes(*slice))
         };
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(address);
+        }
         MemoryFetch {
             cycles: self.wait_cycles_u16[region],
             data: read,
@@ -347,6 +380,9 @@ impl GBAMemory {
             self.get_memory_slice::<{ std::mem::size_of::<u32>() }>(region, address)
                 .map_or(0, |slice| u32::from_le_bytes(*slice))
         };
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(address);
+        }
         MemoryFetch {
             cycles: self.wait_cycles_u32[region],
             data: data.rotate_right(8 * (address as u32 & 0b11)),

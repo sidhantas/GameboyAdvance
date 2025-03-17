@@ -1,4 +1,4 @@
-use crate::utils::bits::Bits;
+use crate::{memory::memory::GBAMemory, utils::bits::Bits};
 
 pub const NUM_OAM_ENTRIES: usize = 128;
 
@@ -165,6 +165,13 @@ impl<'a> Oam<'a> {
 
     pub fn pallete_number(&self) -> usize {
         ((self.0[2] >> 12) & 0xF).into()
+    }
+
+    pub fn oam_read(memory: &'a GBAMemory, oam_num: usize) -> Oam {
+        let oam_slice: &[u8; 6] = memory.oam[oam_num * 0x08..][..6].try_into().unwrap();
+        let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
+
+        return Oam(oam_slice);
     }
 }
 

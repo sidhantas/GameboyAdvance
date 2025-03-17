@@ -7,9 +7,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
-    cell::RefCell,
     io::{self, Stdout},
-    rc::Rc,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -25,7 +23,7 @@ use tui::{
 use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
     gba::GBA,
-    graphics::display::CANVAS_AREA,
+    graphics::display::DisplayBuffer,
     memory::io_handlers::{DISPCNT, IO_BASE, VCOUNT},
     utils::bits::Bits,
 };
@@ -39,16 +37,31 @@ pub struct Debugger {
     pub terminal_enabled: bool,
     pub end_debugger: bool,
     pub gba: GBA,
-    pub breakpoints: Rc<RefCell<Vec<Breakpoint>>>,
-    pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
+    pub breakpoints: Arc<Mutex<Vec<Breakpoint>>>,
+    pub triggered_watchpoints: Arc<Mutex<Vec<TriggeredWatchpoints>>>,
 }
 
 impl Debugger {
-    pub fn new(bios: String, rom: String, pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) -> Self {
-        let breakpoints = Rc::new(RefCell::new(Vec::<Breakpoint>::new()));
-        let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
+    pub fn new(bios: String, rom: String, pixel_buffer: Arc<DisplayBuffer>) -> Self {
+        let breakpoints = Arc::new(Mutex::new(Vec::<Breakpoint>::new()));
+        let triggered_watchpoints = Arc::new(Mutex::new(Vec::<TriggeredWatchpoints>::new()));
 
-        let cpu = GBA::new(bios, rom, pixel_buffer);
+        let memory_breakpoints = breakpoints.clone();
+        let memory_triggered_watchpoints = triggered_watchpoints.clone();
+
+        let mut gba = GBA::new(bios, rom, pixel_buffer);
+        gba.memory.breakpoint_checker = Some(Box::new(move |address: usize| {
+            for watchpoint in memory_breakpoints.lock().unwrap().iter() {
+                if let BreakType::WatchAddress(low, high) = watchpoint.break_type {
+                    if low <= address && address <= high {
+                        memory_triggered_watchpoints
+                            .lock()
+                            .unwrap()
+                            .push(TriggeredWatchpoints::Address(address));
+                    }
+                }
+            }
+        }));
 
         Self {
             memory_start_address: 0x0000000,
@@ -56,7 +69,7 @@ impl Debugger {
             terminal_history: Vec::new(),
             terminal_enabled: true,
             end_debugger: false,
-            gba: cpu,
+            gba,
             breakpoints,
             triggered_watchpoints,
         }
@@ -66,7 +79,7 @@ impl Debugger {
 pub fn start_debugger(
     bios: String,
     rom: String,
-    pixel_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>,
+    pixel_buffer: Arc<DisplayBuffer>,
 ) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
@@ -157,7 +170,6 @@ pub fn start_debugger(
         }) else {
             break;
         };
-        thread::sleep(Duration::from_millis(100));
     }
 
     disable_raw_mode()?;
@@ -202,7 +214,7 @@ fn draw_ppu(
     );
 
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.memory.readu16(IO_BASE + VCOUNT).data))
+        Paragraph::new(format!("{}", cpu.memory.io_load(VCOUNT)))
             .alignment(Alignment::Center),
         ppu_values[1],
     );
@@ -612,8 +624,7 @@ fn draw_memory(
         for row in 2..memory_grid[column].len() {
             let value = cpu
                 .memory
-                .read((start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize)
-                .data;
+                .read_raw((start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize);
 
             let widget = Paragraph::new(format!("0x{:0>2x}", value))
                 .style(Style::default().fg(if value > 0 {

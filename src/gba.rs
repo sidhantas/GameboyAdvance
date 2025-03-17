@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use crate::graphics::display::CANVAS_AREA;
+use crate::graphics::display::{DisplayBuffer, CANVAS_AREA};
 use crate::graphics::ppu::PPU;
 use crate::memory::memory::CPUCallbacks;
 use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
@@ -9,7 +9,7 @@ pub struct GBA {
     pub cpu: CPU,
     pub memory: GBAMemory,
     pub ppu: PPU,
-    display_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>,
+    display_buffer: Arc<DisplayBuffer>,
 }
 
 impl GBA {
@@ -19,11 +19,11 @@ impl GBA {
             memory: GBAMemory::new(),
             cpu: CPU::new(),
             ppu: PPU::default(),
-            display_buffer: Arc::new(Mutex::new([0xFFFFFFFF; CANVAS_AREA])),
+            display_buffer: Arc::new(DisplayBuffer::new()),
         }
     }
 
-    pub fn new(bios: String, rom: String, display_buffer: Arc<Mutex<[u32; CANVAS_AREA]>>) -> Self {
+    pub fn new(bios: String, rom: String, display_buffer: Arc<DisplayBuffer>) -> Self {
         let mut memory = GBAMemory::new();
         memory.initialize_bios(bios).unwrap();
         memory.initialize_rom(rom).unwrap();
@@ -42,7 +42,7 @@ impl GBA {
         self.ppu.advance_ppu(
             cpu_cycles,
             &mut self.memory,
-            &mut self.display_buffer.lock().unwrap(),
+            &self.display_buffer,
         );
         if let Some(mut timers) = self.memory.timers.take() {
             timers.tick(cpu_cycles.into(), &mut self.memory);

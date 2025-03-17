@@ -5,7 +5,7 @@ use std::thread;
 use debugger::debugger::start_debugger;
 use gameboy_advance::graphics::display::CANVAS_AREA;
 use getopts::Options;
-use graphics::display::start_display;
+use graphics::display::{start_display, DisplayBuffer};
 use std::env;
 mod arm7tdmi;
 mod debugger;
@@ -34,7 +34,7 @@ fn main() -> Result<(), std::io::Error> {
 
     //let display_memory = memory.clone();
 
-    let pixel_buffer = Arc::new(Mutex::new([0u32; CANVAS_AREA]));
+    let pixel_buffer = Arc::new(DisplayBuffer::new());
     let gba_pixel_buff = pixel_buffer.clone();
     thread::scope(move |scope| {
         scope.spawn(move || start_debugger(bios, rom, gba_pixel_buff));

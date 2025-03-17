@@ -230,9 +230,9 @@ impl CPU {
 
     fn thumb_sub_imm(&mut self, rd: REGISTER, imm: u8) {
         let minuend = self.get_register(rd);
-        let imm: u32 = sign_extend(imm as u32, 7).twos_complement();
-        let result = minuend + imm;
-        self.set_arithmetic_flags(result, minuend, imm, 0, true);
+        let imm = !(imm as u32);
+        let result = minuend + imm + 1;
+        self.set_arithmetic_flags(result, minuend, imm, 1, true);
         self.set_register(rd, result);
         self.set_executed_instruction(format_args!("SUB {} {:#X}", rd, imm));
     }

@@ -43,7 +43,7 @@ pub struct TerminalHistoryEntry {
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 10] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 11] = [
     TerminalCommand {
         name: "next",
         _arguments: 1,
@@ -104,6 +104,12 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 10] = [
         _description: "Goes to memory location of a tile",
         handler: go_to_obj_tile,
     },
+    TerminalCommand {
+        name: "c",
+        _arguments: 1,
+        _description: "Continues until encountering a breakpoint",
+        handler: continue_handler,
+    },
 ];
 
 fn find_command(command: &str) -> Result<&TerminalCommand, TerminalCommandErrors> {
@@ -125,21 +131,14 @@ pub fn parse_command(debugger: &mut Debugger) -> Result<String, TerminalCommandE
     Ok((command.handler)(debugger, split_command.collect())?)
 }
 
-fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
-    let num_executions = match args.get(0) {
-        Some(value) => {
-            let Ok(parsed_value) = value.parse::<u32>() else {
-                return Err(TerminalCommandErrors::CouldNotParse.into());
-            };
-            parsed_value
-        }
-        None => 1,
-    };
-
+fn continue_handler(
+    debugger: &mut Debugger,
+    _args: Vec<&str>,
+) -> Result<String, TerminalCommandErrors> {
     let cpu = &mut debugger.gba;
-    for _ in 0..num_executions {
+    loop {
         cpu.step();
-        for breakpoint in debugger.breakpoints.borrow().iter() {
+        for breakpoint in debugger.breakpoints.lock().unwrap().iter() {
             match breakpoint.break_type {
                 BreakType::Break(break_pc) => {
                     if cpu.cpu.get_pc() == break_pc {
@@ -155,7 +154,56 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
             }
         }
         let mut encountered_watchpoints = String::new();
-        for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
+        for watchpoint in debugger.triggered_watchpoints.lock().unwrap().drain(..) {
+            match watchpoint {
+                TriggeredWatchpoints::Address(address) => {
+                    encountered_watchpoints
+                        .push_str(&format!("Watchpoint encountered {:#X}\n", address));
+                }
+                TriggeredWatchpoints::Error(memory_error) => {
+                    encountered_watchpoints
+                        .push_str(&format!("Memory Error encountered\n{}\n", memory_error));
+                }
+            }
+        }
+
+        if !encountered_watchpoints.is_empty() {
+            return Ok(encountered_watchpoints);
+        }
+    }
+}
+
+fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
+    let num_executions = match args.get(0) {
+        Some(value) => {
+            let Ok(parsed_value) = value.parse::<u32>() else {
+                return Err(TerminalCommandErrors::CouldNotParse.into());
+            };
+            parsed_value
+        }
+        None => 1,
+    };
+
+    let cpu = &mut debugger.gba;
+    for _ in 0..num_executions {
+        cpu.step();
+        for breakpoint in debugger.breakpoints.lock().unwrap().iter() {
+            match breakpoint.break_type {
+                BreakType::Break(break_pc) => {
+                    if cpu.cpu.get_pc() == break_pc {
+                        return Ok(String::from("Breakpoint encountered"));
+                    }
+                }
+                BreakType::WatchRegister(register, value) => {
+                    if cpu.cpu.get_register(register) == value {
+                        return Ok(format!("Watchpoint encountered {}", breakpoint.break_type));
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut encountered_watchpoints = String::new();
+        for watchpoint in debugger.triggered_watchpoints.lock().unwrap().drain(..) {
             match watchpoint {
                 TriggeredWatchpoints::Address(address) => {
                     encountered_watchpoints
@@ -199,7 +247,8 @@ fn set_breakpoint_handler(
     };
     debugger
         .breakpoints
-        .borrow_mut()
+        .lock()
+        .unwrap()
         .push(Breakpoint::new(BreakType::Break(breakpoint)));
     Ok(format!("Breakpoint set at address {:#X}", breakpoint))
 }
@@ -225,7 +274,8 @@ fn delete_breakpoint_handler(
     }
     debugger
         .breakpoints
-        .borrow_mut()
+        .lock()
+        .unwrap()
         .remove(breakpoint as usize - 1);
 
     Ok(format!("Breakpoint number {} removed", breakpoint))
@@ -236,7 +286,7 @@ fn list_breakpoint_handler(
     _args: Vec<&str>,
 ) -> Result<String, TerminalCommandErrors> {
     let mut breakpoint_list = String::new();
-    let breakpoints = &debugger.breakpoints.borrow();
+    let breakpoints = &debugger.breakpoints.lock().unwrap();
     if breakpoints.is_empty() {
         return Ok("No Breakpoints".into());
     }
@@ -275,7 +325,8 @@ fn set_watchpoint_handler(
 
     debugger
         .breakpoints
-        .borrow_mut()
+        .lock()
+        .unwrap()
         .push(Breakpoint::new(BreakType::WatchRegister(register, value)));
 
     Ok(format!(
@@ -300,7 +351,8 @@ fn set_watch_address_range_handler(
 
     debugger
         .breakpoints
-        .borrow_mut()
+        .lock()
+        .unwrap()
         .push(Breakpoint::new(BreakType::WatchAddress(address1, address2)));
     Ok(format!(
         "Watchpoint set for range {:#X}-{:#X}",
@@ -347,6 +399,7 @@ fn dissassemble_oam(
         width: {},\n\
         orient: {:#?},\n\
         tile: {}\n\
+        rotation scaling: {}\n\
         double size: {}\n\
         disabled: {}\n\
         mode: {:#?}\n\
@@ -358,6 +411,7 @@ fn dissassemble_oam(
         oam.width(),
         oam.obj_shape(),
         oam.tile_number(),
+        oam.rotation_and_scaling_enabled(),
         oam.double_sized(),
         oam.obj_disabled(),
         oam.obj_mode(),

@@ -100,13 +100,13 @@ impl CPU {
 
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
-        if self.status_history.len() >= HISTORY_SIZE {
-            self.status_history.pop_front();
-        }
-        unsafe {
-            INSTRUCTION_COUNT += 1;
-        }
-        self.status_history.push_back(self.get_status());
+        //if self.status_history.len() >= HISTORY_SIZE {
+        //    self.status_history.pop_front();
+        //}
+        //unsafe {
+        //    INSTRUCTION_COUNT += 1;
+        //}
+        //self.status_history.push_back(self.get_status());
         if self.interrupt_triggered {
             self.raise_irq(memory);
             self.interrupt_triggered = false;
