@@ -55,7 +55,7 @@ pub struct CPU {
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
-    pub cpsr: WORD,
+    cpsr: WORD,
     pub spsr: [WORD; 5],
     pub output_file: File,
     pub cycles: u64,
@@ -163,6 +163,28 @@ impl CPU {
 
     pub fn get_sp(&self) -> u32 {
         self.get_register(13)
+    }
+
+    pub fn get_cpsr(&self) -> u32 {
+        self.cpsr
+    }
+
+    pub fn set_cpsr(&mut self, cpsr: u32){
+        self.cpsr = cpsr;
+    }
+
+    pub fn disable_irq(&mut self) {
+        self.cpsr.set_bit(7);
+    }
+
+    pub fn disable_fiq(&mut self) {
+        self.cpsr.set_bit(6);
+    }
+
+    pub fn pop_spsr(&mut self) {
+        if let Some(spsr) = self.get_current_spsr() {
+            self.cpsr = *spsr;
+        }
     }
 
     pub fn increment_pc(&mut self) {

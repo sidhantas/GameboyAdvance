@@ -30,7 +30,7 @@ impl CPU {
         };
 
         // Store CPSR in SPSR_new_mode
-        let cpsr = self.cpsr;
+        let cpsr = self.get_cpsr();
         self.set_mode(exception.into());
         // Store next instruction address for handler to return to
         self.set_register(LINK_REGISTER, self.get_pc() - instruction_size);
@@ -44,20 +44,20 @@ impl CPU {
         // Update I and F bits and get exception address
         let exception_vector = match exception {
             Exceptions::Reset => {
-                self.cpsr.set_bit(7);
-                self.cpsr.set_bit(6);
+                self.disable_irq();
+                self.disable_fiq();
                 0x00
             }
             Exceptions::Undefined => {
-                self.cpsr.set_bit(7);
+                self.disable_irq();
                 0x04
             }
             Exceptions::Software => {
-                self.cpsr.set_bit(7);
+                self.disable_irq();
                 0x08
             }
             Exceptions::IRQ => {
-                self.cpsr.set_bit(7);
+                self.disable_irq();
                 0x18
             }
         };
@@ -71,7 +71,7 @@ impl CPU {
     }
 
     pub fn raise_irq(&mut self, memory: &mut GBAMemory) {
-        if !self.cpsr.bit_is_set(7) {
+        if !self.get_cpsr().bit_is_set(7) {
             self.raise_exception(Exceptions::IRQ, memory);
         }
     }

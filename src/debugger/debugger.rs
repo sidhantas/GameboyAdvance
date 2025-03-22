@@ -542,11 +542,11 @@ fn draw_cpsr(
         flag_values[6],
     );
     f.render_widget(
-        Paragraph::new(format!("{:08x}", cpu.cpsr)).alignment(Alignment::Center),
+        Paragraph::new(format!("{:08x}", cpu.get_cpsr())).alignment(Alignment::Center),
         flag_values[7],
     );
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.cpsr.get_bit(7))).alignment(Alignment::Center),
+        Paragraph::new(format!("{}", cpu.get_cpsr().get_bit(7))).alignment(Alignment::Center),
         flag_values[8],
     );
     f.render_widget(

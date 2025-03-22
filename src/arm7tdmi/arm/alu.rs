@@ -104,9 +104,7 @@ impl CPU {
         operation(self, rd, self.get_register(rn), operand2, set_flags);
         if rd == 15 {
             if instruction.bit_is_set(20) {
-                if let Some(spsr) = self.get_current_spsr() {
-                    self.cpsr = *spsr;
-                }
+                self.pop_spsr();
             }
             cycles += self.flush_pipeline(memory);
         }
@@ -293,7 +291,7 @@ impl CPU {
                 }
             }
         } else {
-            self.cpsr
+                self.get_cpsr()
         };
 
         self.set_register(rd, source_psr);
@@ -319,26 +317,35 @@ impl CPU {
             self.get_register(instruction & 0x0000_000F)
         };
 
-        let destination_psr: &mut u32 = if instruction.bit_is_set(22) {
+        let mut destination_psr = if instruction.bit_is_set(22) {
             match self.get_current_spsr() {
-                Some(spsr) => spsr,
+                Some(spsr) => *spsr,
                 None => {
                     return 0;
                 }
             }
         } else {
-            &mut self.cpsr
+            self.get_cpsr()
         };
 
         if instruction.bit_is_set(19) {
-            (*destination_psr) &= !FLG_MASK;
-            (*destination_psr) |= operand & FLG_MASK;
+            destination_psr &= !FLG_MASK;
+            destination_psr |= operand & FLG_MASK;
         }
 
         if instruction.bit_is_set(16) && !matches!(current_cpu_mode, CPUMode::USER) {
-            (*destination_psr) &= !CTL_MASK;
-            (*destination_psr) |= operand & CTL_MASK;
+            destination_psr &= !CTL_MASK;
+            destination_psr |= operand & CTL_MASK;
         }
+
+        if instruction.bit_is_set(22) {
+            let Some(spsr) = self.get_current_spsr() else {
+                return 0;
+            };
+            *spsr = destination_psr;
+        } else {
+            self.set_cpsr(destination_psr);
+        };
 
         let updated_psr = if instruction.bit_is_set(22) {
             "SPSR"
@@ -865,7 +872,7 @@ mod tests {
     ) {
         let mut gba = GBA::new_no_bios();
 
-        gba.cpu.cpsr = cpsr;
+        gba.cpu.set_cpsr(cpsr);
 
         gba.cpu.prefetch[0] = Some(opcode);
         gba.step();
@@ -899,7 +906,7 @@ mod tests {
         gba.step();
         gba.step();
 
-        assert_eq!(gba.cpu.cpsr, expected_val);
+        assert_eq!(gba.cpu.get_cpsr(), expected_val);
     }
 
     #[rstest]
@@ -943,6 +950,6 @@ mod tests {
         gba.step();
         gba.step();
 
-        assert_eq!(gba.cpu.cpsr, expected_val);
+        assert_eq!(gba.cpu.get_cpsr(), expected_val);
     }
 }

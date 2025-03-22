@@ -1,7 +1,7 @@
 pub(crate) use std::sync::{atomic::Ordering, Arc};
 
 use crate::graphics::display::DisplayBuffer;
-use crate::graphics::ppu::{PPUModes, HBLANK, HDRAW, PPU, VBLANK_FLAG, VDRAW};
+use crate::graphics::ppu::{PPUModes, HBLANK, HBLANK_FLAG, HDRAW, PPU, VBLANK_FLAG, VDRAW};
 use crate::graphics::wrappers::oam::{Oam, NUM_OAM_ENTRIES};
 use crate::memory::memory::GBAMemory;
 
@@ -18,6 +18,7 @@ impl PPU {
                 self.y += 1;
                 self.x = 0;
                 if self.y >= VDRAW {
+                    *disp_stat &= !HBLANK_FLAG;
                     *disp_stat |= VBLANK_FLAG;
                     display_buffer
                         .ready_to_render

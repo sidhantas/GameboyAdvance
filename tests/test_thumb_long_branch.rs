@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use gameboy_advance::{gba::GBA, graphics::display::CANVAS_AREA};
+use gameboy_advance::{gba::GBA, graphics::display::{DisplayBuffer, CANVAS_AREA}};
 
 #[test]
 fn test_thumb_long_branch() {
@@ -8,7 +8,7 @@ fn test_thumb_long_branch() {
     let mut gba = GBA::new(
         bios.clone(),
         bios.clone(),
-        Arc::new(Mutex::new([0; CANVAS_AREA])),
+        Arc::new(DisplayBuffer::new()),
     );
 
     {
