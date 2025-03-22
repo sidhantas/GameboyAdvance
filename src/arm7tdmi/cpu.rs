@@ -1,30 +1,30 @@
-use std::{
-    collections::VecDeque,
-    fmt::Display,
-    fs::{remove_file, File, OpenOptions},
-    io::Write,
-};
+use core::panic;
+use std::fs::{remove_file, File, OpenOptions};
 
 use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
+
+use super::cpsr::PSR;
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
 pub const STACK_POINTER: u32 = 13;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InstructionMode {
     ARM,
     THUMB,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum CPUMode {
-    USER = 0b10000,
-    FIQ = 0b10001, // Fast Interrupt
-    IRQ = 0b10010, // IRQ
-    SVC = 0b10011, // Supervisor
-    ABT = 0b10111, // Abort
-    UND = 0b11011, // Undefined
-    SYS = 0b11111, // System
+    USER,
+    FIQ, // Fast Interrupt
+    IRQ, // IRQ
+    SVC, // Supervisor
+    ABT, // Abort
+    UND, // Undefined
+    SYS, // System
+    INVALID(u32),
 }
 
 #[repr(u8)]
@@ -35,13 +35,13 @@ pub enum FlagsRegister {
     V = 28,
 }
 
-#[derive(Default, Debug)]
-struct Status {
-    pub instruction_count: usize,
-    pub registers: [WORD; 16],
-    pub cpsr: WORD,
-    pub cycles: u64,
-}
+//#[derive(Default, Debug)]
+//struct Status {
+//    pub instruction_count: usize,
+//    pub registers: [WORD; 16],
+//    pub cpsr: PSR,
+//    pub cycles: u64,
+//}
 
 #[derive(Debug)]
 pub struct CPU {
@@ -55,11 +55,11 @@ pub struct CPU {
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
-    cpsr: WORD,
-    pub spsr: [WORD; 5],
+    cpsr: PSR,
+    pub spsr: [PSR; 5],
     pub output_file: File,
     pub cycles: u64,
-    status_history: VecDeque<Status>,
+    //status_history: VecDeque<Status>,
     pub interrupt_triggered: bool,
 }
 
@@ -75,11 +75,8 @@ impl CPU {
             executed_instruction_hex: 0,
             executed_instruction: String::with_capacity(50),
             prefetch: [None; 2],
-            // start in supervisor mode
-            // interrupts are disabled
-            // start in arm mode
-            cpsr: 0b00000000_00000000_00000000_11010011,
-            spsr: [0; 5],
+            cpsr: PSR::new_cpsr(),
+            spsr: [PSR::new_spsr(); 5],
             registers_fiq: [0; 8],
             registers_svc: [0; 2],
             registers_abt: [0; 2],
@@ -91,7 +88,7 @@ impl CPU {
                 .open(OUTPUT_FILE)
                 .unwrap(),
             cycles: 0,
-            status_history: VecDeque::with_capacity(HISTORY_SIZE),
+            //status_history: VecDeque::with_capacity(HISTORY_SIZE),
             is_halted: false,
             interrupt_triggered: false,
         };
@@ -165,20 +162,20 @@ impl CPU {
         self.get_register(13)
     }
 
-    pub fn get_cpsr(&self) -> u32 {
+    pub fn get_cpsr(&self) -> PSR {
         self.cpsr
     }
 
-    pub fn set_cpsr(&mut self, cpsr: u32){
+    pub fn set_cpsr(&mut self, cpsr: PSR) {
         self.cpsr = cpsr;
     }
 
     pub fn disable_irq(&mut self) {
-        self.cpsr.set_bit(7);
+        self.cpsr.irq_disabled = true;
     }
 
     pub fn disable_fiq(&mut self) {
-        self.cpsr.set_bit(6);
+        self.cpsr.fiq_disabled = true;
     }
 
     pub fn pop_spsr(&mut self) {
@@ -206,6 +203,7 @@ impl CPU {
             CPUMode::UND => &self.registers_und[(register_num - 13) as usize],
             CPUMode::IRQ => &self.registers_irq[(register_num - 13) as usize],
             CPUMode::ABT => &self.registers_abt[(register_num - 13) as usize],
+            CPUMode::INVALID(_) => todo!(),
         }
     }
 
@@ -226,6 +224,7 @@ impl CPU {
             CPUMode::UND => &mut self.registers_und[(register_num - 13) as usize],
             CPUMode::IRQ => &mut self.registers_irq[(register_num - 13) as usize],
             CPUMode::ABT => &mut self.registers_abt[(register_num - 13) as usize],
+            CPUMode::INVALID(_) => panic!(),
         }
     }
 
@@ -240,54 +239,42 @@ impl CPU {
 
     #[inline(always)]
     pub fn set_flag(&mut self, flag: FlagsRegister) {
-        self.cpsr.set_bit(flag as u8);
+        self.cpsr.set_flag(flag);
     }
 
     #[inline(always)]
     pub fn reset_flag(&mut self, flag: FlagsRegister) {
-        self.cpsr.reset_bit(flag as u8);
+        self.cpsr.reset_flag(flag);
     }
 
     #[inline(always)]
     pub fn get_flag(&self, flag: FlagsRegister) -> WORD {
-        self.cpsr.get_bit(flag as u8)
+        if self.cpsr.get_flag(flag) {
+            1
+        } else {
+            0
+        }
     }
 
     #[inline(always)]
     pub fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
-        match instruction_mode {
-            InstructionMode::ARM => self.cpsr.reset_bit(5),
-            InstructionMode::THUMB => self.cpsr.set_bit(5),
-        }
+        self.cpsr.instruction_mode = instruction_mode;
     }
 
     #[inline(always)]
     pub fn get_instruction_mode(&self) -> InstructionMode {
-        if self.cpsr.bit_is_set(5) {
-            return InstructionMode::THUMB;
-        }
-        return InstructionMode::ARM;
+        self.cpsr.instruction_mode
     }
 
     pub fn set_mode(&mut self, mode: CPUMode) {
-        self.cpsr &= !0x1F; // clear bottom 5 bits
-        self.cpsr |= mode as u32;
+        self.cpsr.mode = mode;
     }
 
     pub fn get_cpu_mode(&self) -> CPUMode {
-        match (self.cpsr & 0x0000_001F) as u8 {
-            x if x == CPUMode::USER as u8 => CPUMode::USER,
-            x if x == CPUMode::FIQ as u8 => CPUMode::FIQ,
-            x if x == CPUMode::IRQ as u8 => CPUMode::IRQ,
-            x if x == CPUMode::SVC as u8 => CPUMode::SVC,
-            x if x == CPUMode::ABT as u8 => CPUMode::ABT,
-            x if x == CPUMode::UND as u8 => CPUMode::UND,
-            x if x == CPUMode::SYS as u8 => CPUMode::SYS,
-            _ => panic!("Impossible cpsr value {:#x}", self.cpsr),
-        }
+        self.cpsr.mode
     }
 
-    pub fn get_current_spsr(&mut self) -> Option<&mut WORD> {
+    pub fn get_current_spsr(&mut self) -> Option<&mut PSR> {
         match self.get_cpu_mode() {
             CPUMode::FIQ => Some(&mut self.spsr[0]),
             CPUMode::SVC => Some(&mut self.spsr[1]),
@@ -410,44 +397,44 @@ impl CPU {
         }
     }
 
-    fn get_status(&self) -> Status {
-        let mut status = Status::default();
-        for i in 0..self.registers.len() {
-            status.registers[i] = self.get_register(i as REGISTER);
-        }
-        status.cpsr = self.cpsr;
-        status.cycles = 0;
-        unsafe {
-            status.instruction_count = INSTRUCTION_COUNT;
-        }
-        status
-    }
+    //fn get_status(&self) -> Status {
+    //    let mut status = Status::default();
+    //    for i in 0..self.registers.len() {
+    //        status.registers[i] = self.get_register(i as REGISTER);
+    //    }
+    //    status.cpsr = self.cpsr;
+    //    status.cycles = 0;
+    //    unsafe {
+    //        status.instruction_count = INSTRUCTION_COUNT;
+    //    }
+    //    status
+    //}
 }
 
-impl Display for Status {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ", self.instruction_count)?;
-        for i in self.registers {
-            write!(f, "{:08x} ", i)?;
-        }
+//impl Display for Status {
+//    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//        write!(f, "{} ", self.instruction_count)?;
+//        for i in self.registers {
+//            write!(f, "{:08x} ", i)?;
+//        }
+//
+//        write!(f, "{:08x} ", self.cpsr)?;
+//        write!(f, "{}\n", self.cycles)
+//    }
+//}
 
-        write!(f, "{:08x} ", self.cpsr)?;
-        write!(f, "{}\n", self.cycles)
-    }
-}
-
-impl Drop for CPU {
-    fn drop(&mut self) {
-        for i in self.status_history.iter().skip(1) {
-            self.output_file.write(format!("{}", i).as_bytes()).unwrap();
-        }
-    }
-}
+//impl Drop for CPU {
+//    fn drop(&mut self) {
+//        for i in self.status_history.iter().skip(1) {
+//            self.output_file.write(format!("{}", i).as_bytes()).unwrap();
+//        }
+//    }
+//}
 
 #[cfg(test)]
 mod cpu_tests {
 
-    use crate::{arm7tdmi::cpu::CPUMode, utils::bits::Bits};
+    use crate::arm7tdmi::cpu::CPUMode;
 
     use super::CPU;
 
@@ -460,14 +447,14 @@ mod cpu_tests {
         cpu.set_flag(super::FlagsRegister::Z);
         cpu.reset_flag(super::FlagsRegister::Z);
 
-        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::C as u8));
-        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::N as u8));
-        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::Z as u8) == false);
-        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::V as u8) == false);
+        assert_eq!(cpu.cpsr.get_flag(super::FlagsRegister::C), true);
+        assert_eq!(cpu.cpsr.get_flag(super::FlagsRegister::N), true);
+        assert_eq!(cpu.cpsr.get_flag(super::FlagsRegister::Z), false);
+        assert_eq!(cpu.cpsr.get_flag(super::FlagsRegister::V), false);
 
         cpu.reset_flag(super::FlagsRegister::C);
-        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::C as u8) == false);
-        assert!(cpu.cpsr.bit_is_set(super::FlagsRegister::N as u8));
+        assert_eq!(cpu.cpsr.get_flag(super::FlagsRegister::C), false);
+        assert_eq!(cpu.cpsr.get_flag(super::FlagsRegister::N), true);
     }
 
     #[test]

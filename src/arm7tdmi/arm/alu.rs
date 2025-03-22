@@ -291,10 +291,10 @@ impl CPU {
                 }
             }
         } else {
-                self.get_cpsr()
+            self.get_cpsr()
         };
 
-        self.set_register(rd, source_psr);
+        self.set_register(rd, source_psr.into());
         let psr = if instruction.bit_is_set(22) {
             "SPSR"
         } else {
@@ -317,15 +317,17 @@ impl CPU {
             self.get_register(instruction & 0x0000_000F)
         };
 
-        let mut destination_psr = if instruction.bit_is_set(22) {
+        let mut destination_psr: u32 = if instruction.bit_is_set(22) {
             match self.get_current_spsr() {
-                Some(spsr) => *spsr,
+                Some(spsr) => {
+                    (*spsr).into()
+                },
                 None => {
                     return 0;
                 }
             }
         } else {
-            self.get_cpsr()
+            self.get_cpsr().into()
         };
 
         if instruction.bit_is_set(19) {
@@ -342,9 +344,9 @@ impl CPU {
             let Some(spsr) = self.get_current_spsr() else {
                 return 0;
             };
-            *spsr = destination_psr;
+            *spsr = destination_psr.into();
         } else {
-            self.set_cpsr(destination_psr);
+            self.set_cpsr(destination_psr.into());
         };
 
         let updated_psr = if instruction.bit_is_set(22) {
@@ -408,6 +410,7 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::arm7tdmi::cpsr::PSR;
     use crate::gba::GBA;
     use crate::{
         arm7tdmi::cpu::{CPUMode, FlagsRegister},
@@ -863,7 +866,7 @@ mod tests {
 
     #[rstest]
     #[case(0xe10f2000, 0x000000d3, 2, 0x000000d3)]
-    #[case(0xe10f2000, 0x330000d3, 2, 0x330000d3)]
+    #[case(0xe10f2000, 0x300000d3, 2, 0x300000d3)]
     fn mrs_should_move_instruction_from_psr_to_destination_reg(
         #[case] opcode: u32,
         #[case] cpsr: u32,
@@ -872,7 +875,7 @@ mod tests {
     ) {
         let mut gba = GBA::new_no_bios();
 
-        gba.cpu.set_cpsr(cpsr);
+        gba.cpu.set_cpsr(cpsr.into());
 
         gba.cpu.prefetch[0] = Some(opcode);
         gba.step();
@@ -906,7 +909,7 @@ mod tests {
         gba.step();
         gba.step();
 
-        assert_eq!(gba.cpu.get_cpsr(), expected_val);
+        assert_eq!(gba.cpu.get_cpsr(), expected_val.into());
     }
 
     #[rstest]
@@ -929,7 +932,7 @@ mod tests {
         gba.step();
         gba.step();
 
-        assert_eq!(*gba.cpu.get_current_spsr().unwrap(), expected_val);
+        assert_eq!(*gba.cpu.get_current_spsr().unwrap(), expected_val.into());
     }
 
     #[rstest]
@@ -950,6 +953,28 @@ mod tests {
         gba.step();
         gba.step();
 
-        assert_eq!(gba.cpu.get_cpsr(), expected_val);
+        assert_eq!(gba.cpu.get_cpsr(), expected_val.into());
     }
+
+    #[rstest]
+    #[case(0xe14f0000, CPUMode::IRQ, 0x000000d0)] // mrs r0, SPSR
+    fn mrs_should_move_spsr_to_reg(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] expected_val: u32,
+    ) {
+        use crate::gba::GBA;
+
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.spsr[3] = PSR::from(expected_val);
+        gba.cpu.set_mode(mode);
+
+        gba.cpu.prefetch[0] = Some(opcode);
+        gba.step();
+        gba.step();
+
+        assert_eq!(gba.cpu.get_register(0), expected_val.into());
+    }
+
 }

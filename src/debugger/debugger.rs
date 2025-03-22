@@ -214,8 +214,7 @@ fn draw_ppu(
     );
 
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.memory.io_load(VCOUNT)))
-            .alignment(Alignment::Center),
+        Paragraph::new(format!("{}", cpu.memory.io_load(VCOUNT))).alignment(Alignment::Center),
         ppu_values[1],
     );
 
@@ -412,6 +411,7 @@ fn draw_registers(
             CPUMode::UND => "_und",
             CPUMode::IRQ => "_irq",
             CPUMode::ABT => "_abt",
+            CPUMode::INVALID(_) => "",
         }
     };
 
@@ -525,6 +525,7 @@ fn draw_cpsr(
                 CPUMode::ABT => "ABT",
                 CPUMode::UND => "UND",
                 CPUMode::SYS => "SYS",
+                CPUMode::INVALID(_) => "INVLD",
             }
         ))
         .alignment(Alignment::Center),
@@ -541,12 +542,12 @@ fn draw_cpsr(
         .alignment(Alignment::Center),
         flag_values[6],
     );
+    //f.render_widget(
+    //    Paragraph::new(format!("{:08x}", cpu.get_cpsr())).alignment(Alignment::Center),
+    //    flag_values[7],
+    //);
     f.render_widget(
-        Paragraph::new(format!("{:08x}", cpu.get_cpsr())).alignment(Alignment::Center),
-        flag_values[7],
-    );
-    f.render_widget(
-        Paragraph::new(format!("{}", cpu.get_cpsr().get_bit(7))).alignment(Alignment::Center),
+        Paragraph::new(format!("{}", cpu.get_cpsr().irq_disabled)).alignment(Alignment::Center),
         flag_values[8],
     );
     f.render_widget(
@@ -622,9 +623,9 @@ fn draw_memory(
 
     for column in 1..memory_grid.len() {
         for row in 2..memory_grid[column].len() {
-            let value = cpu
-                .memory
-                .read_raw((start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize);
+            let value = cpu.memory.read_raw(
+                (start_address + ((row as u32 - 2) * 0x10) + (column as u32 - 1)) as usize,
+            );
 
             let widget = Paragraph::new(format!("0x{:0>2x}", value))
                 .style(Style::default().fg(if value > 0 {
