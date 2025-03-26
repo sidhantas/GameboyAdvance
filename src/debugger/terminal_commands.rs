@@ -6,7 +6,7 @@ use crate::{
     graphics::wrappers::oam::Oam,
     utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
-use std::fmt::Display;
+use std::{ fmt::Display, mem};
 
 pub enum TerminalCommandErrors {
     CouldNotFindCommand,
@@ -135,18 +135,20 @@ fn continue_handler(
     debugger: &mut Debugger,
     _args: Vec<&str>,
 ) -> Result<String, TerminalCommandErrors> {
-    let cpu = &mut debugger.gba;
     loop {
-        cpu.step();
-        for breakpoint in debugger.breakpoints.lock().unwrap().iter() {
+        let gba = &mut debugger.gba;
+        mem::swap(&mut gba.memory.breakpoints, &mut debugger.breakpoints);
+        gba.step();
+        mem::swap(&mut gba.memory.breakpoints, &mut debugger.breakpoints);
+        for breakpoint in gba.memory.breakpoints.as_ref().unwrap().iter() {
             match breakpoint.break_type {
                 BreakType::Break(break_pc) => {
-                    if cpu.cpu.get_pc() == break_pc {
+                    if gba.cpu.get_pc() == break_pc {
                         return Ok(String::from("Breakpoint encountered"));
                     }
                 }
                 BreakType::WatchRegister(register, value) => {
-                    if cpu.cpu.get_register(register) == value {
+                    if gba.cpu.get_register(register) == value {
                         return Ok(format!("Watchpoint encountered {}", breakpoint.break_type));
                     }
                 }
@@ -154,7 +156,7 @@ fn continue_handler(
             }
         }
         let mut encountered_watchpoints = String::new();
-        for watchpoint in debugger.triggered_watchpoints.lock().unwrap().drain(..) {
+        for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
             match watchpoint {
                 TriggeredWatchpoints::Address(address) => {
                     encountered_watchpoints
@@ -186,8 +188,10 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
 
     let cpu = &mut debugger.gba;
     for _ in 0..num_executions {
+        mem::swap(&mut cpu.memory.breakpoints, &mut debugger.breakpoints);
         cpu.step();
-        for breakpoint in debugger.breakpoints.lock().unwrap().iter() {
+        mem::swap(&mut cpu.memory.breakpoints, &mut debugger.breakpoints);
+        for breakpoint in debugger.breakpoints.as_ref().unwrap().iter() {
             match breakpoint.break_type {
                 BreakType::Break(break_pc) => {
                     if cpu.cpu.get_pc() == break_pc {
@@ -203,7 +207,7 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
             }
         }
         let mut encountered_watchpoints = String::new();
-        for watchpoint in debugger.triggered_watchpoints.lock().unwrap().drain(..) {
+        for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
             match watchpoint {
                 TriggeredWatchpoints::Address(address) => {
                     encountered_watchpoints
@@ -246,8 +250,7 @@ fn set_breakpoint_handler(
         None => return Err(TerminalCommandErrors::NotEnoughArguments),
     };
     debugger
-        .breakpoints
-        .lock()
+        .breakpoints.as_mut()
         .unwrap()
         .push(Breakpoint::new(BreakType::Break(breakpoint)));
     Ok(format!("Breakpoint set at address {:#X}", breakpoint))
@@ -274,7 +277,7 @@ fn delete_breakpoint_handler(
     }
     debugger
         .breakpoints
-        .lock()
+        .as_mut()
         .unwrap()
         .remove(breakpoint as usize - 1);
 
@@ -286,7 +289,7 @@ fn list_breakpoint_handler(
     _args: Vec<&str>,
 ) -> Result<String, TerminalCommandErrors> {
     let mut breakpoint_list = String::new();
-    let breakpoints = &debugger.breakpoints.lock().unwrap();
+    let breakpoints = &debugger.breakpoints.as_ref().unwrap();
     if breakpoints.is_empty() {
         return Ok("No Breakpoints".into());
     }
@@ -325,7 +328,7 @@ fn set_watchpoint_handler(
 
     debugger
         .breakpoints
-        .lock()
+        .as_mut()
         .unwrap()
         .push(Breakpoint::new(BreakType::WatchRegister(register, value)));
 
@@ -351,7 +354,7 @@ fn set_watch_address_range_handler(
 
     debugger
         .breakpoints
-        .lock()
+        .as_mut()
         .unwrap()
         .push(Breakpoint::new(BreakType::WatchAddress(address1, address2)));
     Ok(format!(

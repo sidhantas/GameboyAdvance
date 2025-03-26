@@ -46,11 +46,11 @@ pub enum FlagsRegister {
 #[derive(Debug)]
 pub struct CPU {
     registers: [WORD; 16],
-    registers_fiq: [WORD; 8],
-    registers_svc: [WORD; 2],
-    registers_abt: [WORD; 2],
-    registers_irq: [WORD; 2],
-    registers_und: [WORD; 2],
+    registers_fiq: [WORD; 16],
+    registers_svc: [WORD; 16],
+    registers_abt: [WORD; 16],
+    registers_irq: [WORD; 16],
+    registers_und: [WORD; 16],
     pub is_halted: bool,
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
@@ -77,11 +77,11 @@ impl CPU {
             prefetch: [None; 2],
             cpsr: PSR::new_cpsr(),
             spsr: [PSR::new_spsr(); 5],
-            registers_fiq: [0; 8],
-            registers_svc: [0; 2],
-            registers_abt: [0; 2],
-            registers_irq: [0; 2],
-            registers_und: [0; 2],
+            registers_fiq: [0; 16],
+            registers_svc: [0; 16],
+            registers_abt: [0; 16],
+            registers_irq: [0; 16],
+            registers_und: [0; 16],
             output_file: OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -191,50 +191,58 @@ impl CPU {
         }
     }
 
-    fn get_register_ref(&self, register_num: REGISTER) -> &WORD {
-        if register_num < 8 || register_num == 15 {
-            return &self.registers[register_num as usize];
+    pub fn get_register(&self, register_num: REGISTER) -> WORD {
+        let cpu_mode = self.get_cpu_mode();
+        if let CPUMode::FIQ = cpu_mode {
+            if register_num >= 8 && register_num < 15 {
+                return self.registers_fiq[register_num as usize];
+            }
         }
-        match self.get_cpu_mode() {
-            CPUMode::FIQ => &self.registers_fiq[(register_num - 8) as usize],
-            CPUMode::USER | CPUMode::SYS => &self.registers[register_num as usize],
-            _ if register_num < 13 => &self.registers[register_num as usize],
-            CPUMode::SVC => &self.registers_svc[(register_num - 13) as usize],
-            CPUMode::UND => &self.registers_und[(register_num - 13) as usize],
-            CPUMode::IRQ => &self.registers_irq[(register_num - 13) as usize],
-            CPUMode::ABT => &self.registers_abt[(register_num - 13) as usize],
+
+        if register_num < 13 || register_num == 15 {
+            return self.registers[register_num as usize];
+        }
+
+        match cpu_mode {
+            CPUMode::FIQ => unreachable!(), // Shouldn't happen
+            CPUMode::USER | CPUMode::SYS => self.registers[register_num as usize],
+            CPUMode::SVC => self.registers_svc[(register_num) as usize],
+            CPUMode::UND => self.registers_und[(register_num) as usize],
+            CPUMode::IRQ => self.registers_irq[(register_num) as usize],
+            CPUMode::ABT => self.registers_abt[(register_num) as usize],
             CPUMode::INVALID(_) => todo!(),
         }
     }
 
-    pub fn get_register(&self, register_num: REGISTER) -> WORD {
-        assert!(register_num < 16);
-        *self.get_register_ref(register_num)
-    }
-
-    fn get_register_ref_mut(&mut self, register_num: REGISTER) -> &mut WORD {
-        if register_num < 8 || register_num == 15 {
-            return &mut self.registers[register_num as usize];
-        }
-        match self.get_cpu_mode() {
-            CPUMode::FIQ => &mut self.registers_fiq[(register_num - 8) as usize],
-            CPUMode::USER | CPUMode::SYS => &mut self.registers[register_num as usize],
-            _ if register_num < 13 => &mut self.registers[register_num as usize],
-            CPUMode::SVC => &mut self.registers_svc[(register_num - 13) as usize],
-            CPUMode::UND => &mut self.registers_und[(register_num - 13) as usize],
-            CPUMode::IRQ => &mut self.registers_irq[(register_num - 13) as usize],
-            CPUMode::ABT => &mut self.registers_abt[(register_num - 13) as usize],
-            CPUMode::INVALID(_) => panic!(),
-        }
-    }
-
     pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
-        assert!(register_num < 16);
-        if register_num == 15 {
-            self.set_pc(value);
+        if register_num < 8 || register_num == 15 {
+            self.registers[register_num as usize] = value;
             return;
         }
-        *self.get_register_ref_mut(register_num) = value;
+
+        let cpu_mode = self.get_cpu_mode();
+
+        if let CPUMode::FIQ = cpu_mode {
+            if register_num >= 8 && register_num < 15 {
+                self.registers_fiq[register_num as usize] = value;
+                return;
+            }
+        }
+
+        if register_num < 13 || register_num == 15 {
+            self.registers[register_num as usize] = value;
+            return;
+        }
+
+        match cpu_mode {
+            CPUMode::FIQ => unreachable!(), // Shouldn't happen
+            CPUMode::USER | CPUMode::SYS => self.registers[register_num as usize] = value,
+            CPUMode::SVC => self.registers_svc[(register_num) as usize] = value,
+            CPUMode::UND => self.registers_und[(register_num) as usize] = value,
+            CPUMode::IRQ => self.registers_irq[(register_num) as usize] = value,
+            CPUMode::ABT => self.registers_abt[(register_num) as usize] = value,
+            CPUMode::INVALID(_) => todo!(),
+        };
     }
 
     #[inline(always)]

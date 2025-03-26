@@ -1,5 +1,3 @@
-use core::panic;
-
 use crate::utils::bits::{self, Bits};
 
 use super::cpu::{CPUMode, FlagsRegister, InstructionMode};

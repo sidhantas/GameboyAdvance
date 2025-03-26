@@ -7,7 +7,9 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
+    cell::RefCell,
     io::{self, Stdout},
+    rc::Rc,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -24,7 +26,10 @@ use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
     gba::GBA,
     graphics::display::DisplayBuffer,
-    memory::io_handlers::{DISPCNT, IO_BASE, VCOUNT},
+    memory::{
+        io_handlers::{DISPCNT, VCOUNT},
+        memory::GBAMemory,
+    },
     utils::bits::Bits,
 };
 
@@ -37,26 +42,26 @@ pub struct Debugger {
     pub terminal_enabled: bool,
     pub end_debugger: bool,
     pub gba: GBA,
-    pub breakpoints: Arc<Mutex<Vec<Breakpoint>>>,
-    pub triggered_watchpoints: Arc<Mutex<Vec<TriggeredWatchpoints>>>,
+    pub breakpoints: Option<Vec<Breakpoint>>,
+    pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
 
 impl Debugger {
     pub fn new(bios: String, rom: String, pixel_buffer: Arc<DisplayBuffer>) -> Self {
-        let breakpoints = Arc::new(Mutex::new(Vec::<Breakpoint>::new()));
-        let triggered_watchpoints = Arc::new(Mutex::new(Vec::<TriggeredWatchpoints>::new()));
-
-        let memory_breakpoints = breakpoints.clone();
-        let memory_triggered_watchpoints = triggered_watchpoints.clone();
+        let breakpoints = Some(Vec::<Breakpoint>::new());
+        let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
         let mut gba = GBA::new(bios, rom, pixel_buffer);
-        gba.memory.breakpoint_checker = Some(Box::new(move |address: usize| {
-            for watchpoint in memory_breakpoints.lock().unwrap().iter() {
+        gba.memory.breakpoint_checker = Some(Box::new(|memory: &GBAMemory, address: usize| {
+            let Some(memory_breakpoints) = memory.breakpoints.as_ref() else {
+                return;
+            };
+            let triggered_breakpoints = &memory.triggered_breakpoints;
+            for watchpoint in memory_breakpoints.iter() {
                 if let BreakType::WatchAddress(low, high) = watchpoint.break_type {
                     if low <= address && address <= high {
-                        memory_triggered_watchpoints
-                            .lock()
-                            .unwrap()
+                        triggered_breakpoints
+                            .borrow_mut()
                             .push(TriggeredWatchpoints::Address(address));
                     }
                 }
@@ -349,16 +354,23 @@ fn handle_terminal_events(debugger: &mut Debugger, event: KeyEvent) {
         KeyCode::Char(c) => debugger.terminal_buffer.push(c),
         KeyCode::Enter => {
             match parse_command(debugger) {
-                Ok(res) => debugger.terminal_history.push(TerminalHistoryEntry {
-                    command: debugger.terminal_buffer.clone(),
-                    result: res,
-                }),
-                Err(err) => debugger.terminal_history.push(TerminalHistoryEntry {
-                    command: debugger.terminal_buffer.clone(),
-                    result: err.to_string(),
-                }),
+                Ok(res) => {
+                    let mut history_command = String::new();
+                    std::mem::swap(&mut debugger.terminal_buffer, &mut history_command);
+                    debugger.terminal_history.push(TerminalHistoryEntry {
+                        command: history_command,
+                        result: res,
+                    })
+                }
+                Err(err) => {
+                    let mut history_command = String::new();
+                    std::mem::swap(&mut debugger.terminal_buffer, &mut history_command);
+                    debugger.terminal_history.push(TerminalHistoryEntry {
+                        command: history_command,
+                        result: err.to_string(),
+                    })
+                }
             };
-            debugger.terminal_buffer.clear();
         }
         _ => {}
     }

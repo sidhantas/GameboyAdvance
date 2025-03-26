@@ -1,13 +1,8 @@
 use crate::{
-    io::timers::Timers,
-    types::{BYTE, CYCLES, HWORD, WORD},
+    debugger::breakpoints::{Breakpoint, TriggeredWatchpoints}, io::timers::Timers, types::{BYTE, CYCLES, HWORD, WORD}
 };
 use std::{
-    fmt::Display,
-    fs::File,
-    io::{Read, Seek},
-    sync::Arc,
-    usize,
+    cell::RefCell, fmt::Display, fs::File, io::{Read, Seek}, rc::Rc, sync::Arc, usize
 };
 
 use super::io_handlers::{DISPSTAT, IF, KEYINPUT};
@@ -113,7 +108,9 @@ pub struct GBAMemory {
     wait_cycles_u32: [u8; 15],
     pub cpu_commands: Vec<CPUCallbacks>,
     pub timers: Option<Timers>,
-    pub(crate) breakpoint_checker: Option<Box<dyn Fn(usize) -> ()>>,
+    pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
+    pub triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
+    pub breakpoints: Option<Vec<Breakpoint>>
 }
 
 impl GBAMemory {
@@ -164,6 +161,8 @@ impl GBAMemory {
             cpu_commands: Vec::new(),
             timers: Some(Timers::new()),
             breakpoint_checker: None,
+            triggered_breakpoints: Rc::new(RefCell::new(Vec::new())),
+            breakpoints: None,
         };
 
         memory.io_store(0x088, 0x200);
@@ -286,7 +285,7 @@ impl GBAMemory {
             memory_reference[0] = value;
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
-            breakpoint_checker(address);
+            breakpoint_checker(self, address);
         }
 
         self.wait_cycles_u16[region]
@@ -303,7 +302,7 @@ impl GBAMemory {
             memory_reference.copy_from_slice(&value.to_le_bytes());
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
-            breakpoint_checker(address);
+            breakpoint_checker(self, address);
         }
 
         self.wait_cycles_u16[region]
@@ -320,7 +319,7 @@ impl GBAMemory {
             memory_reference.copy_from_slice(&value.to_le_bytes());
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
-            breakpoint_checker(address);
+            breakpoint_checker(self, address);
         }
 
         self.wait_cycles_u32[region]
@@ -336,7 +335,7 @@ impl GBAMemory {
         };
 
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
-            breakpoint_checker(address);
+            breakpoint_checker(self, address);
         }
 
         MemoryFetch {
@@ -364,7 +363,7 @@ impl GBAMemory {
                 .map_or(0, |slice| u16::from_le_bytes(*slice))
         };
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
-            breakpoint_checker(address);
+            breakpoint_checker(self, address);
         }
         MemoryFetch {
             cycles: self.wait_cycles_u16[region],
@@ -381,7 +380,7 @@ impl GBAMemory {
                 .map_or(0, |slice| u32::from_le_bytes(*slice))
         };
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
-            breakpoint_checker(address);
+            breakpoint_checker(self, address);
         }
         MemoryFetch {
             cycles: self.wait_cycles_u32[region],
