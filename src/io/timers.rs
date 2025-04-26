@@ -13,7 +13,6 @@ impl Timers {
 
     pub(crate) fn tick(&mut self, cpu_cycles: u32, memory: &mut GBAMemory) {
         let mut previous_timer_overflowed = false;
-        let mut if_flag = memory.io_load(IF);
         for (i, timer) in self.0.iter_mut().enumerate() {
             let tmcnt_h = TMCntH(memory.io_load(0x102 + 0x4 * i));
             let tmcnt_l = memory.io_load(0x100 + 0x4 * i);
@@ -25,11 +24,12 @@ impl Timers {
             );
 
             if previous_timer_overflowed && tmcnt_h.timer_irq_enable() {
+                let mut if_flag = memory.io_load(IF);
                 if_flag.set_bit((3 + i) as u8);
+                memory.ppu_io_write(IF, if_flag);
             }
         }
 
-        memory.ppu_io_write(IF, if_flag);
     }
 
     pub(crate) fn read_timer(&self, timer_num: usize) -> u32 {
