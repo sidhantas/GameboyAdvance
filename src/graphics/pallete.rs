@@ -1,9 +1,9 @@
-use super::wrappers::tile::Tile;
+use super::{ppu_modes::hdraw::RGBComponents, wrappers::tile::Tile};
 
 pub struct OBJPaletteData<'a>(pub &'a [u8; 0x200]);
 
 impl<'a> OBJPaletteData<'a> {
-    pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<u32> {
+    pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
         match tile {
             Tile::FourBit { tile, pallete_num } => {
                 let palette_index = tile[y * 4 + x / 2];
@@ -23,7 +23,7 @@ impl<'a> OBJPaletteData<'a> {
         palette_index: usize,
         pallete_num: usize,
         pallete_mode: usize,
-    ) -> Option<u32> {
+    ) -> Option<RGBComponents> {
         if palette_index == 0 {
             return None;
         }
@@ -33,18 +33,18 @@ impl<'a> OBJPaletteData<'a> {
             _ => panic!(),
         };
 
-        let color = rgb555_to_rgb24(u16::from_le_bytes(self.0[index..][..2].try_into().unwrap()));
+        let color = u16::from_le_bytes(self.0[index..][..2].try_into().unwrap());
 
-        return Some(color);
+        return Some(color.into());
     }
 }
 
 pub struct BGPalleteData<'a>(pub &'a [u8; 0x200]);
 
 impl<'a> BGPalleteData<'a> {
-    pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<u32> {
+    pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
         match tile {
-            Tile::FourBit { .. } => Some(0x0000FFFF),
+            Tile::FourBit { .. } => Some(RGBComponents { r: 0, g: 0, b: 0xFF }),
             Tile::EightBit { tile } => {
                 let palette_index: usize = tile[y * 8 + x].into();
                 self.get_bg_color(palette_index, 0, 1, false)
@@ -58,7 +58,7 @@ impl<'a> BGPalleteData<'a> {
         pallete_num: usize,
         pallete_mode: usize,
         is_backdrop: bool,
-    ) -> Option<u32> {
+    ) -> Option<RGBComponents> {
         if palette_index == 0 && is_backdrop == false {
             return None;
         }
@@ -68,19 +68,16 @@ impl<'a> BGPalleteData<'a> {
             _ => panic!(),
         };
 
-        let color = rgb555_to_rgb24(u16::from_le_bytes(self.0[index..][..2].try_into().unwrap()));
+        let color = u16::from_le_bytes(self.0[index..][..2].try_into().unwrap());
 
-        return Some(color);
+        return Some(color.into());
     }
 }
 
-fn rgb555_to_rgb24(rgb555: u16) -> u32 {
-    let r5 = (rgb555 >> 10) & 0x1F;
-    let g5 = (rgb555 >> 5) & 0x1F;
-    let b5 = rgb555 & 0x1F;
-    let r8: u32 = (r5 * 8).into();
-    let g8: u32 = (g5 * 8).into();
-    let b8: u32 = (b5 * 8).into();
+pub fn rgb555_to_rgb24(rgb555: RGBComponents) -> u32 {
+    let r8: u32 = (rgb555.r * 8).into();
+    let g8: u32 = (rgb555.g * 8).into();
+    let b8: u32 = (rgb555.b * 8).into();
 
     return r8 << 16 | g8 << 8 | b8;
 }

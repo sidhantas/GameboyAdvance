@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 pub struct BldCnt<'a>(pub &'a u16);
 pub struct BldAlpha<'a>(pub &'a u16);
 pub struct BldY<'a>(pub &'a u16);
@@ -26,5 +28,11 @@ impl<'a> BldCnt<'a> {
 
     pub fn get_target_layers_b(&self) -> u16 {
         (self.0 >> 7) & 0x3F
+    }
+}
+
+impl<'a> BldY<'a> {
+    pub fn evy_coefficient(&self) -> u16 {
+        min(self.0 & 0x1F, 16)
     }
 }

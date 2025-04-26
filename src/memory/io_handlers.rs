@@ -41,9 +41,9 @@ const WIN1V: usize = 0x046;
 const WININ: usize = 0x048;
 const WINOUT: usize = 0x04A;
 const MOSAIC: usize = 0x04C;
-const BLDCNT: usize = 0x050;
-const BLDALPHA: usize = 0x052;
-const BLDY: usize = 0x054;
+pub const BLDCNT: usize = 0x050;
+pub const BLDALPHA: usize = 0x052;
+pub const BLDY: usize = 0x054;
 
 const DMA0SAD: usize = 0x0B0;
 const DMA0DAD: usize = 0x0B4;

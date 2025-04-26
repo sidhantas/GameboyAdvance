@@ -2,10 +2,14 @@ use std::sync::Arc;
 
 use crate::{
     graphics::{
+        color_effects::color_effects_pipeline,
         display::DisplayBuffer,
-        pallete::{BGPalleteData, OBJPaletteData},
+        pallete::{rgb555_to_rgb24, BGPalleteData, OBJPaletteData},
         ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
-        wrappers::{oam::Oam, tile::Tile},
+        wrappers::{
+            oam::{OBJMode, Oam},
+            tile::Tile,
+        },
     },
     memory::{
         io_handlers::DISPCNT,
@@ -13,6 +17,35 @@ use crate::{
         wrappers::{bgcnt::BGCnt, dispcnt::Dispcnt},
     },
 };
+
+#[derive(Default)]
+pub struct RGBComponents {
+    pub r: u16,
+    pub g: u16,
+    pub b: u16,
+}
+
+impl From<u16> for RGBComponents {
+    fn from(value: u16) -> Self {
+        Self {
+            r: (value >> 10) & 0x1F,
+            g: (value >> 5) & 0x1F,
+            b: value & 0x1F,
+        }
+    }
+}
+
+pub struct OBJPixel {
+    pub priority: u16,
+    pub pixel: RGBComponents,
+    pub is_semi_transparent: bool,
+}
+
+pub struct BGPixel {
+    pub priority: u16,
+    pub pixel: RGBComponents,
+    pub layer: u16
+}
 
 impl PPU {
     pub(crate) fn hdraw(
@@ -30,14 +63,11 @@ impl PPU {
                 self.current_mode = PPUModes::HBLANK;
                 return dots;
             }
-            let background_pixel = self.get_background_pixel(memory, &Dispcnt(dispcnt));
+            let bg_pixel = self.get_background_pixel(memory, &Dispcnt(dispcnt));
             let obj_pixel = self.get_obj_pixel(memory);
 
-            if let Some(pixel) = obj_pixel {
-                display_buffer[(self.y * HDRAW + self.x) as usize] = pixel;
-            } else {
-                display_buffer[(self.y * HDRAW + self.x) as usize] = background_pixel;
-            }
+            display_buffer[(self.y * HDRAW + self.x) as usize] =
+                rgb555_to_rgb24(color_effects_pipeline(memory, obj_pixel, bg_pixel));
 
             dots -= 1;
             self.x += 1;
@@ -46,7 +76,7 @@ impl PPU {
         return 0;
     }
 
-    fn get_background_pixel(&self, memory: &GBAMemory, dispcnt: &Dispcnt) -> u32 {
+    fn get_background_pixel(&self, memory: &GBAMemory, dispcnt: &Dispcnt) -> BGPixel {
         let tile_x = self.x / 8;
         let tile_y = self.y / 8;
         let pixel_x = self.x % 8;
@@ -57,7 +87,17 @@ impl PPU {
         let pallete = BGPalleteData(pallete_region);
 
         let Some(highest_priority_bg) = highest_priority_bg else {
-            return pallete.get_bg_color(0, 0, 1, true).unwrap_or(0xFFFF0000);
+            return BGPixel {
+                priority: 3,
+                pixel: pallete
+                    .get_bg_color(0, 0, 1, true)
+                    .unwrap_or(RGBComponents {
+                        r: 0xFF,
+                        g: 0,
+                        b: 0,
+                    }),
+                layer: 4
+            };
         };
 
         let tile = match dispcnt.get_bg_mode() {
@@ -68,16 +108,29 @@ impl PPU {
                 tile_y as usize,
                 tile_x as usize,
             ),
-            _ => return 0xFFFF0000,
+            _ => {
+                return BGPixel {
+                    priority: 3,
+                    pixel: Default::default(),
+                    layer: 4
+                }
+            }
         };
 
-        return pallete
-            .get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
-            .unwrap_or(0xFFFFFFFF);
+        BGPixel {
+            priority: highest_priority_bg.priority(),
+            pixel: pallete
+                .get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
+                .unwrap_or(RGBComponents {
+                    r: 0x1F,
+                    g: 0x1F,
+                    b: 0x1F,
+                }),
+        }
     }
 
     #[inline]
-    fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<u32> {
+    fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
         for obj in &self.current_line_objects {
             let oam = Oam::oam_read(memory, *obj);
             if oam.x() < self.x && self.x <= oam.x() + oam.width() {
@@ -92,7 +145,11 @@ impl PPU {
                 if let Some(pixel) =
                     pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
                 {
-                    return Some(pixel);
+                    return Some(OBJPixel {
+                        priority: oam.priority(),
+                        pixel,
+                        is_semi_transparent: matches!(oam.obj_mode(), OBJMode::SemiTransparent),
+                    });
                 }
             }
         }
