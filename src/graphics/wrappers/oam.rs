@@ -177,7 +177,7 @@ impl<'a> Oam<'a> {
 
 #[cfg(test)]
 mod oam_tests {
-    use super::{Oam, OBJMode};
+    use super::{OBJMode, Oam};
 
     #[test]
     fn can_get_y_from_bits() {

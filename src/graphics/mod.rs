@@ -5,6 +5,7 @@ pub mod wrappers;
 mod color_effects;
 mod ppu_modes;
 mod background;
+mod layers;
 
 #[derive(Clone, Copy)]
 struct PixelPriority {

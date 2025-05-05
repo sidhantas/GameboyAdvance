@@ -29,6 +29,26 @@ impl Dispcnt {
             count: 0,
         }
     }
+
+    pub fn bg0_enabled(&self) -> bool {
+        self.0.bit_is_set(8)
+    }
+
+    pub fn bg1_enabled(&self) -> bool {
+        self.0.bit_is_set(9)
+    }
+
+    pub fn bg2_enabled(&self) -> bool {
+        self.0.bit_is_set(10)
+    }
+
+    pub fn bg3_enabled(&self) -> bool {
+        self.0.bit_is_set(11)
+    }
+
+    pub fn obj_enabled(&self) -> bool {
+        self.0.bit_is_set(12)
+    }
 }
 
 pub struct EnabledBackgrounds {
