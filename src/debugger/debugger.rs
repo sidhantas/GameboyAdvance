@@ -94,6 +94,10 @@ pub fn start_debugger(
 
     let debugger = &mut Debugger::new(bios, rom, pixel_buffer);
 
+    for _ in 0..3000000 {
+        debugger.gba.step();
+    }
+
     while !debugger.end_debugger {
         loop {
             if event::poll(Duration::from_millis(10))? {

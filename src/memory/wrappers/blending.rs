@@ -15,11 +15,11 @@ pub enum BlendMode {
 
 impl BldAlpha {
     pub fn eva(&self) -> u16 {
-        self.0 & 0xF
+        min(self.0 & 0x1F, 16)
     }
 
     pub fn evb(&self) -> u16 {
-        (self.0 >> 8) & 0xF
+        min((self.0 >> 8) & 0x1F, 16)
     }
 }
 
@@ -59,7 +59,6 @@ impl<'a> BldCnt<'a> {
     pub fn target_a_bd_enabled(&self) -> bool {
         self.0.bit_is_set(5)
     }
-
     pub fn target_b_bg0_enabled(&self) -> bool {
         self.0.bit_is_set(8)
     }

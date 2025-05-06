@@ -5,27 +5,9 @@ use crate::memory::{
 };
 
 use super::{
-    layers::Layers,
-    ppu_modes::hdraw::{BGPixel, OBJPixel, RGBComponents},
+    layers::{BGPixel, LayerPixel, Layers, OBJPixel},
+    ppu_modes::hdraw::RGBComponents,
 };
-
-pub enum TargetPixel {
-    OBJ(OBJPixel),
-    BG(BGPixel),
-}
-
-impl TargetPixel {
-    pub fn pixel(&self) -> RGBComponents {
-        match self {
-            TargetPixel::OBJ(OBJPixel {
-                pixel,
-                priority: _,
-                is_semi_transparent: _,
-            }) => *pixel,
-            TargetPixel::BG(BGPixel { priority: _, pixel }) => *pixel,
-        }
-    }
-}
 
 pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponents {
     let binding = memory.io_load(BLDCNT);
@@ -48,22 +30,29 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
 
             let target_pixel_a = if let Some(obj_pixel) = target_layers_a.obj {
                 if obj_pixel.is_semi_transparent {
-                    TargetPixel::OBJ(obj_pixel)
+                    LayerPixel::OBJ(obj_pixel)
                 } else {
-                    let Some(target_pixel_a) = target_layers_a.get_top_pixel() else {
-                        return RGBComponents::backdrop();
+                    let Some(target_pixel_a) = target_layers_a.get_top_pixel(false) else {
+                        return layers.get_top_layer().pixel();
                     };
                     target_pixel_a
                 }
             } else {
-                let Some(target_pixel_a) = target_layers_a.get_top_pixel() else {
-                    return RGBComponents::backdrop();
+                let Some(target_pixel_a) = target_layers_a.get_top_pixel(false) else {
+                    return layers.get_top_layer().pixel();
                 };
                 target_pixel_a
             };
-            let Some(target_pixel_b) = target_layers_b.get_top_pixel() else {
-                return RGBComponents::backdrop();
+
+            let Some(target_pixel_b) =
+                target_layers_b.get_top_pixel(matches!(target_pixel_a, LayerPixel::OBJ(_)))
+            else {
+                return layers.get_top_layer().pixel();
             };
+
+            if target_pixel_b.priority() < target_pixel_a.priority() {
+                return target_pixel_b.pixel();
+            }
 
             let bldalpha = BldAlpha(memory.io_load(BLDALPHA));
             let eva = bldalpha.eva();
@@ -74,6 +63,7 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
                 g: ((target_pixel_a.pixel().g as u16 * eva as u16) / 16) as u16,
                 b: ((target_pixel_a.pixel().b as u16 * eva as u16) / 16) as u16,
             };
+
             let pixel_b = RGBComponents {
                 r: ((target_pixel_b.pixel().r as u16 * evb as u16) / 16) as u16,
                 g: ((target_pixel_b.pixel().g as u16 * evb as u16) / 16) as u16,
@@ -86,12 +76,7 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
                 b: pixel_a.b + pixel_b.b,
             }
         }
-        _ => {
-            return match layers.get_top_pixel() {
-                TargetPixel::BG(bg_pixel) => bg_pixel.pixel,
-                TargetPixel::OBJ(obj_pixel) => obj_pixel.pixel,
-            }
-        }
+        _ => return layers.get_top_layer().pixel(),
     }
 }
 
@@ -133,7 +118,6 @@ impl TargetLayer {
         if bldcnt.target_b_bg0_enabled() {
             target_layers_b.bg0 = layers.bg0;
         }
-
         if bldcnt.target_b_bg1_enabled() {
             target_layers_b.bg1 = layers.bg1;
         }
@@ -146,7 +130,6 @@ impl TargetLayer {
         if bldcnt.target_b_obj_enabled() {
             target_layers_b.obj = layers.obj;
         }
-
         if bldcnt.target_b_bd_enabled() {
             target_layers_b.bd = Some(layers.bd);
         }
@@ -154,7 +137,7 @@ impl TargetLayer {
         (target_layers_a, target_layers_b)
     }
 
-    pub fn get_top_pixel(&self) -> Option<TargetPixel> {
+    pub fn get_top_pixel(&self, exclude_obj: bool) -> Option<LayerPixel> {
         let background_pixels = [self.bd, self.bg3, self.bg2, self.bg1, self.bg0];
 
         let mut highest_priority_bg_pixel: Option<BGPixel> = None;
@@ -171,16 +154,20 @@ impl TargetLayer {
             }
         }
 
-        if let Some(bg_pixel) = highest_priority_bg_pixel {
-            if let Some(obj_pixel) = self.obj {
-                if obj_pixel.priority <= bg_pixel.priority {
-                    return Some(TargetPixel::OBJ(obj_pixel));
+        if !exclude_obj {
+            if let Some(bg_pixel) = highest_priority_bg_pixel {
+                if let Some(obj_pixel) = self.obj {
+                    if obj_pixel.priority <= bg_pixel.priority {
+                        return Some(LayerPixel::OBJ(obj_pixel));
+                    }
                 }
+                return Some(LayerPixel::BG(bg_pixel));
+            } else {
+                return self.obj.map(|obj| LayerPixel::OBJ(obj));
             }
-            Some(TargetPixel::BG(bg_pixel))
-        } else {
-            None
         }
+
+        return highest_priority_bg_pixel.map(|bg_pixel| LayerPixel::BG(bg_pixel));
     }
 }
 

@@ -1,21 +1,18 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     graphics::{
         color_effects::color_effects_pipeline,
         display::DisplayBuffer,
-        layers::Layers,
-        pallete::{rgb555_to_rgb24, BGPalleteData, OBJPaletteData},
+        layers::{Layers, OBJPixel},
+        pallete::{rgb555_to_rgb24, OBJPaletteData},
         ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
         wrappers::{
             oam::{OBJMode, Oam},
             tile::Tile,
         },
     },
-    memory::{
-        memory::GBAMemory,
-        wrappers::{bgcnt::BGCnt, dispcnt::Dispcnt},
-    },
+    memory::{io_handlers::DISPCNT, memory::GBAMemory, wrappers::dispcnt::Dispcnt},
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -45,47 +42,6 @@ impl From<u16> for RGBComponents {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct OBJPixel {
-    pub priority: u16,
-    pub pixel: RGBComponents,
-    pub is_semi_transparent: bool,
-}
-
-#[derive(Clone, Copy)]
-pub struct BGPixel {
-    pub priority: u16,
-    pub pixel: RGBComponents,
-}
-
-impl PartialEq for BGPixel {
-    fn eq(&self, other: &Self) -> bool {
-        self.priority == other.priority
-    }
-}
-
-impl PartialOrd for BGPixel {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.priority < other.priority {
-            return Some(Ordering::Less);
-        } else if self.priority == other.priority {
-            return Some(Ordering::Equal);
-        } else if self.priority > other.priority {
-            return Some(Ordering::Greater);
-        }
-        None
-    }
-}
-
-impl BGPixel {
-    pub fn backdrop() -> Self {
-        Self {
-            priority: 3,
-            pixel: RGBComponents::backdrop(),
-        }
-    }
-}
-
 impl PPU {
     pub(crate) fn hdraw(
         &mut self,
@@ -103,7 +59,13 @@ impl PPU {
             }
             let obj_pixel = self.get_obj_pixel(memory);
 
-            let enabled_layers = Layers::get_enabled_layers(self.x, self.y, memory, obj_pixel);
+            let enabled_layers = Layers::get_enabled_layers(
+                self.x,
+                self.y,
+                &Dispcnt(memory.io_load(DISPCNT)),
+                memory,
+                obj_pixel,
+            );
 
             display_buffer[(self.y * HDRAW + self.x) as usize] =
                 rgb555_to_rgb24(color_effects_pipeline(memory, enabled_layers));
@@ -116,6 +78,7 @@ impl PPU {
     }
 
     fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
+        let mut highest_prio_obj: Option<OBJPixel> = None;
         for obj in &self.current_line_objects {
             let oam = Oam::oam_read(memory, *obj);
             if oam.x() < self.x && self.x <= oam.x() + oam.width() {
@@ -130,14 +93,21 @@ impl PPU {
                 if let Some(pixel) =
                     pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
                 {
-                    return Some(OBJPixel {
+                    let obj = OBJPixel {
                         priority: oam.priority(),
                         pixel,
                         is_semi_transparent: matches!(oam.obj_mode(), OBJMode::SemiTransparent),
+                    };
+                    highest_prio_obj = highest_prio_obj.map_or(Some(obj), |current_obj| {
+                        if current_obj.priority > oam.priority() {
+                            Some(obj)
+                        } else {
+                            Some(current_obj)
+                        }
                     });
                 }
             }
         }
-        return None;
+        return highest_prio_obj;
     }
 }

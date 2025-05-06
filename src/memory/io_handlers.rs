@@ -1,4 +1,4 @@
-use crate::{memory::wrappers::tmcnt::TMCntH, utils::bits::Bits};
+use crate::utils::bits::Bits;
 
 use super::memory::{CPUCallbacks, GBAMemory, MemoryError};
 
@@ -855,8 +855,13 @@ mod tests {
         gba.memory.io_writeu16(0x100 + 0x4 * timer_num, 0xFF);
         let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
         tmcnt.set_bit(7); // enables timer
-        gba.memory.io_writeu16(0x102 + 0x4 * timer_num, tmcnt).unwrap();
+        gba.memory
+            .io_writeu16(0x102 + 0x4 * timer_num, tmcnt)
+            .unwrap();
 
-        assert_eq!(gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(), 0xFF);
+        assert_eq!(
+            gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(),
+            0xFF
+        );
     }
 }
