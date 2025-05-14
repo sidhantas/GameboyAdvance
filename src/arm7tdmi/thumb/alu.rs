@@ -471,7 +471,9 @@ impl CPU {
 mod thumb_add_and_subtract_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]
@@ -673,7 +675,9 @@ mod thumb_add_and_subtract_tests {
 mod thumb_move_shifted_register_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]
@@ -812,7 +816,9 @@ mod thumb_move_shifted_register_tests {
 mod thumb_move_compare_add_subtract_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]
@@ -897,7 +903,9 @@ mod thumb_move_compare_add_subtract_tests {
 mod thumb_alu_operations_tests {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]
@@ -971,7 +979,9 @@ mod thumb_alu_operations_tests {
 mod thumb_hi_reg_operations {
 
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]
@@ -1029,7 +1039,9 @@ mod thumb_hi_reg_operations {
 mod thumb_bx_tests {
 
     use crate::{
-        arm7tdmi::cpu::{InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]
@@ -1043,7 +1055,10 @@ mod thumb_bx_tests {
         gba.step();
 
         assert_eq!(gba.cpu.get_pc(), 0x1C);
-        assert!(matches!(gba.cpu.get_instruction_mode(), InstructionMode::ARM));
+        assert!(matches!(
+            gba.cpu.get_instruction_mode(),
+            InstructionMode::ARM
+        ));
     }
 
     #[test]
@@ -1057,7 +1072,10 @@ mod thumb_bx_tests {
         gba.step();
 
         assert_eq!(gba.cpu.get_pc(), 0x20);
-        assert!(matches!(gba.cpu.get_instruction_mode(), InstructionMode::ARM));
+        assert!(matches!(
+            gba.cpu.get_instruction_mode(),
+            InstructionMode::ARM
+        ));
     }
 }
 
@@ -1065,7 +1083,9 @@ mod thumb_bx_tests {
 mod get_relative_address_tests {
 
     use crate::{
-        arm7tdmi::cpu::{InstructionMode, CPU}, gba::GBA, memory::memory::GBAMemory
+        arm7tdmi::cpu::{InstructionMode, CPU},
+        gba::GBA,
+        memory::memory::GBAMemory,
     };
 
     #[test]

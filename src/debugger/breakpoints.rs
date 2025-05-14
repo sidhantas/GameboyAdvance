@@ -1,6 +1,4 @@
-use std::
-    fmt::Display
-;
+use std::fmt::Display;
 
 use crate::{memory::memory::MemoryError, types::REGISTER};
 
@@ -13,7 +11,7 @@ pub enum BreakType {
 
 pub enum TriggeredWatchpoints {
     Address(usize),
-    Error(MemoryError)
+    Error(MemoryError),
 }
 
 #[derive(Clone)]
@@ -23,9 +21,7 @@ pub struct Breakpoint {
 
 impl Breakpoint {
     pub fn new(break_type: BreakType) -> Self {
-        Self {
-            break_type,
-        }
+        Self { break_type }
     }
 }
 

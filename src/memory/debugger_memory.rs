@@ -135,7 +135,7 @@
 //        })
 //
 //    }
-//    
+//
 //    fn ppu_io_write(&mut self, address: usize, value: u16) {
 //        self.memory.ppu_io_write(address, value)
 //    }

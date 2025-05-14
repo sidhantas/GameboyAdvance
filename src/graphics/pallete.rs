@@ -44,7 +44,11 @@ pub struct BGPalleteData<'a>(pub &'a [u8; 0x200]);
 impl<'a> BGPalleteData<'a> {
     pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
         match tile {
-            Tile::FourBit { .. } => Some(RGBComponents { r: 0, g: 0, b: 0xFF }),
+            Tile::FourBit { .. } => Some(RGBComponents {
+                r: 0,
+                g: 0,
+                b: 0xFF,
+            }),
             Tile::EightBit { tile } => {
                 let palette_index: usize = tile[y * 8 + x].into();
                 self.get_bg_color(palette_index, 0, 1, false)

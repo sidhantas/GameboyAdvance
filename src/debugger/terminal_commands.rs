@@ -6,7 +6,7 @@ use crate::{
     graphics::wrappers::oam::Oam,
     utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
-use std::{ fmt::Display, mem};
+use std::{fmt::Display, mem};
 
 pub enum TerminalCommandErrors {
     CouldNotFindCommand,
@@ -250,7 +250,8 @@ fn set_breakpoint_handler(
         None => return Err(TerminalCommandErrors::NotEnoughArguments),
     };
     debugger
-        .breakpoints.as_mut()
+        .breakpoints
+        .as_mut()
         .unwrap()
         .push(Breakpoint::new(BreakType::Break(breakpoint)));
     Ok(format!("Breakpoint set at address {:#X}", breakpoint))

@@ -9,6 +9,8 @@ use std::{
 
 use sdl2::{event::Event, pixels::PixelFormatEnum, rect::Rect, render::Texture, surface::Surface};
 
+use crate::gba::KILL_SIGNAL;
+
 use super::ppu::{HDRAW, VDRAW};
 
 const DISPLAY_SCALE: u32 = 3;
@@ -52,6 +54,9 @@ pub fn start_display(pixel_buffer: Arc<DisplayBuffer>) {
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         while pixel_buffer.ready_to_render.load(Relaxed) == false {
+            if KILL_SIGNAL.killed() {
+                break 'running;
+            }
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. }
@@ -59,7 +64,7 @@ pub fn start_display(pixel_buffer: Arc<DisplayBuffer>) {
                         keycode: Some(sdl2::keyboard::Keycode::Escape),
                         ..
                     } => {
-                        break 'running;
+                        KILL_SIGNAL.kill();
                     }
                     _ => {}
                 }

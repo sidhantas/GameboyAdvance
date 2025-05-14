@@ -25,7 +25,7 @@ impl From<PSR> for u32 {
             CPUMode::ABT => 0b10111,
             CPUMode::UND => 0b11011,
             CPUMode::SYS => 0b11111,
-            CPUMode::INVALID(bits) => bits
+            CPUMode::INVALID(bits) => bits,
         };
 
         psr_bits |= mode;

@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use crate::graphics::display::{DisplayBuffer, CANVAS_AREA};
+use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::PPU;
 use crate::memory::memory::CPUCallbacks;
+use crate::utils::utils::KillSignal;
 use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
+
+pub(crate) static KILL_SIGNAL: KillSignal = KillSignal::new();
 
 pub struct GBA {
     pub cpu: CPU,
@@ -39,11 +42,8 @@ impl GBA {
 
     pub fn step(&mut self) {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
-        self.ppu.advance_ppu(
-            cpu_cycles,
-            &mut self.memory,
-            &self.display_buffer,
-        );
+        self.ppu
+            .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);
         if let Some(mut timers) = self.memory.timers.take() {
             timers.tick(cpu_cycles.into(), &mut self.memory);
             self.memory.timers.replace(timers);

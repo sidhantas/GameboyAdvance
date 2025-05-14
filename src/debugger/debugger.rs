@@ -24,7 +24,7 @@ use tui::{
 
 use crate::{
     arm7tdmi::cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
-    gba::GBA,
+    gba::{GBA, KILL_SIGNAL},
     graphics::display::DisplayBuffer,
     memory::{
         io_handlers::{DISPCNT, VCOUNT},
@@ -99,6 +99,9 @@ pub fn start_debugger(
     }
 
     while !debugger.end_debugger {
+        if KILL_SIGNAL.killed() {
+            debugger.end_debugger = true;
+        }
         loop {
             if event::poll(Duration::from_millis(10))? {
                 if let Event::Key(event) = read()? {
@@ -339,6 +342,7 @@ fn handle_control_events(debugger: &mut Debugger, event: KeyEvent) {
             debugger.terminal_enabled = !debugger.terminal_enabled;
         }
         KeyCode::Char('c') => {
+            KILL_SIGNAL.kill();
             debugger.end_debugger = true;
         }
         KeyCode::Char('w') => {

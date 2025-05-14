@@ -2,15 +2,14 @@ use crate::utils::bits::Bits;
 
 pub struct TMCntH(pub u16);
 
-
 impl TMCntH {
-    pub fn prescaler_value(&self) -> u32{
+    pub fn prescaler_value(&self) -> u32 {
         match self.0 & 0b11 {
             0 => 1,
             1 => 64,
             2 => 256,
             3 => 1024,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 

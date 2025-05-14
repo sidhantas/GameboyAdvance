@@ -319,9 +319,7 @@ impl CPU {
 
         let mut destination_psr: u32 = if instruction.bit_is_set(22) {
             match self.get_current_spsr() {
-                Some(spsr) => {
-                    (*spsr).into()
-                },
+                Some(spsr) => (*spsr).into(),
                 None => {
                     return 0;
                 }
@@ -976,5 +974,4 @@ mod tests {
 
         assert_eq!(gba.cpu.get_register(0), expected_val.into());
     }
-
 }

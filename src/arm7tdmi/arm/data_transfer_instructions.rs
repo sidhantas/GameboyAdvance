@@ -1,11 +1,21 @@
 use std::mem::size_of;
 
 use crate::{
-    arm7tdmi::cpu::{CPUMode, CPU, PC_REGISTER}, memory::memory::{GBAMemory}, types::{CYCLES, REGISTER, WORD}, utils::{bits::{sign_extend, Bits}, utils::print_vec}
+    arm7tdmi::cpu::{CPUMode, CPU, PC_REGISTER},
+    memory::memory::GBAMemory,
+    types::{CYCLES, REGISTER, WORD},
+    utils::{
+        bits::{sign_extend, Bits},
+        utils::print_vec,
+    },
 };
 
 impl CPU {
-    pub fn sdt_instruction_execution(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
+    pub fn sdt_instruction_execution(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut cycles = 0;
         let offset;
         let offset_address;
@@ -75,7 +85,7 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let data: WORD = self.get_register(rd);
         if byte_transfer {
@@ -92,7 +102,7 @@ impl CPU {
         rd: REGISTER,
         address: u32,
         byte_transfer: bool,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let mut cycles = 1;
         let data = {
@@ -116,7 +126,11 @@ impl CPU {
         cycles
     }
 
-    pub fn hw_or_signed_data_transfer(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
+    pub fn hw_or_signed_data_transfer(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let pre_indexed_addressing = instruction.bit_is_set(24);
         let add_offset = instruction.bit_is_set(23);
         let use_immediate_offset = instruction.bit_is_set(22);
@@ -178,7 +192,12 @@ impl CPU {
         cycles
     }
 
-    pub fn ldrsh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
+    pub fn ldrsh_execution(
+        &mut self,
+        rd: REGISTER,
+        address: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut cycles = 1;
         let memory_fetch = { memory.readu16(address as usize) };
 
@@ -194,7 +213,12 @@ impl CPU {
         cycles
     }
 
-    pub fn ldrsb_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
+    pub fn ldrsb_execution(
+        &mut self,
+        rd: REGISTER,
+        address: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let mut cycles = 1;
         let memory_fetch = { memory.read(address as usize) };
 
@@ -249,20 +273,36 @@ impl CPU {
         cycles += match opcode {
             0b00000 => self.stmda_execution(base_address, &register_list, None, memory),
             0b00001 => self.ldmda_execution(base_address, &register_list, None, memory),
-            0b00010 => self.stmda_execution(base_address, &register_list, Some(base_register), memory),
-            0b00011 => self.ldmda_execution(base_address, &register_list, Some(base_register), memory),
+            0b00010 => {
+                self.stmda_execution(base_address, &register_list, Some(base_register), memory)
+            }
+            0b00011 => {
+                self.ldmda_execution(base_address, &register_list, Some(base_register), memory)
+            }
             0b01000 => self.stmia_execution(base_address, &register_list, None, memory),
             0b01001 => self.ldmia_execution(base_address, &register_list, None, memory),
-            0b01010 => self.stmia_execution(base_address, &register_list, Some(base_register), memory),
-            0b01011 => self.ldmia_execution(base_address, &register_list, Some(base_register), memory),
+            0b01010 => {
+                self.stmia_execution(base_address, &register_list, Some(base_register), memory)
+            }
+            0b01011 => {
+                self.ldmia_execution(base_address, &register_list, Some(base_register), memory)
+            }
             0b10000 => self.stmdb_execution(base_address, &register_list, None, memory),
             0b10001 => self.ldmdb_execution(base_address, &register_list, None, memory),
-            0b10010 => self.stmdb_execution(base_address, &register_list, Some(base_register), memory),
-            0b10011 => self.ldmdb_execution(base_address, &register_list, Some(base_register), memory),
+            0b10010 => {
+                self.stmdb_execution(base_address, &register_list, Some(base_register), memory)
+            }
+            0b10011 => {
+                self.ldmdb_execution(base_address, &register_list, Some(base_register), memory)
+            }
             0b11000 => self.stmib_execution(base_address, &register_list, None, memory),
             0b11001 => self.ldmib_execution(base_address, &register_list, None, memory),
-            0b11010 => self.stmib_execution(base_address, &register_list, Some(base_register), memory),
-            0b11011 => self.ldmib_execution(base_address, &register_list, Some(base_register), memory),
+            0b11010 => {
+                self.stmib_execution(base_address, &register_list, Some(base_register), memory)
+            }
+            0b11011 => {
+                self.ldmib_execution(base_address, &register_list, Some(base_register), memory)
+            }
             _ => todo!(),
         };
 
@@ -274,7 +314,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let mut cycles = 0;
         let mut curr_address = base_address;
@@ -299,7 +339,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let mut cycles = 1;
         let mut curr_address = base_address;
@@ -326,7 +366,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let mut cycles = 0;
         let mut curr_address = base_address;
@@ -351,7 +391,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let mut cycles = 1;
         let mut curr_address = base_address;
@@ -378,7 +418,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.stmia_execution(base_address, register_list, None, memory);
@@ -399,7 +439,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.ldmia_execution(base_address, register_list, None, memory);
@@ -420,7 +460,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.stmib_execution(base_address, register_list, None, memory);
@@ -442,7 +482,7 @@ impl CPU {
         base_address: usize,
         register_list: &Vec<REGISTER>,
         writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory
+        memory: &mut GBAMemory,
     ) -> CYCLES {
         let base_address = base_address - register_list.len() * size_of::<WORD>();
         let cycles = self.ldmib_execution(base_address, register_list, None, memory);
@@ -462,14 +502,10 @@ impl CPU {
 
 #[cfg(test)]
 mod sdt_tests {
-    use crate::{
-        arm7tdmi::cpu::CPU, gba::GBA, memory::memory::GBAMemory
-    };
+    use crate::{arm7tdmi::cpu::CPU, gba::GBA, memory::memory::GBAMemory};
 
     #[test]
     fn ldr_should_return_data_at_specified_address() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -489,8 +525,6 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_data_at_specified_address_plus_offset() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -510,8 +544,6 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_data_at_specified_address_minus_offset() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -531,8 +563,6 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_data_at_lsl_shifted_address() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -553,8 +583,6 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_return_a_byte_at_address() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -581,8 +609,6 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_rotate_value_when_not_word_aligned() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -610,8 +636,6 @@ mod sdt_tests {
 
     #[test]
     fn ldr_should_writeback_when_post_indexed() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -632,8 +656,6 @@ mod sdt_tests {
 
     #[test]
     fn str_should_store_word_at_memory_address() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -654,8 +676,6 @@ mod sdt_tests {
 
     #[test]
     fn str_should_store_byte_at_address() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value: u8 = 0x21;
@@ -676,8 +696,6 @@ mod sdt_tests {
 
     #[test]
     fn strh_should_store_hw_at_address() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value: u16 = 0x21;
@@ -698,8 +716,6 @@ mod sdt_tests {
 
     #[test]
     fn strh_should_only_store_bottom_half_of_register() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value: u32 = 0x1234_5678;
@@ -720,8 +736,6 @@ mod sdt_tests {
 
     #[test]
     fn ldrh_should_only_load_bottom_half_of_register() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0xFABCD321;
@@ -740,8 +754,6 @@ mod sdt_tests {
 
     #[test]
     fn ldrsh_should_return_a_signed_hw() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_FABC;
@@ -760,8 +772,6 @@ mod sdt_tests {
 
     #[test]
     fn ldrsh_should_return_a_signed_byte() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
@@ -780,8 +790,6 @@ mod sdt_tests {
 
     #[test]
     fn ldm_should_load_multiple_registers() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
@@ -804,8 +812,6 @@ mod sdt_tests {
 
     #[test]
     fn ldmib_should_load_multiple_registers_and_modify_base_register() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
@@ -829,8 +835,6 @@ mod sdt_tests {
 
     #[test]
     fn ldmda_should_load_multiple_registers_and_modify_base_register() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
@@ -854,8 +858,6 @@ mod sdt_tests {
 
     #[test]
     fn ldmdb_should_load_multiple_registers_and_modify_base_register() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let value = 0x0000_0081;
@@ -879,8 +881,6 @@ mod sdt_tests {
 
     #[test]
     fn stm_should_store_multiple_registers() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
@@ -900,8 +900,6 @@ mod sdt_tests {
 
     #[test]
     fn stmib_should_store_multiple_registers_and_writeback() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
@@ -922,8 +920,6 @@ mod sdt_tests {
 
     #[test]
     fn stmdb_should_store_multiple_registers_and_writeback() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;
@@ -944,8 +940,6 @@ mod sdt_tests {
 
     #[test]
     fn stmda_should_store_multiple_registers_and_writeback() {
-        
-
         let mut gba = GBA::new_no_bios();
 
         let address: u32 = 0x3000200;

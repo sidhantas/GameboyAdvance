@@ -1,6 +1,8 @@
-
 use crate::{
-    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER}, memory::memory::{GBAMemory}, types::{CYCLES, REGISTER}, utils::bits::Bits
+    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
+    memory::memory::GBAMemory,
+    types::{CYCLES, REGISTER},
+    utils::bits::Bits,
 };
 
 impl CPU {
@@ -44,7 +46,11 @@ impl CPU {
         cycles
     }
 
-    pub fn sdt_sign_extend_byte_or_halfword(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
+    pub fn sdt_sign_extend_byte_or_halfword(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let opcode = (instruction & 0x0C00) >> 10;
         let ro = (instruction & 0x01C0) >> 6;
         let rb = (instruction & 0x0038) >> 3;
@@ -144,14 +150,24 @@ impl CPU {
                 if instruction.bit_is_set(8) {
                     register_list.push(LINK_REGISTER);
                 }
-                cycles += self.stmdb_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER), memory)
+                cycles += self.stmdb_execution(
+                    self.get_sp() as usize,
+                    &register_list,
+                    Some(STACK_POINTER),
+                    memory,
+                )
             }
             0b1 => {
                 // LDMIA (POP)
                 if instruction.bit_is_set(8) {
                     register_list.push(PC_REGISTER as u32);
                 }
-                cycles += self.ldmia_execution(self.get_sp() as usize, &register_list, Some(STACK_POINTER), memory);
+                cycles += self.ldmia_execution(
+                    self.get_sp() as usize,
+                    &register_list,
+                    Some(STACK_POINTER),
+                    memory,
+                );
                 if instruction.bit_is_set(8) {
                     cycles += self.flush_pipeline(memory);
                 }
@@ -161,7 +177,11 @@ impl CPU {
         cycles
     }
 
-    pub fn thumb_multiple_load_or_store(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
+    pub fn thumb_multiple_load_or_store(
+        &mut self,
+        instruction: u32,
+        memory: &mut GBAMemory,
+    ) -> CYCLES {
         let opcode = instruction.get_bit(11);
         let rb = (instruction & 0x0700) >> 8;
 
@@ -186,13 +206,10 @@ impl CPU {
 #[cfg(test)]
 mod thumb_ldr_str_tests {
 
-    use crate::{
-        arm7tdmi::cpu::InstructionMode, gba::GBA
-    };
+    use crate::{arm7tdmi::cpu::InstructionMode, gba::GBA};
 
     #[test]
     fn should_load_data_relative_to_pc() {
-
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
         gba.memory.writeu32(0x3000024, 0x55);

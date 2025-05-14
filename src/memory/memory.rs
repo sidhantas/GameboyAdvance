@@ -1,8 +1,16 @@
 use crate::{
-    debugger::breakpoints::{Breakpoint, TriggeredWatchpoints}, io::timers::Timers, types::{BYTE, CYCLES, HWORD, WORD}
+    debugger::breakpoints::{Breakpoint, TriggeredWatchpoints},
+    io::timers::Timers,
+    types::{BYTE, CYCLES, HWORD, WORD},
 };
 use std::{
-    cell::RefCell, fmt::Display, fs::File, io::{Read, Seek}, rc::Rc, sync::Arc, usize
+    cell::RefCell,
+    fmt::Display,
+    fs::File,
+    io::{Read, Seek},
+    rc::Rc,
+    sync::Arc,
+    usize,
 };
 
 use super::io_handlers::{DISPSTAT, IF, KEYINPUT};
@@ -110,7 +118,7 @@ pub struct GBAMemory {
     pub timers: Option<Timers>,
     pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
     pub triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
-    pub breakpoints: Option<Vec<Breakpoint>>
+    pub breakpoints: Option<Vec<Breakpoint>>,
 }
 
 impl GBAMemory {

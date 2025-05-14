@@ -14,7 +14,6 @@ pub struct Layers {
     pub bg3: Option<BGPixel>,
     pub obj: Option<OBJPixel>,
     pub bd: BGPixel,
-
 }
 
 impl Default for Layers {
@@ -52,14 +51,14 @@ impl LayerPixel {
     pub fn pixel(&self) -> RGBComponents {
         match self {
             LayerPixel::OBJ(obj) => obj.pixel,
-            LayerPixel::BG(bg) => bg.pixel.unwrap_or(RGBComponents::backdrop())
+            LayerPixel::BG(bg) => bg.pixel.unwrap_or(RGBComponents::backdrop()),
         }
     }
 
     pub fn priority(&self) -> u16 {
         match self {
             LayerPixel::OBJ(obj) => obj.priority,
-            LayerPixel::BG(bg) => bg.priority
+            LayerPixel::BG(bg) => bg.priority,
         }
     }
 }

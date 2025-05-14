@@ -29,7 +29,6 @@ impl Timers {
                 memory.ppu_io_write(IF, if_flag);
             }
         }
-
     }
 
     pub(crate) fn read_timer(&self, timer_num: usize) -> u32 {
