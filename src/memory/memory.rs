@@ -1,5 +1,8 @@
 use crate::{
     debugger::breakpoints::{Breakpoint, TriggeredWatchpoints},
+    graphics::{
+        display::Border, ppu::{HDRAW, VDRAW}, wrappers::oam::{Oam, NUM_OAM_ENTRIES}
+    },
     io::timers::Timers,
     types::{BYTE, CYCLES, HWORD, WORD},
 };
@@ -394,6 +397,22 @@ impl GBAMemory {
             cycles: self.wait_cycles_u32[region],
             data: data.rotate_right(8 * (address as u32 & 0b11)),
         }
+    }
+
+    pub fn get_oam_borders(&self) -> Vec<Border> {
+        let mut borders = Vec::new();
+        for i in 0..NUM_OAM_ENTRIES {
+            let oam = Oam::oam_read(self, i);
+            if oam.view_x() < HDRAW as u32 && oam.view_y() < VDRAW as u32 && !oam.obj_disabled(){
+                borders.push(Border {
+                    x: oam.view_x() as usize,
+                    y: oam.view_y() as usize,
+                    width: oam.view_width() as usize,
+                    height: oam.view_height() as usize
+                });
+            }
+        }
+        borders
     }
 }
 

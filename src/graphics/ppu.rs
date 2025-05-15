@@ -1,5 +1,7 @@
+use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::memory::io_handlers::{DISPSTAT, VCOUNT};
 use crate::memory::memory::GBAMemory;
+use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
 use super::display::DisplayBuffer;
@@ -31,10 +33,12 @@ pub struct PPU {
     pub x: u32,
     pub y: u32,
     pub(super) current_line_objects: Vec<usize>,
+    pub show_borders: bool,
+    pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>
 }
 
-impl Default for PPU {
-    fn default() -> Self {
+impl PPU {
+    pub fn new(ppu_to_display_sender: SyncSender<PPUToDisplayCommands>) -> Self {
         Self {
             usable_cycles: 0,
             available_dots: 0,
@@ -42,11 +46,10 @@ impl Default for PPU {
             x: 0,
             y: 0,
             current_line_objects: Vec::new(),
+            show_borders: false,
+            ppu_to_display_sender
         }
     }
-}
-
-impl PPU {
     pub fn advance_ppu(
         &mut self,
         cycles: u8,

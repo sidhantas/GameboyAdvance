@@ -3,7 +3,7 @@ use super::{
     debugger::Debugger,
 };
 use crate::{
-    graphics::wrappers::oam::Oam,
+    graphics::{display::Border, wrappers::oam::Oam},
     utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
 use std::{fmt::Display, mem};
@@ -38,12 +38,17 @@ pub struct TerminalCommand {
         fn(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors>,
 }
 
+pub enum PPUToDisplayCommands {
+    Render,
+    RenderWithBorders(Vec<Border>)
+}
+
 pub struct TerminalHistoryEntry {
     pub command: String,
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 11] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 12] = [
     TerminalCommand {
         name: "next",
         _arguments: 1,
@@ -109,6 +114,12 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 11] = [
         _arguments: 1,
         _description: "Continues until encountering a breakpoint",
         handler: continue_handler,
+    },
+    TerminalCommand {
+        name: "display-borders",
+        _arguments: 1,
+        _description: "Continues until encountering a breakpoint",
+        handler: send_borders,
     },
 ];
 
@@ -435,6 +446,15 @@ fn go_to_obj_tile(
     let tile_start_address = 0x6010000 + tile_num * 32;
 
     debugger.memory_start_address = tile_start_address;
+
+    Ok(String::new())
+}
+
+fn send_borders(
+    debugger: &mut Debugger,
+    _args: Vec<&str>,
+) -> Result<String, TerminalCommandErrors> {
+    debugger.gba.ppu.show_borders = true;
 
     Ok(String::new())
 }

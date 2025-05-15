@@ -1,5 +1,7 @@
+use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::PPU;
 use crate::memory::memory::CPUCallbacks;
@@ -18,22 +20,29 @@ pub struct GBA {
 impl GBA {
     #[cfg(test)]
     pub fn new_no_bios() -> Self {
+        use std::sync::mpsc::sync_channel;
+
         Self {
             memory: GBAMemory::new(),
             cpu: CPU::new(),
-            ppu: PPU::default(),
+            ppu: PPU::new(sync_channel(1).0),
             display_buffer: Arc::new(DisplayBuffer::new()),
         }
     }
 
-    pub fn new(bios: String, rom: String, display_buffer: Arc<DisplayBuffer>) -> Self {
+    pub fn new(
+        bios: String,
+        rom: String,
+        display_buffer: Arc<DisplayBuffer>,
+        ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
+    ) -> Self {
         let mut memory = GBAMemory::new();
         memory.initialize_bios(bios).unwrap();
         memory.initialize_rom(rom).unwrap();
         let mut gba = Self {
             memory,
             cpu: CPU::new(),
-            ppu: PPU::default(),
+            ppu: PPU::new(ppu_to_display_sender),
             display_buffer,
         };
         gba.cpu.flush_pipeline(&mut gba.memory);

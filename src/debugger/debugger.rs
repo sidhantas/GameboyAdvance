@@ -1,4 +1,7 @@
-use super::breakpoints::{BreakType, Breakpoint, TriggeredWatchpoints};
+use super::{
+    breakpoints::{BreakType, Breakpoint, TriggeredWatchpoints},
+    terminal_commands::PPUToDisplayCommands,
+};
 use crossterm::{
     event::{
         self, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
@@ -10,7 +13,7 @@ use std::{
     cell::RefCell,
     io::{self, Stdout},
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{mpsc::SyncSender, Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -47,11 +50,11 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    pub fn new(bios: String, rom: String, pixel_buffer: Arc<DisplayBuffer>) -> Self {
+    pub fn new(bios: String, rom: String, pixel_buffer: Arc<DisplayBuffer>, ppu_to_display_sender: SyncSender<PPUToDisplayCommands>) -> Self {
         let breakpoints = Some(Vec::<Breakpoint>::new());
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
-        let mut gba = GBA::new(bios, rom, pixel_buffer);
+        let mut gba = GBA::new(bios, rom, pixel_buffer, ppu_to_display_sender);
         gba.memory.breakpoint_checker = Some(Box::new(|memory: &GBAMemory, address: usize| {
             let Some(memory_breakpoints) = memory.breakpoints.as_ref() else {
                 return;
@@ -85,6 +88,7 @@ pub fn start_debugger(
     bios: String,
     rom: String,
     pixel_buffer: Arc<DisplayBuffer>,
+    ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
 ) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
@@ -92,7 +96,7 @@ pub fn start_debugger(
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let debugger = &mut Debugger::new(bios, rom, pixel_buffer);
+    let debugger = &mut Debugger::new(bios, rom, pixel_buffer, ppu_to_display_sender);
 
     for _ in 0..3000000 {
         debugger.gba.step();

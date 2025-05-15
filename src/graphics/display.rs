@@ -1,7 +1,9 @@
 use std::{
     mem::size_of,
+    ops::ControlFlow,
     sync::{
         atomic::{AtomicBool, Ordering::Relaxed},
+        mpsc::Receiver,
         Arc, Condvar, Mutex, MutexGuard,
     },
     time::Duration,
@@ -9,7 +11,7 @@ use std::{
 
 use sdl2::{event::Event, pixels::PixelFormatEnum, rect::Rect, render::Texture, surface::Surface};
 
-use crate::gba::KILL_SIGNAL;
+use crate::{debugger::terminal_commands::PPUToDisplayCommands, gba::KILL_SIGNAL};
 
 use super::ppu::{HDRAW, VDRAW};
 
@@ -30,7 +32,17 @@ impl DisplayBuffer {
     }
 }
 
-pub fn start_display(pixel_buffer: Arc<DisplayBuffer>) {
+pub struct Border {
+    pub x: usize,
+    pub y: usize,
+    pub width: usize,
+    pub height: usize,
+}
+
+pub fn start_display(
+    pixel_buffer: Arc<DisplayBuffer>,
+    ppu_to_display_recv: Receiver<PPUToDisplayCommands>,
+) {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -53,32 +65,87 @@ pub fn start_display(pixel_buffer: Arc<DisplayBuffer>) {
     canvas.present();
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
-        while pixel_buffer.ready_to_render.load(Relaxed) == false {
-            if KILL_SIGNAL.killed() {
-                break 'running;
-            }
-            for event in event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. }
-                    | Event::KeyDown {
-                        keycode: Some(sdl2::keyboard::Keycode::Escape),
-                        ..
-                    } => {
-                        KILL_SIGNAL.kill();
+        while let Ok(command) = ppu_to_display_recv.try_recv() {
+            match command {
+                PPUToDisplayCommands::Render => {
+                    render_frame(&pixel_buffer, &mut canvas, &mut texture);
+                }
+                PPUToDisplayCommands::RenderWithBorders(borders) => {
+                    {
+                        let mut buff = pixel_buffer.buffer.lock().unwrap();
+                        for Border {
+                            x,
+                            y,
+                            width,
+                            height,
+                        } in borders
+                        {
+                            for i in x..x + width {
+                                if i >= HDRAW as usize {
+                                    break;
+                                }
+                                buff[y * HDRAW as usize + i] = 0x00FF0000;
+                            }
+                            for j in y..y + height {
+                                if j >= VDRAW as usize {
+                                    break;
+                                }
+                                buff[j * HDRAW as usize + x] = 0x00FF0000;
+                                if x + width < HDRAW as usize {
+                                    buff[j * HDRAW as usize + x + width] = 0x00FF0000;
+                                }
+                            }
+                            for i in x..x + width {
+                                if (y + height) >= VDRAW as usize{
+                                    break;
+                                }
+                                if i < HDRAW as usize{
+                                    buff[(y + height) * HDRAW as usize + i] = 0x00FF0000;
+                                }
+                            }
+                        }
                     }
-                    _ => {}
+                    render_frame(&pixel_buffer, &mut canvas, &mut texture);
                 }
             }
-            std::thread::sleep(Duration::new(0, 1_000_000_000 / 60));
         }
-        pixel_buffer.ready_to_render.store(false, Relaxed);
-        canvas.clear();
-        let pixel_data: [u8; CANVAS_AREA * size_of::<u32>()] =
-            unsafe { std::mem::transmute(*pixel_buffer.buffer.lock().unwrap()) };
-        texture
-            .update(None, &pixel_data, HDRAW as usize * size_of::<u32>())
-            .unwrap();
-        canvas.copy(&texture, None, None).unwrap();
-        canvas.present();
+        if let ControlFlow::Break(_) = handle_events(&mut event_pump) {
+            break 'running;
+        }
     }
+}
+
+fn handle_events(event_pump: &mut sdl2::EventPump) -> ControlFlow<()> {
+    if KILL_SIGNAL.killed() {
+        return ControlFlow::Break(());
+    }
+    for event in event_pump.poll_iter() {
+        match event {
+            Event::Quit { .. }
+            | Event::KeyDown {
+                keycode: Some(sdl2::keyboard::Keycode::Escape),
+                ..
+            } => {
+                KILL_SIGNAL.kill();
+            }
+            _ => {}
+        }
+    }
+    std::thread::sleep(Duration::new(0, 1_000_000_000 / 60));
+    ControlFlow::Continue(())
+}
+
+fn render_frame(
+    pixel_buffer: &Arc<DisplayBuffer>,
+    canvas: &mut sdl2::render::Canvas<sdl2::video::Window>,
+    texture: &mut Texture<'_>,
+) {
+    canvas.clear();
+    let pixel_data: [u8; CANVAS_AREA * size_of::<u32>()] =
+        unsafe { std::mem::transmute(*pixel_buffer.buffer.lock().unwrap()) };
+    texture
+        .update(None, &pixel_data, HDRAW as usize * size_of::<u32>())
+        .unwrap();
+    canvas.copy(&*texture, None, None).unwrap();
+    canvas.present();
 }

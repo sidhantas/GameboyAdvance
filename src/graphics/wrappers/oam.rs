@@ -50,6 +50,14 @@ impl<'a> Oam<'a> {
         (self.0[0] & 0xFF).into()
     }
 
+    pub fn view_y(&self) -> u32 {
+        if self.double_sized() {
+            self.y().saturating_sub(self.width() / 2)
+        } else {
+            self.y()
+        }
+    }
+
     pub fn rotation_and_scaling_enabled(&self) -> bool {
         self.0[0].bit_is_set(8)
     }
@@ -82,6 +90,14 @@ impl<'a> Oam<'a> {
         (self.0[1] & 0x1FF).into()
     }
 
+    pub fn view_x(&self) -> u32 {
+        if self.double_sized() {
+            self.x().saturating_sub(self.height() / 2)
+        } else {
+            self.x()
+        }
+    }
+
     pub fn width(&self) -> u32 {
         match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
@@ -109,6 +125,14 @@ impl<'a> Oam<'a> {
         }
     }
 
+    pub fn view_width(&self) -> u32 {
+        if self.double_sized() {
+            self.width() * 2
+        } else{
+            self.width()
+        }
+    }
+
     pub fn height(&self) -> u32 {
         match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
@@ -133,6 +157,14 @@ impl<'a> Oam<'a> {
                 _ => panic!("Invalid obj size"),
             },
             OBJShape::Prohibited => panic!("Invalid obj shape"),
+        }
+    }
+
+    pub fn view_height(&self) -> u32 {
+        if self.double_sized() {
+            self.height() * 2
+        } else{
+            self.height()
         }
     }
 
