@@ -22,10 +22,10 @@ impl<'a> Tile<'a> {
     pub fn get_tile_relative_obj(
         memory: &'a GBAMemory,
         oam: &Oam,
-        offset_x: u32,
-        offset_y: u32,
+        offset_x: i32,
+        offset_y: i32,
     ) -> Self {
-        let relative_tile = oam.tile_number() as u32 + offset_y * 0x20 + offset_x * 2;
+        let relative_tile = oam.tile_number() as i32 + offset_y * 0x20 + offset_x * 2;
         Self::get_tile_single_obj(memory, oam, relative_tile as usize)
     }
 

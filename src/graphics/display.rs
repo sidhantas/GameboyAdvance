@@ -33,10 +33,10 @@ impl DisplayBuffer {
 }
 
 pub struct Border {
-    pub x: usize,
-    pub y: usize,
-    pub width: usize,
-    pub height: usize,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 pub fn start_display(
@@ -49,8 +49,8 @@ pub fn start_display(
     let window = video_subsystem
         .window(
             "Gameboy Advance",
-            HDRAW * DISPLAY_SCALE,
-            VDRAW * DISPLAY_SCALE,
+            HDRAW as u32 * DISPLAY_SCALE,
+            VDRAW as u32 * DISPLAY_SCALE,
         )
         .position_centered()
         .build()
@@ -58,9 +58,9 @@ pub fn start_display(
 
     let mut canvas = window.into_canvas().build().unwrap();
     let texture_creator = canvas.texture_creator();
-    let surface = Surface::new(HDRAW, VDRAW, PixelFormatEnum::RGB24).unwrap();
+    let surface = Surface::new(HDRAW as u32, VDRAW as u32, PixelFormatEnum::RGB24).unwrap();
     let mut texture = Texture::from_surface(&surface, &texture_creator).unwrap();
-    canvas.set_logical_size(HDRAW, VDRAW).unwrap();
+    canvas.set_logical_size(HDRAW as u32, VDRAW as u32).unwrap();
 
     canvas.present();
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -71,46 +71,67 @@ pub fn start_display(
                     render_frame(&pixel_buffer, &mut canvas, &mut texture);
                 }
                 PPUToDisplayCommands::RenderWithBorders(borders) => {
-                    {
-                        let mut buff = pixel_buffer.buffer.lock().unwrap();
-                        for Border {
-                            x,
-                            y,
-                            width,
-                            height,
-                        } in borders
-                        {
-                            for i in x..x + width {
-                                if i >= HDRAW as usize {
-                                    break;
-                                }
-                                buff[y * HDRAW as usize + i] = 0x00FF0000;
-                            }
-                            for j in y..y + height {
-                                if j >= VDRAW as usize {
-                                    break;
-                                }
-                                buff[j * HDRAW as usize + x] = 0x00FF0000;
-                                if x + width < HDRAW as usize {
-                                    buff[j * HDRAW as usize + x + width] = 0x00FF0000;
-                                }
-                            }
-                            for i in x..x + width {
-                                if (y + height) >= VDRAW as usize{
-                                    break;
-                                }
-                                if i < HDRAW as usize{
-                                    buff[(y + height) * HDRAW as usize + i] = 0x00FF0000;
-                                }
-                            }
-                        }
-                    }
+                    draw_object_borders(&pixel_buffer, borders);
                     render_frame(&pixel_buffer, &mut canvas, &mut texture);
                 }
             }
         }
         if let ControlFlow::Break(_) = handle_events(&mut event_pump) {
             break 'running;
+        }
+    }
+}
+
+fn draw_object_borders(pixel_buffer: &Arc<DisplayBuffer>, borders: Vec<Border>) {
+    let mut buff = pixel_buffer.buffer.lock().unwrap();
+    for Border {
+        x,
+        y,
+        width,
+        height,
+    } in borders
+    {
+        for i in x..x + width {
+            if i < 0 {
+                continue;
+            }
+            if i >= HDRAW {
+                break;
+            }
+            if y < 0 {
+                break;
+            }
+            buff[(y * HDRAW + i) as usize] = 0x00FF0000;
+        }
+        for j in y..y + height {
+            if x < 0 {
+                break;
+            }
+            if j >= VDRAW {
+                break;
+            }
+            if j < 0 {
+                continue;
+            }
+            buff[(j * HDRAW + x) as usize] = 0x00FF0000;
+            if x + width < HDRAW {
+                buff[(j * HDRAW + x + width) as usize] = 0x00FF0000;
+            }
+        }
+        for i in x..x + width {
+            if y < 0 {
+                break;
+            }
+            if (y + height) >= VDRAW {
+                break;
+            }
+            if i > HDRAW {
+                break;
+            }
+            if i < 0b0 {
+                continue;
+            }
+            buff[((y + height) * HDRAW + i) as usize] = 0x00FF0000;
         }
     }
 }

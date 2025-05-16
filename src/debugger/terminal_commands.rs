@@ -48,7 +48,7 @@ pub struct TerminalHistoryEntry {
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 12] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 13] = [
     TerminalCommand {
         name: "next",
         _arguments: 1,
@@ -118,9 +118,16 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 12] = [
     TerminalCommand {
         name: "display-borders",
         _arguments: 1,
-        _description: "Continues until encountering a breakpoint",
+        _description: "Shows borders of objects",
         handler: send_borders,
     },
+    TerminalCommand {
+        name: "reset",
+        _arguments: 1,
+        _description: "Resets CPU",
+        handler: reset_gba,
+    },
+
 ];
 
 fn find_command(command: &str) -> Result<&TerminalCommand, TerminalCommandErrors> {
@@ -454,7 +461,17 @@ fn send_borders(
     debugger: &mut Debugger,
     _args: Vec<&str>,
 ) -> Result<String, TerminalCommandErrors> {
-    debugger.gba.ppu.show_borders = true;
+    debugger.gba.ppu.show_borders = !debugger.gba.ppu.show_borders;
+
+    Ok(String::new())
+}
+
+
+fn reset_gba(
+    debugger: &mut Debugger,
+    _args: Vec<&str>,
+) -> Result<String, TerminalCommandErrors> {
+    debugger.gba.reset();
 
     Ok(String::new())
 }

@@ -49,6 +49,12 @@ impl GBA {
         gba
     }
 
+    pub fn reset(&mut self) {
+        self.memory.clear_ram();
+        self.cpu.reset();
+        self.ppu.reset();
+    }
+
     pub fn step(&mut self) {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
         self.ppu

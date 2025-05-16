@@ -6,10 +6,10 @@ use std::sync::Arc;
 
 use super::display::DisplayBuffer;
 
-pub const HDRAW: u32 = 240;
-pub const HBLANK: u32 = 68;
-pub const VDRAW: u32 = 160;
-pub const VBLANK: u32 = 68;
+pub const HDRAW: i32 = 240;
+pub const HBLANK: i32 = 68;
+pub const VDRAW: i32 = 160;
+pub const VBLANK: i32 = 68;
 
 pub(super) const VBLANK_FLAG: u16 = 1 << 0;
 pub(super) const HBLANK_FLAG: u16 = 1 << 1;
@@ -30,11 +30,11 @@ pub struct PPU {
     usable_cycles: u32,
     available_dots: u32,
     pub(super) current_mode: PPUModes,
-    pub x: u32,
-    pub y: u32,
+    pub x: i32,
+    pub y: i32,
     pub(super) current_line_objects: Vec<usize>,
     pub show_borders: bool,
-    pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>
+    pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
 }
 
 impl PPU {
@@ -47,8 +47,17 @@ impl PPU {
             y: 0,
             current_line_objects: Vec::new(),
             show_borders: false,
-            ppu_to_display_sender
+            ppu_to_display_sender,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.usable_cycles = 0;
+        self.available_dots = 0;
+        self.current_mode = PPUModes::HDRAW;
+        self.x = 0;
+        self.y = 0;
+        self.current_line_objects = Vec::new();
     }
     pub fn advance_ppu(
         &mut self,

@@ -517,10 +517,6 @@ fn draw_cpsr(
         Paragraph::new(format!("CPSR")).alignment(Alignment::Center),
         flag_names[7],
     );
-    f.render_widget(
-        Paragraph::new(format!("NO IRQ")).alignment(Alignment::Center),
-        flag_names[8],
-    );
 
     f.render_widget(
         Paragraph::new(format!("{}", cpu.get_flag(FlagsRegister::N))).alignment(Alignment::Center),
@@ -565,18 +561,6 @@ fn draw_cpsr(
         ))
         .alignment(Alignment::Center),
         flag_values[6],
-    );
-    //f.render_widget(
-    //    Paragraph::new(format!("{:08x}", cpu.get_cpsr())).alignment(Alignment::Center),
-    //    flag_values[7],
-    //);
-    f.render_widget(
-        Paragraph::new(format!("{}", cpu.get_cpsr().irq_disabled)).alignment(Alignment::Center),
-        flag_values[8],
-    );
-    f.render_widget(
-        Paragraph::new(format!("{}", cpu.is_halted)).alignment(Alignment::Center),
-        flag_values[9],
     );
     f.render_widget(block, flags_chunk);
 

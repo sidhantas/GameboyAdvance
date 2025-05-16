@@ -1,4 +1,4 @@
-use crate::{memory::memory::GBAMemory, utils::bits::Bits};
+use crate::{memory::memory::GBAMemory, utils::bits::{sign_extend, Bits}};
 
 pub const NUM_OAM_ENTRIES: usize = 128;
 
@@ -46,13 +46,17 @@ impl Into<OBJShape> for u16 {
 }
 
 impl<'a> Oam<'a> {
-    pub fn y(&self) -> u32 {
-        (self.0[0] & 0xFF).into()
+    pub fn y(&self) -> i32 {
+        sign_extend((self.0[0] & 0xFF) as u32, 7) as i32
     }
 
-    pub fn view_y(&self) -> u32 {
+    pub fn view_y(&self) -> i32 {
         if self.double_sized() {
-            self.y().saturating_sub(self.width() / 2)
+            let mut y = self.y() - self.width() / 2;
+            if y < -128 {
+                y += 256
+            }
+            y
         } else {
             self.y()
         }
@@ -86,19 +90,24 @@ impl<'a> Oam<'a> {
         ((self.0[0] >> 14) & 0x3).into()
     }
 
-    pub fn x(&self) -> u32 {
-        (self.0[1] & 0x1FF).into()
+    pub fn x(&self) -> i32 {
+        sign_extend((self.0[1] & 0x1FF) as u32, 8) as i32
     }
 
-    pub fn view_x(&self) -> u32 {
+    pub fn view_x(&self) -> i32 {
         if self.double_sized() {
-            self.x().saturating_sub(self.height() / 2)
+            let mut x = self.x() - self.height() / 2;
+            if x < -256 {
+                x += 512
+            }
+            x
+
         } else {
             self.x()
         }
     }
 
-    pub fn width(&self) -> u32 {
+    pub fn width(&self) -> i32 {
         match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
                 0 => 8,
@@ -125,7 +134,7 @@ impl<'a> Oam<'a> {
         }
     }
 
-    pub fn view_width(&self) -> u32 {
+    pub fn view_width(&self) -> i32 {
         if self.double_sized() {
             self.width() * 2
         } else{
@@ -133,7 +142,7 @@ impl<'a> Oam<'a> {
         }
     }
 
-    pub fn height(&self) -> u32 {
+    pub fn height(&self) -> i32 {
         match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
                 0 => 8,
@@ -160,7 +169,7 @@ impl<'a> Oam<'a> {
         }
     }
 
-    pub fn view_height(&self) -> u32 {
+    pub fn view_height(&self) -> i32 {
         if self.double_sized() {
             self.height() * 2
         } else{
@@ -168,11 +177,11 @@ impl<'a> Oam<'a> {
         }
     }
 
-    pub fn rotation_scaling_parameter(&self) -> u16 {
+    pub fn rotation_scaling_parameter(&self) -> Option<usize> {
         if self.rotation_and_scaling_enabled() {
-            return self.0[1] & 0x3E00;
+            return Some(((self.0[1] & 0x3E00) >> 9) as usize);
         }
-        0
+        None
     }
 
     pub fn horizontal_flip(&self) -> bool {
@@ -199,7 +208,7 @@ impl<'a> Oam<'a> {
         ((self.0[2] >> 12) & 0xF).into()
     }
 
-    pub fn oam_read(memory: &'a GBAMemory, oam_num: usize) -> Oam {
+    pub fn oam_read(memory: &GBAMemory, oam_num: usize) -> Oam<'_> {
         let oam_slice: &[u8; 6] = memory.oam[oam_num * 0x08..][..6].try_into().unwrap();
         let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
 

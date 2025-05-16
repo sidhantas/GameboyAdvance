@@ -1,7 +1,9 @@
 use crate::{
     debugger::breakpoints::{Breakpoint, TriggeredWatchpoints},
     graphics::{
-        display::Border, ppu::{HDRAW, VDRAW}, wrappers::oam::{Oam, NUM_OAM_ENTRIES}
+        display::Border,
+        ppu::{HDRAW, VDRAW},
+        wrappers::oam::{Oam, NUM_OAM_ENTRIES},
     },
     io::timers::Timers,
     types::{BYTE, CYCLES, HWORD, WORD},
@@ -212,6 +214,16 @@ impl GBAMemory {
         Ok(())
     }
 
+    pub fn clear_ram(&mut self) {
+        self.exwram = vec![0; EXWRAM_SIZE];
+        self.iwram = vec![0; IWRAM_SIZE];
+        self.ioram = vec![0; IORAM_SIZE >> 1];
+        self.pallete_ram = vec![0; BGRAM_SIZE];
+        self.vram = vec![0; VRAM_SIZE];
+        self.oam = vec![0; OAM_SIZE];
+        self.sram = vec![0; SRAM_SIZE];
+    }
+
     const fn get_slice_alignment(size: usize) -> usize {
         match size {
             1 => !0x0,
@@ -403,12 +415,12 @@ impl GBAMemory {
         let mut borders = Vec::new();
         for i in 0..NUM_OAM_ENTRIES {
             let oam = Oam::oam_read(self, i);
-            if oam.view_x() < HDRAW as u32 && oam.view_y() < VDRAW as u32 && !oam.obj_disabled(){
+            if oam.view_x() < HDRAW && oam.view_y() < VDRAW && !oam.obj_disabled() {
                 borders.push(Border {
-                    x: oam.view_x() as usize,
-                    y: oam.view_y() as usize,
-                    width: oam.view_width() as usize,
-                    height: oam.view_height() as usize
+                    x: oam.view_x() ,
+                    y: oam.view_y() ,
+                    width: oam.view_width() ,
+                    height: oam.view_height() ,
                 });
             }
         }

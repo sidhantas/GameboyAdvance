@@ -1,9 +1,9 @@
 use std::{
     mem::size_of,
-    ops::{BitAnd, Shr},
+    ops::{BitAnd, Shl, Shr},
 };
 
-use num_traits::PrimInt;
+use num_traits::{Bounded, PrimInt, Unsigned};
 
 use crate::types::{BYTE, HWORD, WORD};
 
@@ -128,11 +128,48 @@ impl Bits for BYTE {
     }
 }
 
-pub fn sign_extend(word: WORD, sign_bit: u8) -> u32 {
+pub fn sign_extend<T>(word: T, sign_bit: u8) -> T
+where
+    T: Bounded + Shl<u8, Output = T> + Bits,
+{
     if word.bit_is_set(sign_bit) {
-        let mut mask: u32 = u32::MAX;
-        mask = mask << (sign_bit + 1);
+        let mut mask = T::max_value();
+        mask = mask.shl(sign_bit + 1);
         return word | mask;
     }
     word
+}
+
+pub fn fixed88_point_to_floating_point(mut fixed88: u16) -> f32 {
+    let mut float: u32 = 0;
+
+    if fixed88.bit_is_set(15) {
+        float.set_bit(31);
+    }
+
+    let mut exponent: i32 = 6;
+    while !fixed88.bit_is_set(14) {
+        fixed88 <<= 1;
+        exponent -= 1;
+    }
+
+    fixed88 <<= 2;
+    float |= ((fixed88 & 0x7FFF) as u32) << 10 + exponent;
+    float |= ((exponent + 127) as u32) << 23;
+
+    f32::from_bits(float)
+}
+
+#[cfg(test)]
+mod fixed88_tests {
+    use rstest::rstest;
+
+    use super::fixed88_point_to_floating_point;
+
+    #[rstest]
+    #[case(0b101100, 0.171875)]
+    #[case(0b1000000000101100, -0.171875)]
+    pub fn converts_fixed_point_to_f32(#[case] fixed88: u16, #[case] expected_output: f32) {
+        assert!(fixed88_point_to_floating_point(fixed88) == expected_output);
+    }
 }

@@ -82,10 +82,7 @@ impl PPU {
         for obj in &self.current_line_objects {
             let oam = Oam::oam_read(memory, *obj);
             if oam.x() < self.x && self.x <= oam.x() + oam.width() {
-                let tile_x = (self.x - oam.x()) / 8;
-                let tile_y = (self.y - oam.y()) / 8;
-                let pixel_x = (self.x - oam.x()) % 8;
-                let pixel_y = (self.y - oam.y()) % 8;
+                let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(&oam);
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
                 let pallete_region = &memory.pallete_ram[0x200..][..0x200].try_into().unwrap();
@@ -110,4 +107,13 @@ impl PPU {
         }
         return highest_prio_obj;
     }
+
+    fn get_tile_coordinates(&self, oam: &Oam<'_>) -> (i32, i32, i32, i32) {
+        let tile_x = (self.x - oam.x()) / 8;
+        let tile_y = (self.y - oam.y()) / 8;
+        let pixel_x = (self.x - oam.x()) % 8;
+        let pixel_y = (self.y - oam.y()) % 8;
+        (tile_x, tile_y, pixel_x, pixel_y)
+    }
+
 }

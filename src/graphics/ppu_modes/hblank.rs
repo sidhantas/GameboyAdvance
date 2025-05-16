@@ -24,20 +24,11 @@ impl PPU {
                     if self.show_borders {
                         self.ppu_to_display_sender.send(RenderWithBorders(memory.get_oam_borders())).unwrap()
                     } else {
-                        self.ppu_to_display_sender.send(Render);
+                        self.ppu_to_display_sender.send(Render).unwrap();
                     }
                     self.current_mode = PPUModes::VBLANK;
                 } else {
-                    self.current_line_objects.clear();
-                    for i in 0..NUM_OAM_ENTRIES {
-                        let oam = Oam::oam_read(memory, i);
-                        if oam.y() < self.y
-                            && self.y <= oam.y() + oam.height()
-                            && !oam.obj_disabled()
-                        {
-                            self.current_line_objects.push(i);
-                        }
-                    }
+                    self.obj_selection(memory);
                     self.current_mode = PPUModes::HDRAW;
                 }
                 return dots;
@@ -46,5 +37,18 @@ impl PPU {
             dots -= 1;
         }
         return 0;
+    }
+
+    fn obj_selection(&mut self, memory: &mut GBAMemory) {
+        self.current_line_objects.clear();
+        for i in 0..NUM_OAM_ENTRIES {
+            let oam = Oam::oam_read(memory, i);
+            if (oam.y() < self.y
+                && self.y < oam.y() + oam.height())
+                && !oam.obj_disabled()
+            {
+                self.current_line_objects.push(i);
+            }
+        }
     }
 }

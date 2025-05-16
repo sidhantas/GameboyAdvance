@@ -95,6 +95,11 @@ impl CPU {
         cpu
     }
 
+    pub fn reset(&mut self) {
+        let new_cpu = CPU::new();
+        *self = new_cpu;
+    }
+
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
         //if self.status_history.len() >= HISTORY_SIZE {

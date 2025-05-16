@@ -105,8 +105,8 @@ impl Layers {
     }
 
     pub fn get_enabled_layers(
-        x: u32,
-        y: u32,
+        x: i32,
+        y: i32,
         dispcnt: &Dispcnt,
         memory: &GBAMemory,
         obj: Option<OBJPixel>,
@@ -141,8 +141,8 @@ impl Layers {
     }
 
     fn get_background_pixel(
-        x: u32,
-        y: u32,
+        x: i32,
+        y: i32,
         bgcnt: BGCnt,
         memory: &GBAMemory,
         dispcnt: &Dispcnt,
