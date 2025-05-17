@@ -43,8 +43,8 @@ impl PPU {
         self.current_line_objects.clear();
         for i in 0..NUM_OAM_ENTRIES {
             let oam = Oam::oam_read(memory, i);
-            if (oam.view_y() < self.y
-                && self.y < oam.view_y() + oam.view_height())
+            if (oam.y() < self.y
+                && self.y < oam.y() + oam.view_height())
                 && !oam.obj_disabled()
             {
                 self.current_line_objects.push(i);

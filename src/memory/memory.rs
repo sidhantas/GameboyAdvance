@@ -415,10 +415,10 @@ impl GBAMemory {
         let mut borders = Vec::new();
         for i in 0..NUM_OAM_ENTRIES {
             let oam = Oam::oam_read(self, i);
-            if oam.view_x() < HDRAW && oam.view_y() < VDRAW && !oam.obj_disabled() {
+            if oam.x() < HDRAW && oam.y() < VDRAW && !oam.obj_disabled() {
                 borders.push(Border {
-                    x: oam.view_x(),
-                    y: oam.view_y(),
+                    x: oam.x(),
+                    y: oam.y(),
                     width: oam.view_width(),
                     height: oam.view_height(),
                 });

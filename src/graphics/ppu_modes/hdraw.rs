@@ -80,8 +80,8 @@ impl PPU {
         let mut highest_prio_obj: Option<OBJPixel> = None;
         for obj in &self.current_line_objects {
             let oam = Oam::oam_read(memory, *obj);
-            let normalized_x = self.x - oam.view_x();
-            let normalized_y = self.y - oam.view_y();
+            let normalized_x = self.x - oam.x();
+            let normalized_y = self.y - oam.y();
             let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
             if 0 < transform_x
                 && transform_x <= oam.width()
