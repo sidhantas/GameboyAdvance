@@ -142,20 +142,27 @@ where
 
 pub fn fixed88_point_to_floating_point(mut fixed88: u16) -> f32 {
     let mut float: u32 = 0;
+    
+    if fixed88 == 0 {
+        return 0.;
+    }
 
     if fixed88.bit_is_set(15) {
         float.set_bit(31);
     }
 
     let mut exponent: i32 = 6;
-    while !fixed88.bit_is_set(14) {
-        fixed88 <<= 1;
+    for _ in 0..15 {
+        if fixed88.bit_is_set(14) {
+            break;
+        }
         exponent -= 1;
+        fixed88 <<= 1;
     }
-
-    fixed88 <<= 2;
-    float |= ((fixed88 & 0x7FFF) as u32) << 10 + exponent;
     float |= ((exponent + 127) as u32) << 23;
+
+    fixed88 <<= 1;
+    float |= ((fixed88 & 0x7FFF) as u32) << 8;
 
     f32::from_bits(float)
 }
@@ -169,7 +176,11 @@ mod fixed88_tests {
     #[rstest]
     #[case(0b101100, 0.171875)]
     #[case(0b1000000000101100, -0.171875)]
+    #[case(0b00, 0.)]
+    #[case(0xb8, 0.71875)]
     pub fn converts_fixed_point_to_f32(#[case] fixed88: u16, #[case] expected_output: f32) {
-        assert!(fixed88_point_to_floating_point(fixed88) == expected_output);
+        let result = dbg!(fixed88_point_to_floating_point(fixed88));
+        println!("0b{:0>32b}", result.to_bits());
+        assert_eq!(result, expected_output);
     }
 }

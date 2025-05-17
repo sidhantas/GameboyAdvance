@@ -422,6 +422,7 @@ fn dissassemble_oam(
         orient: {:#?},\n\
         tile: {}\n\
         rotation scaling: {}\n\
+        rotation scaling param: {:#?}\n\
         double size: {}\n\
         disabled: {}\n\
         mode: {:#?}\n\
@@ -434,6 +435,7 @@ fn dissassemble_oam(
         oam.obj_shape(),
         oam.tile_number(),
         oam.rotation_and_scaling_enabled(),
+        oam.rotation_scaling_parameter(),
         oam.double_sized(),
         oam.obj_disabled(),
         oam.obj_mode(),

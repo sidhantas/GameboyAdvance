@@ -8,8 +8,7 @@ use crate::{
         pallete::{rgb555_to_rgb24, OBJPaletteData},
         ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
         wrappers::{
-            oam::{OBJMode, Oam},
-            tile::Tile,
+            oam::{OBJMode, Oam}, rotation_and_scaling::AffineParameters, tile::Tile
         },
     },
     memory::{io_handlers::DISPCNT, memory::GBAMemory, wrappers::dispcnt::Dispcnt},
@@ -81,8 +80,15 @@ impl PPU {
         let mut highest_prio_obj: Option<OBJPixel> = None;
         for obj in &self.current_line_objects {
             let oam = Oam::oam_read(memory, *obj);
-            if oam.x() < self.x && self.x <= oam.x() + oam.width() {
-                let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(&oam);
+            let normalized_x = self.x - oam.view_x();
+            let normalized_y = self.y - oam.view_y();
+            let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
+            if 0 < transform_x
+                && transform_x <= oam.width()
+                && 0 < transform_y
+                && transform_y <= oam.height()
+            {
+                let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(&oam, transform_x, transform_y);
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
                 let pallete_region = &memory.pallete_ram[0x200..][..0x200].try_into().unwrap();
@@ -108,12 +114,20 @@ impl PPU {
         return highest_prio_obj;
     }
 
-    fn get_tile_coordinates(&self, oam: &Oam<'_>) -> (i32, i32, i32, i32) {
-        let tile_x = (self.x - oam.x()) / 8;
-        let tile_y = (self.y - oam.y()) / 8;
-        let pixel_x = (self.x - oam.x()) % 8;
-        let pixel_y = (self.y - oam.y()) % 8;
+    fn get_tile_coordinates(&self, oam: &Oam<'_>, x: i32, y: i32) -> (i32, i32, i32, i32) {
+        let tile_x = x / 8;
+        let tile_y = y / 8;
+        let pixel_x = x % 8;
+        let pixel_y = y % 8;
         (tile_x, tile_y, pixel_x, pixel_y)
     }
 
+    fn transform_coordinates(&self, memory: &GBAMemory, oam: &Oam, x: i32, y: i32) -> (i32, i32) {
+        let Some(affine_parameters) = AffineParameters::create_parameters(memory, oam) else {
+            return (x, y)
+        };
+
+        affine_parameters.transform_coordinates(x, y, oam)
+
+    }
 }
