@@ -51,15 +51,16 @@ impl<'a> Oam<'a> {
     }
 
     pub fn view_y(&self) -> i32 {
-        if self.double_sized() {
-            let mut y = self.y() - self.width() / 2;
-            if y < -128 {
-                y += 256
-            }
-            y
-        } else {
             self.y()
-        }
+        //if self.double_sized() {
+        //    let mut y = self.y() - self.width() / 2;
+        //    if y < -128 {
+        //        y += 256
+        //    }
+        //    y
+        //} else {
+        //    self.y()
+        //}
     }
 
     pub fn rotation_and_scaling_enabled(&self) -> bool {
@@ -95,16 +96,17 @@ impl<'a> Oam<'a> {
     }
 
     pub fn view_x(&self) -> i32 {
-        if self.double_sized() {
-            let mut x = self.x() - self.height() / 2;
-            if x < -256 {
-                x += 512
-            }
-            x
-
-        } else {
             self.x()
-        }
+        //if self.double_sized() {
+        //    let mut x = self.x() - self.height() / 2;
+        //    if x < -256 {
+        //        x += 512
+        //    }
+        //    x
+
+        //} else {
+        //    self.x()
+        //}
     }
 
     pub fn width(&self) -> i32 {
