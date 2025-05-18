@@ -3,32 +3,31 @@ use crate::{
     graphics::{
         display::Border,
         ppu::{HDRAW, VDRAW},
-        wrappers::oam::{Oam, NUM_OAM_ENTRIES},
+        wrappers::{
+            oam::{Oam, NUM_OAM_ENTRIES},
+        },
     },
     io::timers::Timers,
     types::{BYTE, CYCLES, HWORD, WORD},
 };
+use core::panic;
 use std::{
     cell::RefCell,
     fmt::Display,
     fs::File,
     io::{Read, Seek},
     rc::Rc,
-    sync::Arc,
     usize,
 };
 
-use super::io_handlers::{DISPSTAT, IF, KEYINPUT};
+use super::{
+    io_handlers::KEYINPUT,
+    memory_block::{MemoryBlock, SimpleMemoryBlock}, oam_memory::OAMBlock,
+};
 
 pub struct MemoryFetch<T> {
     pub cycles: CYCLES,
     pub data: T,
-}
-
-impl<T> MemoryFetch<T> {
-    pub fn new(data: T, cycles: CYCLES) -> Self {
-        Self { cycles, data }
-    }
 }
 
 impl Into<MemoryFetch<WORD>> for MemoryFetch<BYTE> {
@@ -108,15 +107,15 @@ const BGRAM_MIRROR_MASK: usize = 0x3FF;
 const OAM_MIRROR_MASK: usize = 0x3FF;
 
 pub struct GBAMemory {
-    bios: Vec<u8>,
-    exwram: Vec<u8>,
-    iwram: Vec<u8>,
+    bios: SimpleMemoryBlock,
+    exwram: SimpleMemoryBlock,
+    iwram: SimpleMemoryBlock,
     pub(super) ioram: Vec<u16>,
-    pub pallete_ram: Vec<u8>,
-    pub vram: Vec<u8>,
-    pub oam: Vec<u8>,
-    rom: Vec<u8>,
-    sram: Vec<u8>,
+    pub pallete_ram: SimpleMemoryBlock,
+    pub vram: SimpleMemoryBlock,
+    pub oam: OAMBlock,
+    rom: SimpleMemoryBlock,
+    sram: SimpleMemoryBlock,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
     pub cpu_commands: Vec<CPUCallbacks>,
@@ -160,15 +159,15 @@ impl GBAMemory {
         wait_cycles_u32[ROM2B_REGION] = 8;
 
         let mut memory = Self {
-            bios: vec![0; BIOS_SIZE],
-            exwram: vec![0; EXWRAM_SIZE],
-            iwram: vec![0; IWRAM_SIZE],
+            bios: SimpleMemoryBlock::new(BIOS_SIZE, 0xFFFFFF),
+            exwram: SimpleMemoryBlock::new(EXWRAM_SIZE, EX_WRAM_MIRROR_MASK),
+            iwram: SimpleMemoryBlock::new(IWRAM_SIZE, IWRAM_MIRROR_MASK),
             ioram: vec![0; IORAM_SIZE >> 1],
-            pallete_ram: vec![0; BGRAM_SIZE],
-            vram: vec![0; VRAM_SIZE],
-            oam: vec![0; OAM_SIZE],
-            rom: vec![0; ROM_SIZE],
-            sram: vec![0; SRAM_SIZE],
+            pallete_ram: SimpleMemoryBlock::new(BGRAM_SIZE, BGRAM_MIRROR_MASK),
+            vram: SimpleMemoryBlock::new(VRAM_SIZE, 0xFFFFFF),
+            oam: OAMBlock::new(),
+            rom: SimpleMemoryBlock::new(ROM_SIZE, 0xFFFFFF),
+            sram: SimpleMemoryBlock::new(SRAM_SIZE, 0xFFFFFF),
             wait_cycles_u16,
             wait_cycles_u32,
             cpu_commands: Vec::new(),
@@ -192,7 +191,7 @@ impl GBAMemory {
             if read_bytes == 0 {
                 break;
             }
-            self.bios[index] = buffer.clone()[0];
+            self.bios.memory[index] = buffer.clone()[0];
             index += 1;
         }
         Ok(())
@@ -207,7 +206,7 @@ impl GBAMemory {
             if read_bytes == 0 {
                 break;
             }
-            self.rom[index] = buffer.clone()[0];
+            self.rom.memory[index] = buffer.clone()[0];
             index += 1;
         }
 
@@ -215,98 +214,54 @@ impl GBAMemory {
     }
 
     pub fn clear_ram(&mut self) {
-        self.exwram = vec![0; EXWRAM_SIZE];
-        self.iwram = vec![0; IWRAM_SIZE];
-        self.ioram = vec![0; IORAM_SIZE >> 1];
-        self.pallete_ram = vec![0; BGRAM_SIZE];
-        self.vram = vec![0; VRAM_SIZE];
-        self.oam = vec![0; OAM_SIZE];
-        self.sram = vec![0; SRAM_SIZE];
+        //self.exwram = vec![0; EXWRAM_SIZE];
+        //self.iwram = vec![0; IWRAM_SIZE];
+        //self.ioram = vec![0; IORAM_SIZE >> 1];
+        //self.pallete_ram = vec![0; BGRAM_SIZE];
+        //self.vram = vec![0; VRAM_SIZE];
+        //self.oam = vec![0; OAM_SIZE];
+        //self.sram = vec![0; SRAM_SIZE];
     }
 
-    const fn get_slice_alignment(size: usize) -> usize {
-        match size {
-            1 => !0x0,
-            2 => !0x1,
-            4 => !0x3,
+    fn get_memory_block_mut(&mut self, region: usize) -> Option<&mut dyn MemoryBlock> {
+        match region {
+            BIOS_REGION => None,
+            EXWRAM_REGION => Some(&mut self.exwram),
+            IWRAM_REGION => Some(&mut self.iwram),
+            BGRAM_REGION => Some(&mut self.pallete_ram),
+            VRAM_REGION => Some(&mut self.vram),
+            OAM_REGION => Some(&mut self.oam),
+            ROM0A_REGION..=ROM2B_REGION => None,
+            SRAM_REGION => Some(&mut self.sram),
+            _ => panic!("Invalid Region: {region}"),
+        }
+    }
+
+    fn get_memory_block(&self, region: usize) -> &dyn MemoryBlock {
+        match region {
+            BIOS_REGION => &self.bios,
+            EXWRAM_REGION => &self.exwram,
+            IWRAM_REGION => &self.iwram,
+            BGRAM_REGION => &self.pallete_ram,
+            VRAM_REGION => &self.vram,
+            OAM_REGION => &self.oam,
+            ROM0A_REGION..=ROM2B_REGION => &self.rom,
+            SRAM_REGION => &self.sram,
             _ => unreachable!(),
         }
-    }
-
-    #[inline]
-    fn get_memory_slice_mut<const SIZE: usize>(
-        &mut self,
-        region: usize,
-        address: usize,
-    ) -> Option<&mut [u8; SIZE]> {
-        let address = address & Self::get_slice_alignment(SIZE);
-
-        let (mirror_masked_address, slice): (usize, &mut Vec<u8>) = match region {
-            BIOS_REGION => return None,
-            EXWRAM_REGION => (address & EX_WRAM_MIRROR_MASK, self.exwram.as_mut()),
-            IWRAM_REGION => (address & IWRAM_MIRROR_MASK, self.iwram.as_mut()),
-            BGRAM_REGION => (address & BGRAM_MIRROR_MASK, self.pallete_ram.as_mut()),
-            VRAM_REGION => (address & 0xFFFFFF, self.vram.as_mut()),
-            OAM_REGION => (address & OAM_MIRROR_MASK, self.oam.as_mut()),
-            ROM0A_REGION..=ROM2B_REGION => return None,
-            SRAM_REGION => (address & SRAM_REGION, self.sram.as_mut()),
-            _ => return None,
-        };
-
-        if mirror_masked_address + SIZE > slice.len() {
-            return None;
-        }
-
-        Some(
-            slice[mirror_masked_address..][..SIZE]
-                .as_mut()
-                .try_into()
-                .unwrap(),
-        )
-    }
-
-    #[inline]
-    fn get_memory_slice<const SIZE: usize>(
-        &self,
-        region: usize,
-        address: usize,
-    ) -> Option<&[u8; SIZE]> {
-        let address = address & Self::get_slice_alignment(SIZE);
-
-        let (mirror_masked_address, slice): (usize, &Vec<u8>) = match region {
-            BIOS_REGION => (address, self.bios.as_ref()),
-            EXWRAM_REGION => (address & EX_WRAM_MIRROR_MASK, self.exwram.as_ref()),
-            IWRAM_REGION => (address & IWRAM_MIRROR_MASK, self.iwram.as_ref()),
-            BGRAM_REGION => (address & BGRAM_MIRROR_MASK, self.pallete_ram.as_ref()),
-            VRAM_REGION => (address & 0xFFFFFF, self.vram.as_ref()),
-            OAM_REGION => (address & OAM_MIRROR_MASK, self.oam.as_ref()),
-            ROM0A_REGION..=ROM2B_REGION => (address & 0xFFFFFF, self.rom.as_ref()),
-            SRAM_REGION => (address & SRAM_REGION, self.sram.as_ref()),
-            _ => return None,
-        };
-        if mirror_masked_address + SIZE > slice.len() {
-            return None;
-        }
-
-        Some(
-            slice[mirror_masked_address..][..SIZE]
-                .as_ref()
-                .try_into()
-                .unwrap(),
-        )
     }
 
     pub fn write(&mut self, address: usize, value: u8) -> CYCLES {
         let region = address >> 24;
 
         if region == IORAM_REGION {
-            self.io_writeu8(address, value);
+            let _ = self.io_writeu8(address, value);
+        } else {
+            if let Some(memory_block) = self.get_memory_block_mut(region) {
+                memory_block.writeu8(address, value);
+            }
         }
-        if let Some(memory_reference) =
-            self.get_memory_slice_mut::<{ std::mem::size_of::<u8>() }>(region, address)
-        {
-            memory_reference[0] = value;
-        }
+
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
         }
@@ -318,11 +273,10 @@ impl GBAMemory {
         let region = address >> 24;
         if region == IORAM_REGION {
             self.io_writeu16(address, value);
-        }
-        if let Some(memory_reference) =
-            self.get_memory_slice_mut::<{ std::mem::size_of::<u16>() }>(region, address)
-        {
-            memory_reference.copy_from_slice(&value.to_le_bytes());
+        } else {
+            if let Some(memory_block) = self.get_memory_block_mut(region) {
+                memory_block.writeu16(address, value);
+            }
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -334,12 +288,11 @@ impl GBAMemory {
     pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         let region = address >> 24;
         if region == IORAM_REGION {
-            self.io_writeu32(address, value);
-        }
-        if let Some(memory_reference) =
-            self.get_memory_slice_mut::<{ std::mem::size_of::<u32>() }>(region, address)
-        {
-            memory_reference.copy_from_slice(&value.to_le_bytes());
+            let _ = self.io_writeu32(address, value);
+        } else {
+            if let Some(memory_block) = self.get_memory_block_mut(region) {
+                memory_block.writeu32(address, value);
+            }
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -353,8 +306,7 @@ impl GBAMemory {
         let read = if region == IORAM_REGION {
             self.io_readu8(address).unwrap()
         } else {
-            self.get_memory_slice::<{ std::mem::size_of::<u8>() }>(region, address)
-                .map_or(0, |slice| slice[0])
+            self.get_memory_block(region).readu8(address)
         };
 
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
@@ -372,8 +324,7 @@ impl GBAMemory {
         if region == IORAM_REGION {
             self.io_readu8(address).unwrap()
         } else {
-            self.get_memory_slice::<{ std::mem::size_of::<u8>() }>(region, address)
-                .map_or(0, |slice| slice[0])
+            self.get_memory_block(region).readu8(address)
         }
     }
 
@@ -382,8 +333,7 @@ impl GBAMemory {
         let read = if region == IORAM_REGION {
             self.io_readu16(address).unwrap()
         } else {
-            self.get_memory_slice::<{ std::mem::size_of::<u16>() }>(region, address)
-                .map_or(0, |slice| u16::from_le_bytes(*slice))
+            self.get_memory_block(region).readu16(address)
         };
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -399,8 +349,7 @@ impl GBAMemory {
         let data = if region == IORAM_REGION {
             self.io_readu32(address).unwrap()
         } else {
-            self.get_memory_slice::<{ std::mem::size_of::<u32>() }>(region, address)
-                .map_or(0, |slice| u32::from_le_bytes(*slice))
+            self.get_memory_block(region).readu32(address)
         };
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -414,7 +363,7 @@ impl GBAMemory {
     pub fn get_oam_borders(&self) -> Vec<Border> {
         let mut borders = Vec::new();
         for i in 0..NUM_OAM_ENTRIES {
-            let oam = Oam::oam_read(self, i);
+            let oam = self.oam.oam_read(i);
             if oam.x() < HDRAW && oam.y() < VDRAW && !oam.obj_disabled() {
                 borders.push(Border {
                     x: oam.x(),
@@ -452,10 +401,10 @@ mod memory2_tests {
         let read = memory.read(address + 2).data;
         assert_eq!(read, 0x34);
 
-        assert_eq!(memory.exwram[0x4], 0x78);
-        assert_eq!(memory.exwram[0x5], 0x56);
-        assert_eq!(memory.exwram[0x6], 0x34);
-        assert_eq!(memory.exwram[0x7], 0x12);
+        assert_eq!(memory.exwram.memory[0x4], 0x78);
+        assert_eq!(memory.exwram.memory[0x5], 0x56);
+        assert_eq!(memory.exwram.memory[0x6], 0x34);
+        assert_eq!(memory.exwram.memory[0x7], 0x12);
     }
 
     #[test]
@@ -475,10 +424,10 @@ mod memory2_tests {
         let read = memory.read(address + 1).data;
         assert_eq!(read, 0x12);
 
-        assert_eq!(memory.exwram[0x4], 0x34);
-        assert_eq!(memory.exwram[0x5], 0x12);
-        assert_eq!(memory.exwram[0x6], 0x00);
-        assert_eq!(memory.exwram[0x7], 0x00);
+        assert_eq!(memory.exwram.memory[0x4], 0x34);
+        assert_eq!(memory.exwram.memory[0x5], 0x12);
+        assert_eq!(memory.exwram.memory[0x6], 0x00);
+        assert_eq!(memory.exwram.memory[0x7], 0x00);
     }
 
     #[test]
@@ -501,10 +450,36 @@ mod memory2_tests {
         let read = memory.read(address + 1).data;
         assert_eq!(read, 0x34);
 
-        assert_eq!(memory.exwram[0x4], 0x12);
-        assert_eq!(memory.exwram[0x5], 0x34);
-        assert_eq!(memory.exwram[0x6], 0x56);
-        assert_eq!(memory.exwram[0x7], 0x78);
+        assert_eq!(memory.exwram.memory[0x4], 0x12);
+        assert_eq!(memory.exwram.memory[0x5], 0x34);
+        assert_eq!(memory.exwram.memory[0x6], 0x56);
+        assert_eq!(memory.exwram.memory[0x7], 0x78);
+    }
+
+    #[test]
+    fn can_writeu8_to_vram() {
+        let mut memory = GBAMemory::new();
+        let address = 0x6000004;
+        memory.write(address, 0x12);
+        memory.write(address + 1, 0x34);
+        memory.write(address + 2, 0x56);
+        memory.write(address + 3, 0x78);
+
+        let readu32 = memory.readu32(address).data;
+        assert_eq!(readu32, 0x78563412);
+
+        let readu16 = memory.readu16(address).data;
+        assert_eq!(readu16, 0x3412);
+
+        let read = memory.read(address).data;
+        assert_eq!(read, 0x12);
+        let read = memory.read(address + 1).data;
+        assert_eq!(read, 0x34);
+
+        assert_eq!(memory.vram.memory[0x4], 0x12);
+        assert_eq!(memory.vram.memory[0x5], 0x34);
+        assert_eq!(memory.vram.memory[0x6], 0x56);
+        assert_eq!(memory.vram.memory[0x7], 0x78);
     }
 }
 

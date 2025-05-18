@@ -8,7 +8,7 @@ use crate::{
         pallete::{rgb555_to_rgb24, OBJPaletteData},
         ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
         wrappers::{
-            oam::{OBJMode, Oam}, rotation_and_scaling::AffineParameters, tile::Tile
+            oam::{OBJMode, Oam}, tile::Tile
         },
     },
     memory::{io_handlers::DISPCNT, memory::GBAMemory, wrappers::dispcnt::Dispcnt},
@@ -79,7 +79,7 @@ impl PPU {
     fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
         let mut highest_prio_obj: Option<OBJPixel> = None;
         for obj in &self.current_line_objects {
-            let oam = Oam::oam_read(memory, *obj);
+            let oam = memory.oam.oam_read(*obj);
             let normalized_x = self.x - oam.x();
             let normalized_y = self.y - oam.y();
             let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
@@ -91,7 +91,7 @@ impl PPU {
                 let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(&oam, transform_x, transform_y);
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
-                let pallete_region = &memory.pallete_ram[0x200..][..0x200].try_into().unwrap();
+                let pallete_region = &memory.pallete_ram.memory[0x200..][..0x200].try_into().unwrap();
                 let pallete = OBJPaletteData(pallete_region);
                 if let Some(pixel) =
                     pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
@@ -123,11 +123,12 @@ impl PPU {
     }
 
     fn transform_coordinates(&self, memory: &GBAMemory, oam: &Oam, x: i32, y: i32) -> (i32, i32) {
-        let Some(affine_parameters) = AffineParameters::create_parameters(memory, oam) else {
-            return (x, y)
+        if let Some(affine_group) = oam.rotation_scaling_parameter() {
+            let affine_parameters = memory.oam.get_affine_paramters(affine_group);
+            return affine_parameters.transform_coordinates(x, y, oam)
         };
 
-        affine_parameters.transform_coordinates(x, y, oam)
+        (x, y)
 
     }
 }

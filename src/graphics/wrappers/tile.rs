@@ -32,14 +32,14 @@ impl<'a> Tile<'a> {
     fn get_tile_single_obj(memory: &'a GBAMemory, oam: &Oam, tile_num: usize) -> Self {
         if oam.color_pallete() == 0 {
             Self::FourBit {
-                tile: memory.vram[0x10000 + tile_num * 32..][..32]
+                tile: memory.vram.memory[0x10000 + tile_num * 32..][..32]
                     .try_into()
                     .unwrap(),
                 pallete_num: oam.pallete_number(),
             }
         } else {
             Self::EightBit {
-                tile: memory.vram[0x10000 + tile_num * 32..][..64]
+                tile: memory.vram.memory[0x10000 + tile_num * 32..][..64]
                     .try_into()
                     .unwrap(),
             }
@@ -59,7 +59,7 @@ impl<'a> Tile<'a> {
         let map_address = bgcnt.map_data_base() * MAP_SIZE_BYTES;
         let relative_map_address = map_address + y * BYTES_PER_MAP_ROW + x * BYTES_PER_ENTRY;
         let text_bg_screen_entry =
-            u16::from_le_bytes(memory.vram[relative_map_address..][..2].try_into().unwrap());
+            u16::from_le_bytes(memory.vram.memory[relative_map_address..][..2].try_into().unwrap());
         let text_bg_screen_entry = BGEntry(&text_bg_screen_entry);
 
         let tile_num = text_bg_screen_entry.tile_number();
@@ -67,14 +67,14 @@ impl<'a> Tile<'a> {
 
         if bgcnt.color_pallete() == 0 {
             Self::FourBit {
-                tile: memory.vram[tile_data_start + tile_num * 32..][..32]
+                tile: memory.vram.memory[tile_data_start + tile_num * 32..][..32]
                     .try_into()
                     .unwrap(),
                 pallete_num: text_bg_screen_entry.pallete_num(),
             }
         } else {
             Self::EightBit {
-                tile: memory.vram[tile_data_start + tile_num * 32..][..64]
+                tile: memory.vram.memory[tile_data_start + tile_num * 32..][..64]
                     .try_into()
                     .unwrap(),
             }

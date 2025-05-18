@@ -1,13 +1,12 @@
 use std::panic;
 use std::sync::mpsc::sync_channel;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 
 use debugger::debugger::start_debugger;
 use getopts::Options;
 use graphics::display::{start_display, DisplayBuffer};
 use std::env;
-use utils::utils::KillSignal;
 mod arm7tdmi;
 mod debugger;
 mod gba;
@@ -16,8 +15,6 @@ mod io;
 mod memory;
 mod types;
 mod utils;
-
-pub static KILL_SIGNAL: KillSignal = KillSignal::new();
 
 fn main() -> Result<(), std::io::Error> {
     let args: Vec<String> = env::args().collect();

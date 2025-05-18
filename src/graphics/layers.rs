@@ -152,7 +152,7 @@ impl Layers {
         let pixel_x = x % 8;
         let pixel_y = y % 8;
 
-        let pallete_region = &memory.pallete_ram[0x00..][..0x200].try_into().unwrap();
+        let pallete_region = &memory.pallete_ram.memory[0x00..][..0x200].try_into().unwrap();
         let pallete = BGPalleteData(pallete_region);
 
         let tile = match dispcnt.get_bg_mode() {

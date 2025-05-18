@@ -42,7 +42,7 @@ impl PPU {
     fn obj_selection(&mut self, memory: &mut GBAMemory) {
         self.current_line_objects.clear();
         for i in 0..NUM_OAM_ENTRIES {
-            let oam = Oam::oam_read(memory, i);
+            let oam = memory.oam.oam_read(i);
             if (oam.y() < self.y
                 && self.y < oam.y() + oam.view_height())
                 && !oam.obj_disabled()

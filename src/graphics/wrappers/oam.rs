@@ -183,12 +183,6 @@ impl<'a> Oam<'a> {
         ((self.0[2] >> 12) & 0xF).into()
     }
 
-    pub fn oam_read(memory: &GBAMemory, oam_num: usize) -> Oam<'_> {
-        let oam_slice: &[u8; 6] = memory.oam[oam_num * 0x08..][..6].try_into().unwrap();
-        let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
-
-        return Oam(oam_slice);
-    }
 }
 
 #[cfg(test)]
