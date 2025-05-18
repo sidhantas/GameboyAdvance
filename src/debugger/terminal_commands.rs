@@ -3,8 +3,7 @@ use super::{
     debugger::Debugger,
 };
 use crate::{
-    graphics::{display::Border, wrappers::oam::Oam},
-    utils::utils::{try_parse_num, try_parse_reg, ParsingError},
+    graphics::display::Border, memory::oam::Oam, utils::utils::{try_parse_num, try_parse_reg, ParsingError}
 };
 use std::{fmt::Display, mem};
 
@@ -411,8 +410,8 @@ fn dissassemble_oam(
         try_parse_num(args[4])?,
         try_parse_num(args[5])?,
     ];
-    let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
-    let oam = Oam(oam_slice);
+    let oam_slice: [u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
+    let oam = Oam::new(oam_slice);
     Ok(format!(
         "Attributes:\n\
         y: {},\n\

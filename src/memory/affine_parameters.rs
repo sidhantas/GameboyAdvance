@@ -1,6 +1,6 @@
-use crate::{graphics::wrappers::oam::Oam, utils::bits::fixed88_point_to_floating_point};
+use crate::utils::bits::fixed88_point_to_floating_point;
 
-use super::memory_block::SimpleMemoryBlock;
+use super::{memory_block::SimpleMemoryBlock, oam::Oam};
 
 pub const NUM_OAM_AFFINE_PARAMETERS: usize = 32;
 #[derive(Clone)]

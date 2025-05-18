@@ -65,7 +65,7 @@ pub fn start_display(
     canvas.present();
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
-        while let Ok(command) = ppu_to_display_recv.try_recv() {
+        if let Ok(command) = ppu_to_display_recv.try_recv() {
             match command {
                 PPUToDisplayCommands::Render => {
                     render_frame(&pixel_buffer, &mut canvas, &mut texture);
@@ -74,6 +74,10 @@ pub fn start_display(
                     draw_object_borders(&pixel_buffer, borders);
                     render_frame(&pixel_buffer, &mut canvas, &mut texture);
                 }
+            }
+
+            while let Ok(_) = ppu_to_display_recv.try_recv() {
+
             }
         }
         if let ControlFlow::Break(_) = handle_events(&mut event_pump) {

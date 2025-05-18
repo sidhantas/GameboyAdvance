@@ -1,12 +1,10 @@
 use crate::memory::{
-    memory::GBAMemory,
-    wrappers::{
+    memory::GBAMemory, oam::Oam, wrappers::{
         bgcnt::{BGCnt, MAP_SIZE_BYTES, TILE_DATA_SIZE_BYTES},
         dispcnt::Dispcnt,
-    },
+    }
 };
 
-use super::oam::Oam;
 
 pub enum Tile<'a> {
     FourBit {

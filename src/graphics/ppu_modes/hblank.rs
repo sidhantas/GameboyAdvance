@@ -3,8 +3,8 @@ pub(crate) use std::sync::{atomic::Ordering, Arc};
 use crate::debugger::terminal_commands::PPUToDisplayCommands::{Render, RenderWithBorders};
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::{PPUModes, HBLANK, HBLANK_FLAG, HDRAW, PPU, VBLANK_FLAG, VDRAW};
-use crate::graphics::wrappers::oam::{Oam, NUM_OAM_ENTRIES};
 use crate::memory::memory::GBAMemory;
+use crate::memory::oam::NUM_OAM_ENTRIES;
 
 impl PPU {
     pub(crate) fn hblank(
@@ -12,7 +12,6 @@ impl PPU {
         mut dots: u32,
         memory: &mut GBAMemory,
         disp_stat: &mut u16,
-        display_buffer: &Arc<DisplayBuffer>,
     ) -> u32 {
         while dots > 0 {
             if self.x >= HDRAW + HBLANK {
@@ -22,9 +21,9 @@ impl PPU {
                     *disp_stat &= !HBLANK_FLAG;
                     *disp_stat |= VBLANK_FLAG;
                     if self.show_borders {
-                        self.ppu_to_display_sender.send(RenderWithBorders(memory.get_oam_borders())).unwrap()
+                        self.ppu_to_display_sender.try_send(RenderWithBorders(memory.get_oam_borders())).unwrap()
                     } else {
-                        self.ppu_to_display_sender.send(Render).unwrap();
+                        self.ppu_to_display_sender.try_send(Render).unwrap();
                     }
                     self.current_mode = PPUModes::VBLANK;
                 } else {
@@ -47,7 +46,7 @@ impl PPU {
                 && self.y < oam.y() + oam.view_height())
                 && !oam.obj_disabled()
             {
-                self.current_line_objects.push(i);
+                self.current_line_objects.push(oam);
             }
         }
     }

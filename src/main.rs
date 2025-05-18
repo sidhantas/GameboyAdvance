@@ -36,7 +36,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let pixel_buffer = Arc::new(DisplayBuffer::new());
     let gba_pixel_buff = pixel_buffer.clone();
-    let (ppu_to_display_send, ppu_to_display_recv) = sync_channel(1);
+    let (ppu_to_display_send, ppu_to_display_recv) = sync_channel(10);
     thread::scope(move |scope| {
         scope.spawn(move || start_debugger(bios, rom, gba_pixel_buff, ppu_to_display_send));
         start_display(pixel_buffer.clone(), ppu_to_display_recv);

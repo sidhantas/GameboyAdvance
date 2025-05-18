@@ -1,6 +1,6 @@
 use std::mem::size_of;
 
-use crate::graphics::wrappers::oam::Oam;
+use crate::memory::oam::Oam;
 
 use super::{
     affine_parameters::{AffineParameters, NUM_OAM_AFFINE_PARAMETERS},
@@ -36,17 +36,19 @@ impl OAMBlock {
         &self.affine_parameters[group]
     }
 
-    pub fn oam_read(&self, oam_num: usize) -> Oam<'_> {
-        let oam_slice: &[u8; 6] = self.memory.memory[oam_num * 0x08..][..6].try_into().unwrap();
-        let oam_slice: &[u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
+    pub fn oam_read(&self, oam_num: usize) -> Oam {
+        let oam_slice: &[u8; 6] = self.memory.memory[oam_num * 0x08..][..6]
+            .try_into()
+            .unwrap();
+        let oam_slice: [u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
 
-        return Oam(oam_slice);
+        return Oam::new(oam_slice);
     }
 
     fn on_write_updates<const SIZE: usize>(&mut self, address: usize) {
         for i in 0..SIZE {
             // Check if affine parameters changed
-            if (address + i) & 0x6 == 0x6  {
+            if (address + i) & 0x6 == 0x6 {
                 let group = (address >> 5) & 0x1F;
                 self.update_affine_paramters(group);
             }
@@ -57,17 +59,17 @@ impl OAMBlock {
 impl MemoryBlock for OAMBlock {
     fn writeu8(&mut self, address: usize, value: u8) {
         self.memory.writeu8(address, value);
-        self.on_write_updates::<{size_of::<u8>()}>(address);
+        self.on_write_updates::<{ size_of::<u8>() }>(address);
     }
 
     fn writeu16(&mut self, address: usize, value: u16) {
         self.memory.writeu16(address, value);
-        self.on_write_updates::<{size_of::<u16>()}>(address);
+        self.on_write_updates::<{ size_of::<u16>() }>(address);
     }
 
     fn writeu32(&mut self, address: usize, value: u32) {
         self.memory.writeu32(address, value);
-        self.on_write_updates::<{size_of::<u32>()}>(address);
+        self.on_write_updates::<{ size_of::<u32>() }>(address);
     }
 
     fn readu8(&self, address: usize) -> u8 {

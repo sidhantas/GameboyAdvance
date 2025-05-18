@@ -1,6 +1,6 @@
 use crate::utils::bits::Bits;
 
-use super::memory::{CPUCallbacks, GBAMemory, MemoryError};
+use super::{memory::{CPUCallbacks, GBAMemory, MemoryError}, memory_block::SimpleMemoryBlock};
 
 pub const IO_BASE: usize = 0x4000000;
 pub const DISPCNT: usize = 0x000;

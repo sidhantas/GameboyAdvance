@@ -1,6 +1,7 @@
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::memory::io_handlers::{DISPSTAT, VCOUNT};
 use crate::memory::memory::GBAMemory;
+use crate::memory::oam::Oam;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
@@ -32,7 +33,7 @@ pub struct PPU {
     pub(super) current_mode: PPUModes,
     pub x: i32,
     pub y: i32,
-    pub(super) current_line_objects: Vec<usize>,
+    pub(super) current_line_objects: Vec<Oam>,
     pub show_borders: bool,
     pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
 }
@@ -79,7 +80,7 @@ impl PPU {
                 self.hdraw(self.available_dots, memory, &mut dispstat, display_buffer)
             }
             PPUModes::HBLANK => {
-                self.hblank(self.available_dots, memory, &mut dispstat, display_buffer)
+                self.hblank(self.available_dots, memory, &mut dispstat)
             }
             PPUModes::VBLANK => self.vblank(self.available_dots, &mut dispstat),
         };

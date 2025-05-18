@@ -6,12 +6,9 @@ use crate::{
         display::DisplayBuffer,
         layers::{Layers, OBJPixel},
         pallete::{rgb555_to_rgb24, OBJPaletteData},
-        ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
-        wrappers::{
-            oam::{OBJMode, Oam}, tile::Tile
-        },
+        ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU}, wrappers::tile::Tile,
     },
-    memory::{io_handlers::DISPCNT, memory::GBAMemory, wrappers::dispcnt::Dispcnt},
+    memory::{io_handlers::DISPCNT, memory::GBAMemory, oam::{OBJMode, Oam}, wrappers::dispcnt::Dispcnt},
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -78,8 +75,7 @@ impl PPU {
 
     fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
         let mut highest_prio_obj: Option<OBJPixel> = None;
-        for obj in &self.current_line_objects {
-            let oam = memory.oam.oam_read(*obj);
+        for oam in &self.current_line_objects {
             let normalized_x = self.x - oam.x();
             let normalized_y = self.y - oam.y();
             let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
@@ -114,7 +110,7 @@ impl PPU {
         return highest_prio_obj;
     }
 
-    fn get_tile_coordinates(&self, oam: &Oam<'_>, x: i32, y: i32) -> (i32, i32, i32, i32) {
+    fn get_tile_coordinates(&self, oam: &Oam, x: i32, y: i32) -> (i32, i32, i32, i32) {
         let tile_x = x / 8;
         let tile_y = y / 8;
         let pixel_x = x % 8;

@@ -5,3 +5,4 @@ pub mod wrappers;
 pub mod memory_block;
 pub mod oam_memory;
 pub mod affine_parameters;
+pub mod oam;

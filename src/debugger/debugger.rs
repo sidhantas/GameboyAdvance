@@ -13,8 +13,7 @@ use std::{
     cell::RefCell,
     io::{self, Stdout},
     rc::Rc,
-    sync::{mpsc::SyncSender, Arc, Mutex},
-    thread,
+    sync::{mpsc::SyncSender, Arc},
     time::Duration,
 };
 use tui::{
@@ -97,10 +96,6 @@ pub fn start_debugger(
     terminal.clear()?;
 
     let debugger = &mut Debugger::new(bios, rom, pixel_buffer, ppu_to_display_sender);
-
-    for _ in 0..3000000 {
-        debugger.gba.step();
-    }
 
     while !debugger.end_debugger {
         if KILL_SIGNAL.killed() {

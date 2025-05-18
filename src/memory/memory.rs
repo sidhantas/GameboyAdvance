@@ -3,9 +3,6 @@ use crate::{
     graphics::{
         display::Border,
         ppu::{HDRAW, VDRAW},
-        wrappers::{
-            oam::{Oam, NUM_OAM_ENTRIES},
-        },
     },
     io::timers::Timers,
     types::{BYTE, CYCLES, HWORD, WORD},
@@ -21,8 +18,7 @@ use std::{
 };
 
 use super::{
-    io_handlers::KEYINPUT,
-    memory_block::{MemoryBlock, SimpleMemoryBlock}, oam_memory::OAMBlock,
+    io_handlers::KEYINPUT, memory_block::{MemoryBlock, SimpleMemoryBlock}, oam::NUM_OAM_ENTRIES, oam_memory::OAMBlock
 };
 
 pub struct MemoryFetch<T> {
