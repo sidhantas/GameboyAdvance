@@ -3,7 +3,7 @@ use crate::memory::memory::GBAMemory;
 use crate::utils::bits::Bits;
 
 #[derive(Debug)]
-pub struct Timers(pub [Timer; 4]);
+pub struct Timers([Timer; 4]);
 
 impl Timers {
     pub(crate) fn new() -> Self {

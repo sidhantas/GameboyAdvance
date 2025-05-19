@@ -6,6 +6,7 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
 use super::display::DisplayBuffer;
+use super::ppu_modes::hblank::OAMQueue;
 
 pub const HDRAW: i32 = 240;
 pub const HBLANK: i32 = 68;
@@ -33,7 +34,7 @@ pub struct PPU {
     pub(super) current_mode: PPUModes,
     pub x: i32,
     pub y: i32,
-    pub(super) current_line_objects: Vec<Oam>,
+    pub(super) current_line_objects: OAMQueue,
     pub show_borders: bool,
     pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
 }
@@ -46,7 +47,7 @@ impl PPU {
             current_mode: PPUModes::HDRAW,
             x: 0,
             y: 0,
-            current_line_objects: Vec::new(),
+            current_line_objects: OAMQueue::new(),
             show_borders: false,
             ppu_to_display_sender,
         }
@@ -58,7 +59,7 @@ impl PPU {
         self.current_mode = PPUModes::HDRAW;
         self.x = 0;
         self.y = 0;
-        self.current_line_objects = Vec::new();
+        self.current_line_objects = OAMQueue::new();
     }
     pub fn advance_ppu(
         &mut self,
@@ -99,7 +100,7 @@ mod tests {
     use crate::{
         gba::GBA,
         graphics::ppu::{HBLANK, HDRAW, VDRAW},
-        memory::io_handlers::{DISPSTAT, IO_BASE},
+        memory::io_handlers::{DISPSTAT},
     };
 
     use super::VBLANK_ENABLE;

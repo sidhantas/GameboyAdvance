@@ -53,6 +53,7 @@ impl PPU {
                 self.current_mode = PPUModes::HBLANK;
                 return dots;
             }
+            self.current_line_objects.update_active_oams();
             let obj_pixel = self.get_obj_pixel(memory);
 
             let enabled_layers = Layers::get_enabled_layers(
@@ -75,7 +76,8 @@ impl PPU {
 
     fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
         let mut highest_prio_obj: Option<OBJPixel> = None;
-        for oam in &self.current_line_objects {
+        for oam_num in self.current_line_objects.current_x_objects().iter() {
+            let oam = self.current_line_objects.get_oam(*oam_num);
             let normalized_x = self.x - oam.x();
             let normalized_y = self.y - oam.y();
             let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
@@ -84,7 +86,7 @@ impl PPU {
                 && 0 < transform_y
                 && transform_y <= oam.height()
             {
-                let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(&oam, transform_x, transform_y);
+                let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(transform_x, transform_y);
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
                 let pallete_region = &memory.pallete_ram.memory[0x200..][..0x200].try_into().unwrap();
@@ -110,7 +112,7 @@ impl PPU {
         return highest_prio_obj;
     }
 
-    fn get_tile_coordinates(&self, oam: &Oam, x: i32, y: i32) -> (i32, i32, i32, i32) {
+    fn get_tile_coordinates(&self, x: i32, y: i32) -> (i32, i32, i32, i32) {
         let tile_x = x / 8;
         let tile_y = y / 8;
         let pixel_x = x % 8;
