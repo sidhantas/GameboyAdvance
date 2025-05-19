@@ -1,6 +1,11 @@
-use crate::utils::bits::Bits;
+use crate::{io::timers::Timers, utils::bits::Bits};
 
-use super::{memory::{CPUCallbacks, GBAMemory, MemoryError}, memory_block::SimpleMemoryBlock};
+use super::{
+    memory::{CPUCallbacks, GBAMemory, MemoryError},
+    memory_block::{MemoryBlock, SimpleMemoryBlock},
+};
+
+const IORAM_SIZE: usize = 0x3FF;
 
 pub const IO_BASE: usize = 0x4000000;
 pub const DISPCNT: usize = 0x000;
@@ -85,7 +90,7 @@ const HALTCNT: usize = 0x301;
 struct IORegisterDefinition {
     pub mask: BitMask,
     needs_special_handling: bool,
-    pub callback: Option<fn(&mut GBAMemory, u16, u16) -> ()>,
+    pub callback: Option<fn(&mut IOBlock, u16, u16) -> ()>,
 }
 
 #[derive(Clone, Copy)]
@@ -105,7 +110,7 @@ impl IORegisterDefinition {
         }
     }
 
-    pub const fn with_callback(mut self, callback: fn(&mut GBAMemory, u16, u16) -> ()) -> Self {
+    pub const fn with_callback(mut self, callback: fn(&mut IOBlock, u16, u16) -> ()) -> Self {
         self.callback = Some(callback);
         self
     }
@@ -125,7 +130,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[DISPSTAT] = Some(
         IORegisterDefinition::new(BitMask::SIXTEEN(0xFF3F, 0xFF38), false)
-            .with_callback(GBAMemory::dispstat_callback),
+            .with_callback(IOBlock::dispstat_callback),
     );
     definitions[VCOUNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x0000),
@@ -393,7 +398,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[IME] = Some(
         IORegisterDefinition::new(BitMask::SIXTEEN(0x0001, 0x0001), false)
-            .with_callback(GBAMemory::check_interrupts),
+            .with_callback(IOBlock::check_interrupts),
     );
     definitions[IE] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x3FFF, 0x3FFF),
@@ -401,7 +406,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[IF] = Some(
         IORegisterDefinition::new(BitMask::SIXTEEN(0x3FFF, 0x3FFF), true)
-            .with_callback(GBAMemory::check_interrupts),
+            .with_callback(IOBlock::check_interrupts),
     );
     definitions[WAITCNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0xDFFF, 0xDFFF),
@@ -409,7 +414,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[POSTFLG] = Some(IORegisterDefinition::new(BitMask::EIGHT(0x01, 0x01), false));
     definitions[HALTCNT] = Some(
-        IORegisterDefinition::new(BitMask::EIGHT(0x80, 0x80), false).with_callback(GBAMemory::halt),
+        IORegisterDefinition::new(BitMask::EIGHT(0x80, 0x80), false).with_callback(IOBlock::halt),
     );
     definitions[0x110] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x0000, 0x0000),
@@ -519,10 +524,24 @@ fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError>
     return Err(MemoryError::NoIODefinition(offset));
 }
 
-impl GBAMemory {
+pub struct IOBlock {
+    memory: Vec<u16>,
+    timers: Option<Timers>,
+    pub cpu_commands: Vec<CPUCallbacks>,
+}
+
+impl IOBlock {
+    pub fn new() -> Self {
+        Self {
+            memory: vec![0; IORAM_SIZE >> 1],
+            timers: Some(Timers::new()),
+            cpu_commands: Vec::new(),
+        }
+    }
+
     pub fn ppu_io_write(&mut self, address: usize, value: u16) {
-        let old_value = self.ioram[(address & 0xFFF) >> 1];
-        self.ioram[(address & 0xFFF) >> 1] = value;
+        let old_value = self.memory[(address & 0xFFF) >> 1];
+        self.memory[(address & 0xFFF) >> 1] = value;
         let Ok(def) = get_io_definition(address & 0xFFF) else {
             return;
         };
@@ -531,68 +550,9 @@ impl GBAMemory {
             callback(self, old_value, value);
         }
     }
-    pub(super) fn io_readu8(&self, address: usize) -> Result<u8, MemoryError> {
-        let load_value = self.masked_io_load(address & 0xFFE)?;
-        Ok((load_value >> (8 * (address & 0b1))) as u8)
-    }
-
-    pub(super) fn io_readu16(&self, address: usize) -> Result<u16, MemoryError> {
-        Ok(self.masked_io_load(address & 0xFFE)?)
-    }
-
-    pub(super) fn io_readu32(&self, address: usize) -> Result<u32, MemoryError> {
-        let word_aligned_offset = address & 0xFFC;
-        let lower = self.masked_io_load(word_aligned_offset).unwrap_or(0) as u32;
-        let upper = self.masked_io_load(word_aligned_offset + 2).unwrap_or(0) as u32;
-
-        Ok(upper << 16 | lower)
-    }
-
-    pub(super) fn io_writeu8(&mut self, address: usize, value: u8) -> Result<(), MemoryError> {
-        let mut current_value = self.io_load(address & 0xFFE);
-        current_value &= 0xFF << (8 * !(address & 0b1));
-        current_value |= (value as u16) << (8 * (address & 0b1));
-        self.masked_io_store(address & 0xFFF, current_value)
-    }
-
-    pub(super) fn io_writeu16(&mut self, address: usize, value: u16) -> Result<(), MemoryError> {
-        self.masked_io_store(address & 0xFFE, value)
-    }
-
-    pub(super) fn io_writeu32(&mut self, address: usize, value: u32) -> Result<(), MemoryError> {
-        let offset = address & 0xFFC;
-        let Ok(io_definition) = get_io_definition(offset) else {
-            return Ok(());
-        };
-
-        match io_definition.mask {
-            BitMask::THIRTYTWO(_, mask) => {
-                if io_definition.requires_special_handling() {
-                    todo!();
-                }
-                let store_value = mask & value;
-                self.io_store(offset, (store_value >> 16) as u16);
-                self.io_store(offset, (store_value & 0xFFFF) as u16);
-            }
-            _ => {
-                self.io_writeu16(offset + 2, (value >> 16) as u16)?;
-                self.io_writeu16(offset, (value & 0xFFFF) as u16)?;
-
-                return Ok(());
-            }
-        };
-
-        Ok(())
-    }
-
-    #[inline(always)]
-    pub fn io_load(&self, address: usize) -> u16 {
-        *self.ioram.get(address >> 1).unwrap_or(&0)
-    }
-
-    fn masked_io_load(&self, address: usize) -> Result<u16, MemoryError> {
+    fn masked_io_load(&self, address: usize) -> u16 {
         let Ok(def) = get_io_definition(address) else {
-            return Ok(0);
+            return 0;
         };
         if def.requires_special_handling() {
             match address {
@@ -600,14 +560,14 @@ impl GBAMemory {
                 KEYINPUT => {}
                 TM0CNT_L | TM1CNT_L | TM2CNT_L | TM3CNT_L => {
                     let timer = (address & 0xF) / 4;
-                    return Ok(self.timers.as_ref().unwrap().read_timer(timer) as u16);
+                    return self.timers.as_ref().unwrap().read_timer(timer) as u16;
                 }
                 TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {}
                 _ => todo!(),
             }
         }
         let data = self.io_load(address);
-        Ok(match def.mask {
+        match def.mask {
             BitMask::EIGHT(lower_mask, _) => {
                 let upper_mask = get_io_definition(address + 1).map_or(0, |def| {
                     let BitMask::EIGHT(mask, _) = def.mask else {
@@ -624,28 +584,25 @@ impl GBAMemory {
                 let shifted_mask = (mask >> (8 * address & 0b10)) as u16;
                 data & shifted_mask
             }
-        })
-    }
-
-    #[inline(always)]
-    pub(super) fn io_store(&mut self, address: usize, value: u16) {
-        let store_address = address >> 1;
-        if store_address < self.ioram.len() {
-            self.ioram[store_address] = value;
         }
     }
 
-    fn masked_io_store(&mut self, address: usize, value: u16) -> Result<(), MemoryError> {
+    #[inline(always)]
+    pub fn io_load(&self, address: usize) -> u16 {
+        *self.memory.get(address >> 1).unwrap_or(&0)
+    }
+
+    fn masked_io_store(&mut self, address: usize, value: u16) {
         let mut value = value;
         let Ok(def) = get_io_definition(address) else {
-            return Ok(());
+            return;
         };
         if def.requires_special_handling() {
             match address {
                 IF => {
                     value = self.io_load(address) & !value;
                 }
-                KEYINPUT => return Ok(()),
+                KEYINPUT => return,
                 TM0CNT_L | TM1CNT_L | TM2CNT_L | TM3CNT_L => {}
                 TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {
                     let old_value = self.io_load(address);
@@ -659,7 +616,7 @@ impl GBAMemory {
                         }
                     }
                 }
-                _ => return Err(MemoryError::NoIODefinition(address)),
+                _ => return,
             }
         }
         let store_value = match def.mask {
@@ -685,8 +642,14 @@ impl GBAMemory {
         if let Some(callback) = def.callback {
             callback(self, old_value, store_value);
         }
+    }
 
-        Ok(())
+    #[inline(always)]
+    pub(super) fn io_store(&mut self, address: usize, value: u16) {
+        let store_address = address >> 1;
+        if store_address < self.memory.len() {
+            self.memory[store_address] = value;
+        }
     }
 
     pub(super) fn halt(&mut self, _old_value: u16, value: u16) {
@@ -718,6 +681,60 @@ impl GBAMemory {
         current_if |= available_interrupts;
         self.io_store(IF, current_if);
         self.check_interrupts(old_value, value);
+    }
+}
+
+impl MemoryBlock for IOBlock {
+    fn writeu8(&mut self, address: usize, value: u8) {
+        let mut current_value = self.io_load(address & 0xFFE);
+        current_value &= 0xFF << (8 * !(address & 0b1));
+        current_value |= (value as u16) << (8 * (address & 0b1));
+        self.masked_io_store(address & 0xFFF, current_value);
+    }
+
+    fn writeu16(&mut self, address: usize, value: u16) {
+        self.masked_io_store(address & 0xFFE, value);
+    }
+
+    fn writeu32(&mut self, address: usize, value: u32) {
+        let offset = address & 0xFFC;
+        let Ok(io_definition) = get_io_definition(offset) else {
+            return;
+        };
+
+        match io_definition.mask {
+            BitMask::THIRTYTWO(_, mask) => {
+                if io_definition.requires_special_handling() {
+                    todo!();
+                }
+                let store_value = mask & value;
+                self.io_store(offset, (store_value >> 16) as u16);
+                self.io_store(offset, (store_value & 0xFFFF) as u16);
+            }
+            _ => {
+                self.writeu16(offset + 2, (value >> 16) as u16);
+                self.writeu16(offset, (value & 0xFFFF) as u16);
+
+                return;
+            }
+        };
+    }
+
+    fn readu8(&self, address: usize) -> u8 {
+        let load_value = self.masked_io_load(address & 0xFFE);
+        (load_value >> (8 * (address & 0b1))) as u8
+    }
+
+    fn readu16(&self, address: usize) -> u16 {
+        self.masked_io_load(address & 0xFFE)
+    }
+
+    fn readu32(&self, address: usize) -> u32 {
+        let word_aligned_offset = address & 0xFFC;
+        let lower = self.masked_io_load(word_aligned_offset) as u32;
+        let upper = self.masked_io_load(word_aligned_offset + 2) as u32;
+
+        upper << 16 | lower
     }
 }
 

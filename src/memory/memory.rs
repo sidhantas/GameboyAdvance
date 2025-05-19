@@ -18,7 +18,7 @@ use std::{
 };
 
 use super::{
-    io_handlers::KEYINPUT, memory_block::{MemoryBlock, SimpleMemoryBlock}, oam::NUM_OAM_ENTRIES, oam_memory::OAMBlock
+    io_handlers::{IOBlock, KEYINPUT}, memory_block::{MemoryBlock, SimpleMemoryBlock}, oam::NUM_OAM_ENTRIES, oam_memory::OAMBlock
 };
 
 pub struct MemoryFetch<T> {
@@ -106,7 +106,7 @@ pub struct GBAMemory {
     bios: SimpleMemoryBlock,
     exwram: SimpleMemoryBlock,
     iwram: SimpleMemoryBlock,
-    pub(super) ioram: Vec<u16>,
+    pub ioram: IOBlock,
     pub pallete_ram: SimpleMemoryBlock,
     pub vram: SimpleMemoryBlock,
     pub oam: OAMBlock,
@@ -114,7 +114,6 @@ pub struct GBAMemory {
     sram: SimpleMemoryBlock,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
-    pub cpu_commands: Vec<CPUCallbacks>,
     pub timers: Option<Timers>,
     pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
     pub triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
@@ -158,7 +157,7 @@ impl GBAMemory {
             bios: SimpleMemoryBlock::new(BIOS_SIZE, 0xFFFFFF),
             exwram: SimpleMemoryBlock::new(EXWRAM_SIZE, EX_WRAM_MIRROR_MASK),
             iwram: SimpleMemoryBlock::new(IWRAM_SIZE, IWRAM_MIRROR_MASK),
-            ioram: vec![0; IORAM_SIZE >> 1],
+            ioram: IOBlock::new(),
             pallete_ram: SimpleMemoryBlock::new(BGRAM_SIZE, BGRAM_MIRROR_MASK),
             vram: SimpleMemoryBlock::new(VRAM_SIZE, 0xFFFFFF),
             oam: OAMBlock::new(),
@@ -166,15 +165,14 @@ impl GBAMemory {
             sram: SimpleMemoryBlock::new(SRAM_SIZE, 0xFFFFFF),
             wait_cycles_u16,
             wait_cycles_u32,
-            cpu_commands: Vec::new(),
             timers: Some(Timers::new()),
             breakpoint_checker: None,
             triggered_breakpoints: Rc::new(RefCell::new(Vec::new())),
             breakpoints: None,
         };
 
-        memory.io_store(0x088, 0x200);
-        memory.io_store(KEYINPUT, 0x03FF);
+        memory.ioram.io_store(0x088, 0x200);
+        memory.ioram.io_store(KEYINPUT, 0x03FF);
         memory
     }
 
@@ -219,11 +217,20 @@ impl GBAMemory {
         //self.sram = vec![0; SRAM_SIZE];
     }
 
+    pub fn io_load(&self, address: usize) -> u16{
+        self.ioram.io_load(address)
+    }
+
+    pub fn ppu_io_write(&mut self, address: usize, value:u16) {
+        self.ioram.ppu_io_write(address, value)
+    }
+
     fn get_memory_block_mut(&mut self, region: usize) -> Option<&mut dyn MemoryBlock> {
         match region {
             BIOS_REGION => None,
             EXWRAM_REGION => Some(&mut self.exwram),
             IWRAM_REGION => Some(&mut self.iwram),
+            IORAM_REGION => Some(&mut self.ioram),
             BGRAM_REGION => Some(&mut self.pallete_ram),
             VRAM_REGION => Some(&mut self.vram),
             OAM_REGION => Some(&mut self.oam),
@@ -238,6 +245,7 @@ impl GBAMemory {
             BIOS_REGION => &self.bios,
             EXWRAM_REGION => &self.exwram,
             IWRAM_REGION => &self.iwram,
+            IORAM_REGION => &self.ioram,
             BGRAM_REGION => &self.pallete_ram,
             VRAM_REGION => &self.vram,
             OAM_REGION => &self.oam,
@@ -250,12 +258,8 @@ impl GBAMemory {
     pub fn write(&mut self, address: usize, value: u8) -> CYCLES {
         let region = address >> 24;
 
-        if region == IORAM_REGION {
-            let _ = self.io_writeu8(address, value);
-        } else {
-            if let Some(memory_block) = self.get_memory_block_mut(region) {
-                memory_block.writeu8(address, value);
-            }
+        if let Some(memory_block) = self.get_memory_block_mut(region) {
+            memory_block.writeu8(address, value);
         }
 
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
@@ -267,12 +271,8 @@ impl GBAMemory {
 
     pub fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
         let region = address >> 24;
-        if region == IORAM_REGION {
-            self.io_writeu16(address, value);
-        } else {
-            if let Some(memory_block) = self.get_memory_block_mut(region) {
-                memory_block.writeu16(address, value);
-            }
+        if let Some(memory_block) = self.get_memory_block_mut(region) {
+            memory_block.writeu16(address, value);
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -283,12 +283,8 @@ impl GBAMemory {
 
     pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         let region = address >> 24;
-        if region == IORAM_REGION {
-            let _ = self.io_writeu32(address, value);
-        } else {
-            if let Some(memory_block) = self.get_memory_block_mut(region) {
-                memory_block.writeu32(address, value);
-            }
+        if let Some(memory_block) = self.get_memory_block_mut(region) {
+            memory_block.writeu32(address, value);
         }
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -299,11 +295,7 @@ impl GBAMemory {
 
     pub fn read(&self, address: usize) -> MemoryFetch<u8> {
         let region = address >> 24;
-        let read = if region == IORAM_REGION {
-            self.io_readu8(address).unwrap()
-        } else {
-            self.get_memory_block(region).readu8(address)
-        };
+        let read = self.get_memory_block(region).readu8(address);
 
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
@@ -317,20 +309,12 @@ impl GBAMemory {
 
     pub fn read_raw(&self, address: usize) -> u8 {
         let region = address >> 24;
-        if region == IORAM_REGION {
-            self.io_readu8(address).unwrap()
-        } else {
-            self.get_memory_block(region).readu8(address)
-        }
+        self.get_memory_block(region).readu8(address)
     }
 
     pub fn readu16(&self, address: usize) -> MemoryFetch<u16> {
         let region = address >> 24;
-        let read = if region == IORAM_REGION {
-            self.io_readu16(address).unwrap()
-        } else {
-            self.get_memory_block(region).readu16(address)
-        };
+        let read = self.get_memory_block(region).readu16(address);
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
         }
@@ -342,17 +326,13 @@ impl GBAMemory {
 
     pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
         let region = address >> 24;
-        let data = if region == IORAM_REGION {
-            self.io_readu32(address).unwrap()
-        } else {
-            self.get_memory_block(region).readu32(address)
-        };
+        let read = self.get_memory_block(region).readu32(address);
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
         }
         MemoryFetch {
             cycles: self.wait_cycles_u32[region],
-            data: data.rotate_right(8 * (address as u32 & 0b11)),
+            data: read.rotate_right(8 * (address as u32 & 0b11)),
         }
     }
 

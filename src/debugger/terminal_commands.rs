@@ -3,9 +3,11 @@ use super::{
     debugger::Debugger,
 };
 use crate::{
-    graphics::display::Border, memory::oam::Oam, utils::utils::{try_parse_num, try_parse_reg, ParsingError}
+    graphics::display::Border,
+    memory::oam::Oam,
+    utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
-use std::{fmt::Display, mem};
+use std::{fmt::Display, mem, time::Instant};
 
 pub enum TerminalCommandErrors {
     CouldNotFindCommand,
@@ -39,7 +41,7 @@ pub struct TerminalCommand {
 
 pub enum PPUToDisplayCommands {
     Render,
-    RenderWithBorders(Vec<Border>)
+    RenderWithBorders(Vec<Border>),
 }
 
 pub struct TerminalHistoryEntry {
@@ -126,7 +128,6 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 13] = [
         _description: "Resets CPU",
         handler: reset_gba,
     },
-
 ];
 
 fn find_command(command: &str) -> Result<&TerminalCommand, TerminalCommandErrors> {
@@ -204,6 +205,7 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
     };
 
     let cpu = &mut debugger.gba;
+    let timer = Instant::now();
     for _ in 0..num_executions {
         mem::swap(&mut cpu.memory.breakpoints, &mut debugger.breakpoints);
         cpu.step();
@@ -242,7 +244,11 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
         }
     }
 
-    Ok(String::new())
+    Ok(format!(
+        "Completed: {} instructions\nin {}ms",
+        num_executions,
+        timer.elapsed().as_millis()
+    ))
 }
 
 fn quit_handler(
@@ -467,11 +473,7 @@ fn send_borders(
     Ok(String::new())
 }
 
-
-fn reset_gba(
-    debugger: &mut Debugger,
-    _args: Vec<&str>,
-) -> Result<String, TerminalCommandErrors> {
+fn reset_gba(debugger: &mut Debugger, _args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
     debugger.gba.reset();
 
     Ok(String::new())

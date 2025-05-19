@@ -73,7 +73,7 @@ impl PPU {
             return;
         }
 
-        let mut dispstat = memory.io_load(DISPSTAT);
+        let mut dispstat = memory.ioram.io_load(DISPSTAT);
 
         self.available_dots = match self.current_mode {
             PPUModes::HDRAW => {

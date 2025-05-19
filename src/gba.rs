@@ -63,7 +63,7 @@ impl GBA {
             timers.tick(cpu_cycles.into(), &mut self.memory);
             self.memory.timers.replace(timers);
         }
-        for command in self.memory.cpu_commands.drain(..) {
+        for command in self.memory.ioram.cpu_commands.drain(..) {
             match command {
                 CPUCallbacks::Halt => self.cpu.halt(),
                 CPUCallbacks::RaiseIrq => {
