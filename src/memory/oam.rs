@@ -7,8 +7,14 @@ pub const NUM_OAM_ENTRIES: usize = 128;
 #[derive(Default, Debug)]
 pub struct Oam {
     data: [u16; 3],
+    x: Cell<Option<i32>>,
     y: Cell<Option<i32>>,
+    width: Cell<Option<i32>>,
+    view_width: Cell<Option<i32>>,
+    height: Cell<Option<i32>>,
+    view_height: Cell<Option<i32>>,
     rotation_and_scaling_enabled: Cell<Option<bool>>,
+    double_sized: Cell<Option<bool>>
 }
 
 #[derive(Debug)]
@@ -80,7 +86,14 @@ impl Oam {
     }
 
     pub fn double_sized(&self) -> bool {
-        self.rotation_and_scaling_enabled() && self.data[0].bit_is_set(9)
+        if let Some(double_sized) = self.double_sized.get() {
+            return double_sized;
+        }
+        let double_sized = self.rotation_and_scaling_enabled() && self.data[0].bit_is_set(9);
+        self.double_sized
+            .replace(Some(double_sized));
+
+        double_sized
     }
 
     pub fn obj_disabled(&self) -> bool {
@@ -104,11 +117,19 @@ impl Oam {
     }
 
     pub fn x(&self) -> i32 {
-        sign_extend((self.data[1] & 0x1FF) as u32, 8) as i32
+        if let Some(x) = self.x.get() {
+            return x;
+        }
+        let x = sign_extend((self.data[1] & 0x1FF) as u32, 8) as i32;
+        self.x.replace(Some(x));
+        x
     }
 
     pub fn width(&self) -> i32 {
-        match self.obj_shape() {
+        if let Some(width) = self.width.get() {
+            return width;
+        }
+        let width = match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
                 0 => 8,
                 1 => 16,
@@ -131,19 +152,33 @@ impl Oam {
                 _ => panic!("Invalid obj size"),
             },
             OBJShape::Prohibited => panic!("Invalid obj shape"),
-        }
+        };
+        self.width.replace(Some(width));
+
+        width
     }
 
     pub fn view_width(&self) -> i32 {
-        if self.double_sized() {
+        if let Some(view_width) = self.view_width.get() {
+            return view_width
+        }
+        let view_width = if self.double_sized() {
             self.width() * 2
         } else {
             self.width()
-        }
+        };
+
+        self.view_width.replace(Some(view_width));
+        
+        view_width
+
     }
 
     pub fn height(&self) -> i32 {
-        match self.obj_shape() {
+        if let Some(height) = self.height.get() {
+            return height
+        }
+        let height = match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
                 0 => 8,
                 1 => 16,
@@ -166,15 +201,24 @@ impl Oam {
                 _ => panic!("Invalid obj size"),
             },
             OBJShape::Prohibited => panic!("Invalid obj shape"),
-        }
+        };
+
+        self.height.replace(Some(height));
+        height
     }
 
     pub fn view_height(&self) -> i32 {
-        if self.double_sized() {
+        if let Some(view_height) = self.view_height.get() {
+            return view_height
+        }
+        let view_height = if self.double_sized() {
             self.height() * 2
         } else {
             self.height()
-        }
+        };
+
+        self.view_height.replace(Some(view_height));
+        view_height
     }
 
     pub fn rotation_scaling_parameter(&self) -> Option<usize> {
