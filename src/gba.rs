@@ -59,9 +59,9 @@ impl GBA {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
         self.ppu
             .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);
-        if let Some(mut timers) = self.memory.timers.take() {
+        if let Some(mut timers) = self.memory.ioram.timers.take() {
             timers.tick(cpu_cycles.into(), &mut self.memory);
-            self.memory.timers.replace(timers);
+            self.memory.ioram.timers.replace(timers);
         }
         for command in self.memory.ioram.cpu_commands.drain(..) {
             match command {

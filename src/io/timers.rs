@@ -1,10 +1,9 @@
 use crate::memory::io_handlers::IF;
 use crate::memory::memory::GBAMemory;
-use crate::memory::wrappers::tmcnt::TMCntH;
 use crate::utils::bits::Bits;
 
 #[derive(Debug)]
-pub struct Timers([Timer; 4]);
+pub struct Timers(pub [Timer; 4]);
 
 impl Timers {
     pub(crate) fn new() -> Self {
@@ -14,16 +13,12 @@ impl Timers {
     pub(crate) fn tick(&mut self, cpu_cycles: u32, memory: &mut GBAMemory) {
         let mut previous_timer_overflowed = false;
         for (i, timer) in self.0.iter_mut().enumerate() {
-            let tmcnt_h = TMCntH(memory.io_load(0x102 + 0x4 * i));
-            let tmcnt_l = memory.io_load(0x100 + 0x4 * i);
             previous_timer_overflowed = timer.increment(
                 cpu_cycles.into(),
-                &tmcnt_h,
-                tmcnt_l,
                 previous_timer_overflowed,
             );
 
-            if previous_timer_overflowed && tmcnt_h.timer_irq_enable() {
+            if previous_timer_overflowed && timer.timer_irq_enable {
                 let mut if_flag = memory.io_load(IF);
                 if_flag.set_bit((3 + i) as u8);
                 memory.ppu_io_write(IF, if_flag);
@@ -35,8 +30,28 @@ impl Timers {
         self.0[timer_num].counter
     }
 
-    pub(crate) fn reload_timer(&mut self, timer_num: usize, tmcntl_l: u16) {
-        self.0[timer_num].counter = tmcntl_l as u32;
+    pub(crate) fn reload_timer(&mut self, timer_num: usize) {
+        self.0[timer_num].counter = self.0[timer_num].reload_value;
+    }
+
+    pub(crate) fn set_reload_value(&mut self, timer_num: usize, reload_value: u32) {
+        self.0[timer_num].reload_value = reload_value;
+    }
+
+    pub(crate) fn set_timer_enabled(&mut self, timer_num: usize, enabled: bool) {
+        self.0[timer_num].timer_enabled = enabled;
+    }
+
+    pub(crate) fn set_count_up_timing(&mut self, timer_num: usize, enabled: bool) {
+        self.0[timer_num].count_up_timing = enabled;
+    }
+
+    pub(crate) fn set_prescalar_value(&mut self, timer_num: usize, prescalar_value: u32) {
+        self.0[timer_num].prescaler_value = prescalar_value;
+    }
+    
+    pub(crate) fn set_timer_irq_enable(&mut self, timer_num: usize, enabled: bool) {
+        self.0[timer_num].timer_irq_enable = enabled;
     }
 }
 
@@ -44,30 +59,33 @@ impl Timers {
 struct Timer {
     counter: u32,
     cycles: u32,
+    timer_enabled: bool,
+    timer_irq_enable: bool,
+    count_up_timing: bool,
+    prescaler_value: u32,
+    reload_value: u32
 }
 
 impl Timer {
     fn increment(
         &mut self,
         cpu_cycles: u32,
-        tmcnt_h: &TMCntH,
-        tmcnt_l: u16,
         overflow: bool,
     ) -> bool {
-        if !tmcnt_h.timer_enabled() {
+        if !self.timer_enabled {
             return false;
         }
-        if tmcnt_h.count_up_timing() && overflow {
+        if self.count_up_timing && overflow {
             self.counter += 1;
         } else {
             self.cycles += cpu_cycles;
-            let ticks = self.cycles / tmcnt_h.prescaler_value();
-            self.cycles %= tmcnt_h.prescaler_value();
+            let ticks = self.cycles / self.prescaler_value;
+            self.cycles %= self.prescaler_value;
             self.counter += ticks as u32;
         }
         if self.counter >= u16::MAX.into() {
             self.counter -= u16::MAX as u32;
-            self.counter += tmcnt_l as u32; // Reload the counter
+            self.counter += self.reload_value; // Reload the counter
             return true;
         }
         return false;

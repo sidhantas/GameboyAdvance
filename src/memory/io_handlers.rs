@@ -3,11 +3,11 @@ use crate::{io::timers::Timers, utils::bits::Bits};
 use super::{
     memory::{CPUCallbacks, GBAMemory, MemoryError},
     memory_block::{MemoryBlock, SimpleMemoryBlock},
+    wrappers::tmcnt::TMCntH,
 };
 
 const IORAM_SIZE: usize = 0x3FF;
 
-pub const IO_BASE: usize = 0x4000000;
 pub const DISPCNT: usize = 0x000;
 pub const DISPSTAT: usize = 0x004;
 pub const VCOUNT: usize = 0x006;
@@ -526,7 +526,7 @@ fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError>
 
 pub struct IOBlock {
     memory: Vec<u16>,
-    timers: Option<Timers>,
+    pub timers: Option<Timers>,
     pub cpu_commands: Vec<CPUCallbacks>,
 }
 
@@ -592,8 +592,7 @@ impl IOBlock {
         *self.memory.get(address >> 1).unwrap_or(&0)
     }
 
-    fn masked_io_store(&mut self, address: usize, value: u16) {
-        let mut value = value;
+    fn masked_io_store(&mut self, address: usize, mut value: u16) {
         let Ok(def) = get_io_definition(address) else {
             return;
         };
@@ -603,17 +602,29 @@ impl IOBlock {
                     value = self.io_load(address) & !value;
                 }
                 KEYINPUT => return,
-                TM0CNT_L | TM1CNT_L | TM2CNT_L | TM3CNT_L => {}
+                TM0CNT_L | TM1CNT_L | TM2CNT_L | TM3CNT_L => {
+                    let timer = (address & 0xF) / 4;
+                    if let Some(mut timers) = self.timers.take() {
+                        timers.set_reload_value(timer, value as u32);
+                    }
+                }
                 TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {
                     let old_value = self.io_load(address);
                     let timer_enabled = !old_value & value;
                     let timer_num = ((address - 0x2) & 0xF) / 4;
                     if timer_enabled.bit_is_set(7) {
-                        // The timer enabled bit has been set to 1
+                        // The timer enabled bit has been changed from 0 to 1
                         if let Some(mut timers) = self.timers.take() {
-                            timers.reload_timer(timer_num, self.io_load(address - 0x2));
+                            timers.reload_timer(timer_num);
                             self.timers.replace(timers);
                         }
+                    }
+                    let tmcnth = TMCntH(value);
+                    if let Some(mut timers) = self.timers.take() {
+                        timers.set_timer_enabled(timer_num, tmcnth.timer_enabled());
+                        timers.set_count_up_timing(timer_num, tmcnth.count_up_timing());
+                        timers.set_prescalar_value(timer_num, tmcnth.prescaler_value());
+                        timers.set_timer_irq_enable(timer_num, tmcnth.timer_irq_enable());
                     }
                 }
                 _ => return,
