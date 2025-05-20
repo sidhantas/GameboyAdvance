@@ -53,7 +53,7 @@ impl PPU {
                 self.current_mode = PPUModes::HBLANK;
                 return dots;
             }
-            self.current_line_objects.update_active_oams();
+            self.current_line_objects.update_active_objects();
             let obj_pixel = self.get_obj_pixel(memory);
 
             let enabled_layers = Layers::get_enabled_layers(
@@ -75,9 +75,9 @@ impl PPU {
     }
 
     fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
-        let mut highest_prio_obj: Option<OBJPixel> = None;
-        for oam_num in self.current_line_objects.current_x_objects().iter() {
-            let oam = self.current_line_objects.get_oam(*oam_num);
+        let active_objects = self.current_line_objects.active_objects();
+        for oam_num in active_objects.iter() {
+            let oam = self.current_line_objects.get_oam(oam_num.0);
             let normalized_x = self.x - oam.x();
             let normalized_y = self.y - oam.y();
             let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
@@ -89,27 +89,20 @@ impl PPU {
                 let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(transform_x, transform_y);
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
-                let pallete_region = &memory.pallete_ram.memory[0x200..][..0x200].try_into().unwrap();
+                let pallete_region: &[u8; 512] = unsafe { &memory.pallete_ram.memory[0x200..][..0x200].try_into().unwrap_unchecked() };
                 let pallete = OBJPaletteData(pallete_region);
                 if let Some(pixel) =
                     pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
                 {
-                    let obj = OBJPixel {
+                    return Some(OBJPixel {
                         priority: oam.priority(),
                         pixel,
                         is_semi_transparent: matches!(oam.obj_mode(), OBJMode::SemiTransparent),
-                    };
-                    highest_prio_obj = highest_prio_obj.map_or(Some(obj), |current_obj| {
-                        if current_obj.priority > oam.priority() {
-                            Some(obj)
-                        } else {
-                            Some(current_obj)
-                        }
                     });
                 }
             }
         }
-        return highest_prio_obj;
+        return None;
     }
 
     fn get_tile_coordinates(&self, x: i32, y: i32) -> (i32, i32, i32, i32) {

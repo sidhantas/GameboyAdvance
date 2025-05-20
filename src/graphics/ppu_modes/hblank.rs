@@ -1,5 +1,5 @@
-use std::cmp::{max, min};
-use std::collections::HashSet;
+use std::cmp::{max, min, Reverse};
+use std::collections::{BinaryHeap, HashSet};
 
 use num_traits::clamp;
 
@@ -53,8 +53,9 @@ impl PPU {
 
 #[derive(Debug)]
 pub struct OAMQueue {
-    queue: Vec<Oam>,
+    line_objects: Vec<Oam>,
     active_objects: HashSet<usize>,
+    current_objects: BinaryHeap<Reverse<usize>>,
     intervals: [Vec<Position>; HDRAW as usize],
     i: usize,
 }
@@ -68,15 +69,16 @@ enum Position {
 impl OAMQueue {
     pub fn new() -> Self {
         Self {
-            queue: Vec::new(),
+            line_objects: Vec::new(),
             active_objects: HashSet::new(),
+            current_objects: BinaryHeap::new(),
             intervals: [(); HDRAW as usize].map(|_| Vec::<Position>::new()),
             i: 0,
         }
     }
 
     pub fn clear(&mut self) {
-        self.queue.clear();
+        self.line_objects.clear();
         self.active_objects.clear();
         for i in &mut self.intervals {
             i.clear();
@@ -86,20 +88,22 @@ impl OAMQueue {
 
     pub fn try_push(&mut self, oam: Oam, curr_y: i32) {
         if (oam.y() < curr_y && curr_y < oam.y() + oam.view_height()) && !oam.obj_disabled() {
-            let position = self.queue.len();
+            let position = self.line_objects.len();
             let start = Position::Start(position);
             let stop = Position::Stop(position);
             let x_start = clamp(oam.x(), 0, 239) as usize;
             let x_end = clamp(oam.x() + oam.view_width() + 1, 0, 239) as usize;
             self.intervals[x_start].push(start);
             self.intervals[x_end].push(stop);
-            self.queue.push(oam);
+            self.line_objects.push(oam);
         }
     }
 
-    pub fn update_active_oams(&mut self) {
-        for interval in self.intervals[min(self.i, 239)].iter() {
-            match interval {
+    pub fn update_active_objects(&mut self) {
+        let updates = &self.intervals[min(self.i, 239)];
+        self.current_objects.clear();
+        for update in updates {
+            match update {
                 Position::Start(obj) => {
                     self.active_objects.insert(*obj);
                 }
@@ -108,15 +112,18 @@ impl OAMQueue {
                 }
             }
         }
+        for object in (&self.active_objects).iter() {
+            self.current_objects.push(Reverse(*object));
+        }
 
         self.i += 1;
     }
 
-    pub fn current_x_objects(&self) -> &HashSet<usize> {
-        &self.active_objects
+    pub fn active_objects(&self) -> &BinaryHeap<Reverse<usize>> {
+        &self.current_objects
     }
 
     pub fn get_oam(&self, obj: usize) -> &Oam {
-        &self.queue[obj]
+        &self.line_objects[obj]
     }
 }
