@@ -606,6 +606,7 @@ impl IOBlock {
                     let timer = (address & 0xF) / 4;
                     if let Some(mut timers) = self.timers.take() {
                         timers.set_reload_value(timer, value as u32);
+                        self.timers.replace(timers);
                     }
                 }
                 TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {
@@ -625,6 +626,7 @@ impl IOBlock {
                         timers.set_count_up_timing(timer_num, tmcnth.count_up_timing());
                         timers.set_prescalar_value(timer_num, tmcnth.prescaler_value());
                         timers.set_timer_irq_enable(timer_num, tmcnth.timer_irq_enable());
+                        self.timers.replace(timers);
                     }
                 }
                 _ => return,

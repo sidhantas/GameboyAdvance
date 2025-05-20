@@ -1,14 +1,20 @@
-use std::sync::Arc;
+use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc};
 
 use crate::{
     graphics::{
         color_effects::color_effects_pipeline,
         display::DisplayBuffer,
         layers::{Layers, OBJPixel},
-        pallete::{rgb555_to_rgb24, OBJPaletteData},
-        ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU}, wrappers::tile::Tile,
+        pallete::{rgb555_to_rgb24, OBJPalleteData},
+        ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
+        wrappers::tile::Tile,
     },
-    memory::{io_handlers::DISPCNT, memory::GBAMemory, oam::{OBJMode, Oam}, wrappers::dispcnt::Dispcnt},
+    memory::{
+        io_handlers::DISPCNT,
+        memory::GBAMemory,
+        oam::{OBJMode, Oam},
+        wrappers::dispcnt::Dispcnt,
+    },
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +53,12 @@ impl PPU {
         display_buffer: &Arc<DisplayBuffer>,
     ) -> u32 {
         let mut display_buffer = display_buffer.buffer.lock().unwrap();
+        let pallete_region = unsafe {
+            &memory.pallete_ram.memory[0x200..][..0x200]
+                .try_into()
+                .unwrap_unchecked()
+        };
+        let pallete = OBJPalleteData(pallete_region);
         while dots > 0 {
             if self.x >= HDRAW {
                 *disp_stat |= HBLANK_FLAG;
@@ -54,7 +66,13 @@ impl PPU {
                 return dots;
             }
             self.current_line_objects.update_active_objects();
-            let obj_pixel = self.get_obj_pixel(memory);
+            let obj_pixel = if let Some(mut active_objects) = self.active_objects.take() {
+                let obj_pixel = self.get_obj_pixel(memory, &mut active_objects, &pallete);
+                self.active_objects.replace(active_objects);
+                obj_pixel
+            } else {
+                None
+            };
 
             let enabled_layers = Layers::get_enabled_layers(
                 self.x,
@@ -74,23 +92,28 @@ impl PPU {
         return 0;
     }
 
-    fn get_obj_pixel(&self, memory: &GBAMemory) -> Option<OBJPixel> {
-        let active_objects = self.current_line_objects.active_objects();
-        for oam_num in active_objects.iter() {
+    fn get_obj_pixel(
+        &mut self,
+        memory: &GBAMemory,
+        active_object_heap: &mut BinaryHeap<Reverse<usize>>,
+        pallete: &OBJPalleteData
+    ) -> Option<OBJPixel> {
+        self.current_line_objects.active_objects(active_object_heap);
+        while let Some(oam_num) = active_object_heap.pop() {
             let oam = self.current_line_objects.get_oam(oam_num.0);
-            let normalized_x = self.x - oam.x();
-            let normalized_y = self.y - oam.y();
-            let (transform_x, transform_y) = self.transform_coordinates(memory, &oam, normalized_x, normalized_y);
+            let offset_x = self.x - oam.x();
+            let offset_y = self.y - oam.y();
+            let (transform_x, transform_y) =
+                self.transform_coordinates(memory, &oam, offset_x, offset_y);
             if 0 < transform_x
                 && transform_x <= oam.width()
                 && 0 < transform_y
-                && transform_y <= oam.height()
+                && transform_y < oam.height()
             {
-                let (tile_x, tile_y, pixel_x, pixel_y) = self.get_tile_coordinates(transform_x, transform_y);
+                let (tile_x, tile_y, pixel_x, pixel_y) =
+                    self.get_tile_coordinates(transform_x, transform_y);
                 let tile = Tile::get_tile_relative_obj(memory, &oam, tile_x, tile_y);
 
-                let pallete_region: &[u8; 512] = unsafe { &memory.pallete_ram.memory[0x200..][..0x200].try_into().unwrap_unchecked() };
-                let pallete = OBJPaletteData(pallete_region);
                 if let Some(pixel) =
                     pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
                 {
@@ -116,10 +139,9 @@ impl PPU {
     fn transform_coordinates(&self, memory: &GBAMemory, oam: &Oam, x: i32, y: i32) -> (i32, i32) {
         if let Some(affine_group) = oam.rotation_scaling_parameter() {
             let affine_parameters = memory.oam.get_affine_paramters(affine_group);
-            return affine_parameters.transform_coordinates(x, y, oam)
+            return affine_parameters.transform_coordinates(x, y, oam);
         };
 
         (x, y)
-
     }
 }

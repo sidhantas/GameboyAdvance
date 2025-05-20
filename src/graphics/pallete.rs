@@ -1,8 +1,8 @@
 use super::{ppu_modes::hdraw::RGBComponents, wrappers::tile::Tile};
 
-pub struct OBJPaletteData<'a>(pub &'a [u8; 0x200]);
+pub struct OBJPalleteData<'a>(pub &'a [u8; 0x200]);
 
-impl<'a> OBJPaletteData<'a> {
+impl<'a> OBJPalleteData<'a> {
     pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
         match tile {
             Tile::FourBit { tile, pallete_num } => {

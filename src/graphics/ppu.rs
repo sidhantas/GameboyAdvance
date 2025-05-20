@@ -2,6 +2,8 @@ use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::memory::io_handlers::{DISPSTAT, VCOUNT};
 use crate::memory::memory::GBAMemory;
 use crate::memory::oam::Oam;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
@@ -35,6 +37,7 @@ pub struct PPU {
     pub x: i32,
     pub y: i32,
     pub(super) current_line_objects: OAMQueue,
+    pub(super) active_objects: Option<BinaryHeap<Reverse<usize>>>,
     pub show_borders: bool,
     pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
 }
@@ -47,6 +50,7 @@ impl PPU {
             current_mode: PPUModes::HDRAW,
             x: 0,
             y: 0,
+            active_objects: Some(BinaryHeap::new()),
             current_line_objects: OAMQueue::new(),
             show_borders: false,
             ppu_to_display_sender,
@@ -78,6 +82,10 @@ impl PPU {
 
         self.available_dots = match self.current_mode {
             PPUModes::HDRAW => {
+                if self.available_dots < HDRAW as u32 {
+                    // accumulate enough dots to draw entire lin
+                    return;
+                }
                 self.hdraw(self.available_dots, memory, &mut dispstat, display_buffer)
             }
             PPUModes::HBLANK => {

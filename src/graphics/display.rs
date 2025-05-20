@@ -122,7 +122,7 @@ fn draw_object_borders(pixel_buffer: &Arc<DisplayBuffer>, borders: Vec<Border>) 
                 buff[(j * HDRAW + x + width) as usize] = 0x00FF0000;
             }
         }
-        for i in x..x + width {
+        for i in x..=(x + width) {
             if y < 0 {
                 break;
             }
