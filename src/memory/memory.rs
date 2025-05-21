@@ -9,12 +9,7 @@ use crate::{
 };
 use core::panic;
 use std::{
-    cell::RefCell,
-    fmt::Display,
-    fs::File,
-    io::{Read, Seek},
-    rc::Rc,
-    usize,
+    cell::RefCell, fmt::Display, fs::File, hint::unreachable_unchecked, io::{Read, Seek}, rc::Rc, usize
 };
 
 use super::{

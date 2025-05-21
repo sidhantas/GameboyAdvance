@@ -3,7 +3,7 @@ use std::fs::{remove_file, File, OpenOptions};
 
 use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
 
-use super::cpsr::PSR;
+use super::{cpsr::PSR, registers::Registers};
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -45,12 +45,7 @@ pub enum FlagsRegister {
 
 #[derive(Debug)]
 pub struct CPU {
-    registers: [WORD; 16],
-    registers_fiq: [WORD; 16],
-    registers_svc: [WORD; 16],
-    registers_abt: [WORD; 16],
-    registers_irq: [WORD; 16],
-    registers_und: [WORD; 16],
+    registers: Registers,
     pub is_halted: bool,
     pub prefetch: [Option<WORD>; 2],
     pub executed_instruction_hex: ARMByteCode,
@@ -71,17 +66,12 @@ impl CPU {
     pub fn new() -> Self {
         let _ = remove_file(OUTPUT_FILE);
         let cpu = Self {
-            registers: [0; 16],
+            registers: Registers::new(),
             executed_instruction_hex: 0,
             executed_instruction: String::with_capacity(50),
             prefetch: [None; 2],
             cpsr: PSR::new_cpsr(),
             spsr: [PSR::new_spsr(); 5],
-            registers_fiq: [0; 16],
-            registers_svc: [0; 16],
-            registers_abt: [0; 16],
-            registers_irq: [0; 16],
-            registers_und: [0; 16],
             output_file: OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -102,13 +92,6 @@ impl CPU {
 
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
-        //if self.status_history.len() >= HISTORY_SIZE {
-        //    self.status_history.pop_front();
-        //}
-        //unsafe {
-        //    INSTRUCTION_COUNT += 1;
-        //}
-        //self.status_history.push_back(self.get_status());
         if self.interrupt_triggered {
             self.raise_irq(memory);
             self.interrupt_triggered = false;
@@ -152,11 +135,11 @@ impl CPU {
     }
 
     pub fn get_pc(&self) -> u32 {
-        self.registers[PC_REGISTER] & 0xFFFF_FFFE
+        self.registers.active_registers[PC_REGISTER] & 0xFFFF_FFFE
     }
 
     pub fn set_pc(&mut self, address: WORD) {
-        self.registers[PC_REGISTER] = address & !1;
+        self.registers.active_registers[PC_REGISTER] = address & !1;
     }
 
     pub fn set_sp(&mut self, address: WORD) {
@@ -173,6 +156,7 @@ impl CPU {
 
     pub fn set_cpsr(&mut self, cpsr: PSR) {
         self.cpsr = cpsr;
+        self.registers.update_registers(self.cpsr.mode);
     }
 
     pub fn disable_irq(&mut self) {
@@ -186,68 +170,25 @@ impl CPU {
     pub fn pop_spsr(&mut self) {
         if let Some(spsr) = self.get_current_spsr() {
             self.cpsr = *spsr;
+            self.registers.update_registers(self.cpsr.mode);
         }
     }
 
     pub fn increment_pc(&mut self) {
         match self.get_instruction_mode() {
-            InstructionMode::ARM => self.registers[PC_REGISTER] += 4,
-            InstructionMode::THUMB => self.registers[PC_REGISTER] += 2,
+            InstructionMode::ARM => self.registers.active_registers[PC_REGISTER] += 4,
+            InstructionMode::THUMB => self.registers.active_registers[PC_REGISTER] += 2,
         }
     }
 
+    #[inline]
     pub fn get_register(&self, register_num: REGISTER) -> WORD {
-        let cpu_mode = self.get_cpu_mode();
-        if let CPUMode::FIQ = cpu_mode {
-            if register_num >= 8 && register_num < 15 {
-                return self.registers_fiq[register_num as usize];
-            }
-        }
-
-        if register_num < 13 || register_num == 15 {
-            return self.registers[register_num as usize];
-        }
-
-        match cpu_mode {
-            CPUMode::FIQ => unreachable!(), // Shouldn't happen
-            CPUMode::USER | CPUMode::SYS => self.registers[register_num as usize],
-            CPUMode::SVC => self.registers_svc[(register_num) as usize],
-            CPUMode::UND => self.registers_und[(register_num) as usize],
-            CPUMode::IRQ => self.registers_irq[(register_num) as usize],
-            CPUMode::ABT => self.registers_abt[(register_num) as usize],
-            CPUMode::INVALID(_) => todo!(),
-        }
+        self.registers.get_register(register_num as usize)
     }
 
+    #[inline]
     pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
-        if register_num < 8 || register_num == 15 {
-            self.registers[register_num as usize] = value;
-            return;
-        }
-
-        let cpu_mode = self.get_cpu_mode();
-
-        if let CPUMode::FIQ = cpu_mode {
-            if register_num >= 8 && register_num < 15 {
-                self.registers_fiq[register_num as usize] = value;
-                return;
-            }
-        }
-
-        if register_num < 13 || register_num == 15 {
-            self.registers[register_num as usize] = value;
-            return;
-        }
-
-        match cpu_mode {
-            CPUMode::FIQ => unreachable!(), // Shouldn't happen
-            CPUMode::USER | CPUMode::SYS => self.registers[register_num as usize] = value,
-            CPUMode::SVC => self.registers_svc[(register_num) as usize] = value,
-            CPUMode::UND => self.registers_und[(register_num) as usize] = value,
-            CPUMode::IRQ => self.registers_irq[(register_num) as usize] = value,
-            CPUMode::ABT => self.registers_abt[(register_num) as usize] = value,
-            CPUMode::INVALID(_) => todo!(),
-        };
+        self.registers.set_register(register_num as usize, value);
     }
 
     #[inline(always)]
@@ -281,6 +222,7 @@ impl CPU {
 
     pub fn set_mode(&mut self, mode: CPUMode) {
         self.cpsr.mode = mode;
+        self.registers.update_registers(mode);
     }
 
     pub fn get_cpu_mode(&self) -> CPUMode {

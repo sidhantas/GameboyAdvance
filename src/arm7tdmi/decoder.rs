@@ -39,7 +39,7 @@ impl CPU {
                     || self.get_flag(FlagsRegister::N) != self.get_flag(FlagsRegister::V)
             } //LE
             0b1110 => true,                                                               //AL
-            _ => panic!("Impossible Condition Code Encountered"),
+            _ => unreachable!("Impossible Condition Code Encountered"),
         }
     }
 

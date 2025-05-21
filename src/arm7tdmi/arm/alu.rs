@@ -16,7 +16,7 @@ impl CPU {
         let shift_amount;
         let mut cycles = 0;
         if instruction.bit_is_set(25) {
-            shift_amount = ((instruction & 0x0000_0F00) >> 8) * 2;
+            shift_amount = (instruction & 0x0000_0F00) >> 7;
         } else {
             // The first cycle gets the register we shift by
             // The rest of the operation happens on the next cycle in an I cycle
@@ -73,7 +73,7 @@ impl CPU {
             0xd => CPU::arm_mov,
             0xe => CPU::arm_bic,
             0xf => CPU::arm_mvn,
-            _ => panic!("Impossible to decode opcode"),
+            _ => unreachable!("Impossible to decode opcode"),
         };
 
         let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
