@@ -49,29 +49,34 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    pub fn new(bios: String, rom: String, pixel_buffer: Arc<DisplayBuffer>, ppu_to_display_sender: SyncSender<PPUToDisplayCommands>) -> Self {
+    pub fn new(
+        bios: String,
+        rom: String,
+        pixel_buffer: Arc<DisplayBuffer>,
+        ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
+    ) -> Self {
         let breakpoints = Some(Vec::<Breakpoint>::new());
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
 
         let gba = GBA::new(bios, rom, pixel_buffer, ppu_to_display_sender);
-       // gba.memory.breakpoint_checker = Some(Box::new(|memory: &GBAMemory, address: usize| {
-       //     let Some(memory_breakpoints) = memory.breakpoints.as_ref() else {
-       //         return;
-       //     };
-       //     if memory_breakpoints.is_empty() {
-       //         return;
-       //     }
-       //     let triggered_breakpoints = &memory.triggered_breakpoints;
-       //     for watchpoint in memory_breakpoints.iter() {
-       //         if let BreakType::WatchAddress(low, high) = watchpoint.break_type {
-       //             if low <= address && address <= high {
-       //                 triggered_breakpoints
-       //                     .borrow_mut()
-       //                     .push(TriggeredWatchpoints::Address(address));
-       //             }
-       //         }
-       //     }
-       // }));
+        // gba.memory.breakpoint_checker = Some(Box::new(|memory: &GBAMemory, address: usize| {
+        //     let Some(memory_breakpoints) = memory.breakpoints.as_ref() else {
+        //         return;
+        //     };
+        //     if memory_breakpoints.is_empty() {
+        //         return;
+        //     }
+        //     let triggered_breakpoints = &memory.triggered_breakpoints;
+        //     for watchpoint in memory_breakpoints.iter() {
+        //         if let BreakType::WatchAddress(low, high) = watchpoint.break_type {
+        //             if low <= address && address <= high {
+        //                 triggered_breakpoints
+        //                     .borrow_mut()
+        //                     .push(TriggeredWatchpoints::Address(address));
+        //             }
+        //         }
+        //     }
+        // }));
 
         Self {
             memory_start_address: 0x0000000,

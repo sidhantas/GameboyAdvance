@@ -11,18 +11,26 @@ impl AffineParameters {
         Self([
             [
                 fixed88_point_to_floating_point(u16::from_le_bytes(
-                    oam_memory.memory[(group * 0x20 + 0x6)..][..2].try_into().unwrap(),
+                    oam_memory.memory[(group * 0x20 + 0x6)..][..2]
+                        .try_into()
+                        .unwrap(),
                 )),
                 fixed88_point_to_floating_point(u16::from_le_bytes(
-                    oam_memory.memory[(group * 0x20 + 0xe)..][..2].try_into().unwrap(),
+                    oam_memory.memory[(group * 0x20 + 0xe)..][..2]
+                        .try_into()
+                        .unwrap(),
                 )),
             ],
             [
                 fixed88_point_to_floating_point(u16::from_le_bytes(
-                    oam_memory.memory[(group * 0x20 + 0x16)..][..2].try_into().unwrap(),
+                    oam_memory.memory[(group * 0x20 + 0x16)..][..2]
+                        .try_into()
+                        .unwrap(),
                 )),
                 fixed88_point_to_floating_point(u16::from_le_bytes(
-                    oam_memory.memory[(group * 0x20 + 0x1e)..][..2].try_into().unwrap(),
+                    oam_memory.memory[(group * 0x20 + 0x1e)..][..2]
+                        .try_into()
+                        .unwrap(),
                 )),
             ],
         ])

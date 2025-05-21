@@ -9,11 +9,20 @@ use crate::{
 };
 use core::panic;
 use std::{
-    cell::RefCell, fmt::Display, fs::File, hint::unreachable_unchecked, io::{Read, Seek}, rc::Rc, usize
+    cell::RefCell,
+    fmt::Display,
+    fs::File,
+    hint::unreachable_unchecked,
+    io::{Read, Seek},
+    rc::Rc,
+    usize,
 };
 
 use super::{
-    io_handlers::{IOBlock, KEYINPUT}, memory_block::{MemoryBlock, SimpleMemoryBlock}, oam::NUM_OAM_ENTRIES, oam_memory::OAMBlock
+    io_handlers::{IOBlock, KEYINPUT},
+    memory_block::{MemoryBlock, SimpleMemoryBlock},
+    oam::NUM_OAM_ENTRIES,
+    oam_memory::OAMBlock,
 };
 
 pub struct MemoryFetch<T> {
@@ -210,11 +219,11 @@ impl GBAMemory {
         //self.sram = vec![0; SRAM_SIZE];
     }
 
-    pub fn io_load(&self, address: usize) -> u16{
+    pub fn io_load(&self, address: usize) -> u16 {
         self.ioram.io_load(address)
     }
 
-    pub fn ppu_io_write(&mut self, address: usize, value:u16) {
+    pub fn ppu_io_write(&mut self, address: usize, value: u16) {
         self.ioram.ppu_io_write(address, value)
     }
 

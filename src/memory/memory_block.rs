@@ -1,6 +1,5 @@
 use std::{mem::size_of, usize};
 
-
 pub trait MemoryBlock {
     fn writeu8(&mut self, address: usize, value: u8);
     fn writeu16(&mut self, address: usize, value: u16);

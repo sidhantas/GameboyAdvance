@@ -96,7 +96,7 @@ impl PPU {
         &mut self,
         memory: &GBAMemory,
         active_object_heap: &mut BinaryHeap<Reverse<usize>>,
-        pallete: &OBJPalleteData
+        pallete: &OBJPalleteData,
     ) -> Option<OBJPixel> {
         self.current_line_objects.active_objects(active_object_heap);
         while let Some(oam_num) = active_object_heap.pop() {

@@ -142,7 +142,7 @@ where
 
 pub fn fixed88_point_to_floating_point(mut fixed88: u16) -> f32 {
     let mut float: u32 = 0;
-    
+
     if fixed88 == 0 {
         return 0.;
     }

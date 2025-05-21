@@ -1,10 +1,11 @@
 use crate::memory::{
-    memory::GBAMemory, oam::Oam, wrappers::{
+    memory::GBAMemory,
+    oam::Oam,
+    wrappers::{
         bgcnt::{BGCnt, MAP_SIZE_BYTES, TILE_DATA_SIZE_BYTES},
         dispcnt::Dispcnt,
-    }
+    },
 };
-
 
 pub enum Tile<'a> {
     FourBit {
@@ -56,8 +57,11 @@ impl<'a> Tile<'a> {
 
         let map_address = bgcnt.map_data_base() * MAP_SIZE_BYTES;
         let relative_map_address = map_address + y * BYTES_PER_MAP_ROW + x * BYTES_PER_ENTRY;
-        let text_bg_screen_entry =
-            u16::from_le_bytes(memory.vram.memory[relative_map_address..][..2].try_into().unwrap());
+        let text_bg_screen_entry = u16::from_le_bytes(
+            memory.vram.memory[relative_map_address..][..2]
+                .try_into()
+                .unwrap(),
+        );
         let text_bg_screen_entry = BGEntry(&text_bg_screen_entry);
 
         let tile_num = text_bg_screen_entry.tile_number();

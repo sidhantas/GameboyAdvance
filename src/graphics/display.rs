@@ -76,9 +76,7 @@ pub fn start_display(
                 }
             }
 
-            while let Ok(_) = ppu_to_display_recv.try_recv() {
-
-            }
+            while let Ok(_) = ppu_to_display_recv.try_recv() {}
         }
         if let ControlFlow::Break(_) = handle_events(&mut event_pump) {
             break 'running;

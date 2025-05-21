@@ -381,15 +381,15 @@ impl CPU {
         if set_flags == false {
             return;
         }
-        self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+        let result_sign = result.get_bit(31);
+        let operand2_sign = operand2.get_bit(31);
+        self.set_flag_from_bit(FlagsRegister::N, result_sign as u8);
         if result == 0 {
             self.set_flag(FlagsRegister::Z);
         } else {
             self.reset_flag(FlagsRegister::Z);
         }
-        if (operand1.get_bit(31) == operand2.get_bit(31))
-            && result.get_bit(31) != operand2.get_bit(31)
-        {
+        if operand1.get_bit(31) == operand2_sign && result_sign != operand2_sign {
             self.set_flag(FlagsRegister::V);
         } else {
             self.reset_flag(FlagsRegister::V);

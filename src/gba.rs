@@ -1,10 +1,13 @@
+use std::convert::identity;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::PPU;
+use crate::memory::io_handlers::IF;
 use crate::memory::memory::CPUCallbacks;
+use crate::utils::bits::Bits;
 use crate::utils::utils::KillSignal;
 use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
@@ -59,9 +62,15 @@ impl GBA {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
         self.ppu
             .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);
-        if let Some(mut timers) = self.memory.ioram.timers.take() {
-            timers.tick(cpu_cycles.into(), &mut self.memory);
-            self.memory.ioram.timers.replace(timers);
+        let triggered_irqs = self.memory.ioram.timers.tick(cpu_cycles.into());
+        if triggered_irqs.iter().any(|x| identity(*x)) {
+            let mut if_flag = self.memory.io_load(IF);
+            for i in 0..triggered_irqs.len() {
+                if triggered_irqs[i] == true {
+                    if_flag.set_bit((3 + i) as u8);
+                }
+            }
+            self.memory.ppu_io_write(IF, if_flag);
         }
         for command in self.memory.ioram.cpu_commands.drain(..) {
             match command {

@@ -87,7 +87,7 @@ impl OAMQueue {
     }
 
     pub fn try_push(&mut self, oam: Oam, curr_y: i32) {
-        if (oam.y() <= curr_y && curr_y < oam.y() + oam.view_height() ) && !oam.obj_disabled() {
+        if (oam.y() <= curr_y && curr_y < oam.y() + oam.view_height()) && !oam.obj_disabled() {
             let position = self.line_objects.len();
             let start = Position::Start(position);
             let stop = Position::Stop(position);
@@ -115,7 +115,7 @@ impl OAMQueue {
         self.i += 1;
     }
 
-    pub fn active_objects(&self, heap: &mut BinaryHeap<Reverse<usize>>)  {
+    pub fn active_objects(&self, heap: &mut BinaryHeap<Reverse<usize>>) {
         heap.clear();
         for object in (&self.active_objects).iter() {
             heap.push(Reverse(*object));

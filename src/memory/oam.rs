@@ -14,7 +14,7 @@ pub struct Oam {
     height: Cell<Option<i32>>,
     view_height: Cell<Option<i32>>,
     rotation_and_scaling_enabled: Cell<Option<bool>>,
-    double_sized: Cell<Option<bool>>
+    double_sized: Cell<Option<bool>>,
 }
 
 #[derive(Debug)]
@@ -90,8 +90,7 @@ impl Oam {
             return double_sized;
         }
         let double_sized = self.rotation_and_scaling_enabled() && self.data[0].bit_is_set(9);
-        self.double_sized
-            .replace(Some(double_sized));
+        self.double_sized.replace(Some(double_sized));
 
         double_sized
     }
@@ -160,7 +159,7 @@ impl Oam {
 
     pub fn view_width(&self) -> i32 {
         if let Some(view_width) = self.view_width.get() {
-            return view_width
+            return view_width;
         }
         let view_width = if self.double_sized() {
             self.width() * 2
@@ -169,14 +168,13 @@ impl Oam {
         };
 
         self.view_width.replace(Some(view_width));
-        
-        view_width
 
+        view_width
     }
 
     pub fn height(&self) -> i32 {
         if let Some(height) = self.height.get() {
-            return height
+            return height;
         }
         let height = match self.obj_shape() {
             OBJShape::Square => match self.obj_size() {
@@ -209,7 +207,7 @@ impl Oam {
 
     pub fn view_height(&self) -> i32 {
         if let Some(view_height) = self.view_height.get() {
-            return view_height
+            return view_height;
         }
         let view_height = if self.double_sized() {
             self.height() * 2

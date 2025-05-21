@@ -88,9 +88,7 @@ impl PPU {
                 }
                 self.hdraw(self.available_dots, memory, &mut dispstat, display_buffer)
             }
-            PPUModes::HBLANK => {
-                self.hblank(self.available_dots, memory, &mut dispstat)
-            }
+            PPUModes::HBLANK => self.hblank(self.available_dots, memory, &mut dispstat),
             PPUModes::VBLANK => self.vblank(self.available_dots, &mut dispstat),
         };
 
@@ -108,7 +106,7 @@ mod tests {
     use crate::{
         gba::GBA,
         graphics::ppu::{HBLANK, HDRAW, VDRAW},
-        memory::io_handlers::{DISPSTAT},
+        memory::io_handlers::DISPSTAT,
     };
 
     use super::VBLANK_ENABLE;

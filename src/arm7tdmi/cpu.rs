@@ -201,7 +201,6 @@ impl CPU {
         self.cpsr.reset_flag(flag);
     }
 
-    #[inline(always)]
     pub fn get_flag(&self, flag: FlagsRegister) -> WORD {
         if self.cpsr.get_flag(flag) {
             1
