@@ -42,7 +42,7 @@ impl SimpleMemoryBlock {
         )
     }
 
-    fn get_memory_slice<const SIZE: usize>(&self, address: usize) -> Option<&[u8; SIZE]> {
+    fn get_memory_slice<const SIZE: usize>(&self, address: usize) -> Option<[u8; SIZE]> {
         let address = address & Self::get_slice_alignment(SIZE);
         let mirror_masked_address = address & self.memory_mask;
 
@@ -105,7 +105,7 @@ impl MemoryBlock for SimpleMemoryBlock {
             return 0;
         };
 
-        u16::from_le_bytes(*slice)
+        u16::from_le_bytes(slice)
     }
 
     fn readu32(&self, address: usize) -> u32 {
@@ -113,6 +113,6 @@ impl MemoryBlock for SimpleMemoryBlock {
             return 0;
         };
 
-        u32::from_le_bytes(*slice)
+        u32::from_le_bytes(slice)
     }
 }

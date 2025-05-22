@@ -1,3 +1,5 @@
+use std::u16;
+
 use crate::{io::timers::Timers, utils::bits::Bits};
 
 use super::{
@@ -620,7 +622,7 @@ impl IOBlock {
                     self.timers
                         .set_count_up_timing(timer_num, tmcnth.count_up_timing());
                     self.timers
-                        .set_prescalar_value(timer_num, tmcnth.prescaler_value());
+                        .set_prescalar_value(timer_num, tmcnth.prescaler_value() * u16::MAX as u32);
                     self.timers
                         .set_timer_irq_enable(timer_num, tmcnth.timer_irq_enable());
                 }

@@ -358,6 +358,7 @@ impl CPU {
         0
     }
 
+    #[inline(never)]
     pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags == false {
             return;

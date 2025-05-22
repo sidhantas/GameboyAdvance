@@ -209,12 +209,10 @@ impl CPU {
         }
     }
 
-    #[inline(always)]
     pub fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
         self.cpsr.instruction_mode = instruction_mode;
     }
 
-    #[inline(always)]
     pub fn get_instruction_mode(&self) -> InstructionMode {
         self.cpsr.instruction_mode
     }

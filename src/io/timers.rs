@@ -1,7 +1,3 @@
-use crate::memory::io_handlers::IF;
-use crate::memory::memory::GBAMemory;
-use crate::utils::bits::Bits;
-
 #[derive(Debug)]
 pub struct Timers([Timer; 4]);
 
