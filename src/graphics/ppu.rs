@@ -81,17 +81,20 @@ impl PPU {
                     return;
                 }
                 self.available_dots -= 4 * HDRAW as u32;
-                self.hdraw(memory, &mut dispstat, display_buffer);
+                self.hdraw(memory, display_buffer);
             }
             PPUModes::HBLANK => {
+                dispstat |= HBLANK_FLAG;
                 if self.available_dots < 4 * HBLANK as u32 {
                     // accumulate enough dots to draw entire lin
                     return;
                 }
                 self.available_dots -= 4 * HBLANK as u32;
-                self.hblank(memory, &mut dispstat);
+                self.hblank(memory);
+                dispstat &= !HBLANK_FLAG;
             }
             PPUModes::VBLANK => {
+                dispstat |= VBLANK_FLAG;
                 if self.available_dots < 4 * (HBLANK + HDRAW) as u32 {
                     // accumulate enough dots to draw entire lin
                     return;

@@ -48,7 +48,6 @@ impl PPU {
     pub(crate) fn hdraw(
         &mut self,
         memory: &mut GBAMemory,
-        disp_stat: &mut u16,
         display_buffer: &Arc<DisplayBuffer>,
     ) {
         let mut display_buffer = display_buffer.buffer.lock().unwrap();
@@ -81,7 +80,6 @@ impl PPU {
 
             self.x += 1;
         }
-        *disp_stat |= HBLANK_FLAG;
         self.current_mode = PPUModes::HBLANK;
     }
 

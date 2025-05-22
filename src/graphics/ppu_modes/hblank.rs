@@ -9,7 +9,7 @@ use crate::memory::memory::GBAMemory;
 use crate::memory::oam::{Oam, NUM_OAM_ENTRIES};
 
 impl PPU {
-    pub(crate) fn hblank(&mut self, memory: &mut GBAMemory, disp_stat: &mut u16) {
+    pub(crate) fn hblank(&mut self, memory: &mut GBAMemory) {
         self.y += 1;
         self.x = 0;
         if self.y < VDRAW {
@@ -17,11 +17,8 @@ impl PPU {
             self.current_mode = PPUModes::HDRAW;
             return;
         }
-        *disp_stat &= !HBLANK_FLAG;
-        *disp_stat |= VBLANK_FLAG;
         self.current_mode = PPUModes::VBLANK;
         self.start_display_rendering(memory);
-
     }
 
     fn start_display_rendering(&mut self, memory: &mut GBAMemory) {
