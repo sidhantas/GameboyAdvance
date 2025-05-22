@@ -1,45 +1,38 @@
-use std::cmp::{max, min, Reverse};
+use std::cmp::{min, Reverse};
 use std::collections::{BinaryHeap, HashSet};
 
 use num_traits::clamp;
 
-use crate::debugger::terminal_commands::PPUToDisplayCommands::{Render, RenderWithBorders};
-use crate::graphics::ppu::{PPUModes, HBLANK, HBLANK_FLAG, HDRAW, PPU, VBLANK_FLAG, VDRAW};
+use crate::debugger::terminal_commands::PPUToDisplayCommands::{self, Render, RenderWithBorders};
+use crate::graphics::ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU, VBLANK_FLAG, VDRAW};
 use crate::memory::memory::GBAMemory;
 use crate::memory::oam::{Oam, NUM_OAM_ENTRIES};
 
 impl PPU {
-    pub(crate) fn hblank(
-        &mut self,
-        mut dots: u32,
-        memory: &mut GBAMemory,
-        disp_stat: &mut u16,
-    ) -> u32 {
-        while dots > 0 {
-            if self.x >= HDRAW + HBLANK {
-                self.y += 1;
-                self.x = 0;
-                if self.y >= VDRAW {
-                    *disp_stat &= !HBLANK_FLAG;
-                    *disp_stat |= VBLANK_FLAG;
-                    if self.show_borders {
-                        self.ppu_to_display_sender
-                            .try_send(RenderWithBorders(memory.get_oam_borders()))
-                            .unwrap()
-                    } else {
-                        self.ppu_to_display_sender.try_send(Render).unwrap();
-                    }
-                    self.current_mode = PPUModes::VBLANK;
-                } else {
-                    self.obj_selection(memory);
-                    self.current_mode = PPUModes::HDRAW;
-                }
-                return dots;
-            }
-            self.x += 1;
-            dots -= 1;
+    pub(crate) fn hblank(&mut self, memory: &mut GBAMemory, disp_stat: &mut u16) {
+        self.y += 1;
+        self.x = 0;
+        if self.y < VDRAW {
+            self.obj_selection(memory);
+            self.current_mode = PPUModes::HDRAW;
+            return;
         }
-        return 0;
+        *disp_stat &= !HBLANK_FLAG;
+        *disp_stat |= VBLANK_FLAG;
+        self.current_mode = PPUModes::VBLANK;
+        self.start_display_rendering(memory);
+
+    }
+
+    fn start_display_rendering(&mut self, memory: &mut GBAMemory) {
+        match self.show_borders {
+            true => self.send_command(RenderWithBorders(memory.get_oam_borders())),
+            false => self.send_command(Render),
+        }
+    }
+
+    fn send_command(&mut self, command: PPUToDisplayCommands) {
+        self.ppu_to_display_sender.try_send(command).unwrap()
     }
 
     fn obj_selection(&mut self, memory: &mut GBAMemory) {

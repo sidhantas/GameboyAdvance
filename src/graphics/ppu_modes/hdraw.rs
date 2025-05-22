@@ -47,11 +47,10 @@ impl From<u16> for RGBComponents {
 impl PPU {
     pub(crate) fn hdraw(
         &mut self,
-        mut dots: u32,
         memory: &mut GBAMemory,
         disp_stat: &mut u16,
         display_buffer: &Arc<DisplayBuffer>,
-    ) -> u32 {
+    ) {
         let mut display_buffer = display_buffer.buffer.lock().unwrap();
         let pallete_region = unsafe {
             &memory.pallete_ram.memory[0x200..][..0x200]
@@ -59,12 +58,7 @@ impl PPU {
                 .unwrap_unchecked()
         };
         let pallete = OBJPalleteData(pallete_region);
-        while dots > 0 {
-            if self.x >= HDRAW {
-                *disp_stat |= HBLANK_FLAG;
-                self.current_mode = PPUModes::HBLANK;
-                return dots;
-            }
+        for _ in 0..HDRAW {
             self.current_line_objects.update_active_objects();
             let obj_pixel = if let Some(mut active_objects) = self.active_objects.take() {
                 let obj_pixel = self.get_obj_pixel(memory, &mut active_objects, &pallete);
@@ -85,11 +79,10 @@ impl PPU {
             display_buffer[(self.y * HDRAW + self.x) as usize] =
                 rgb555_to_rgb24(color_effects_pipeline(memory, enabled_layers));
 
-            dots -= 1;
             self.x += 1;
         }
-
-        return 0;
+        *disp_stat |= HBLANK_FLAG;
+        self.current_mode = PPUModes::HBLANK;
     }
 
     fn get_obj_pixel(

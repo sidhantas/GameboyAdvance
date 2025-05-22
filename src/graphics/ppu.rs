@@ -71,25 +71,34 @@ impl PPU {
         memory: &mut GBAMemory,
         display_buffer: &Arc<DisplayBuffer>,
     ) {
-        self.usable_cycles += cycles as u32;
-        self.available_dots += self.usable_cycles / 4;
-        self.usable_cycles %= 4;
-        if self.available_dots < 1 {
-            return;
-        }
+        self.available_dots += cycles as u32;
 
         let mut dispstat = memory.ioram.io_load(DISPSTAT);
-
-        self.available_dots = match self.current_mode {
+        match self.current_mode {
             PPUModes::HDRAW => {
-                if self.available_dots < HDRAW as u32 {
+                if self.available_dots < 4 * HDRAW as u32 {
                     // accumulate enough dots to draw entire lin
                     return;
                 }
-                self.hdraw(self.available_dots, memory, &mut dispstat, display_buffer)
+                self.available_dots -= 4 * HDRAW as u32;
+                self.hdraw(memory, &mut dispstat, display_buffer);
             }
-            PPUModes::HBLANK => self.hblank(self.available_dots, memory, &mut dispstat),
-            PPUModes::VBLANK => self.vblank(self.available_dots, &mut dispstat),
+            PPUModes::HBLANK => {
+                if self.available_dots < 4 * HBLANK as u32 {
+                    // accumulate enough dots to draw entire lin
+                    return;
+                }
+                self.available_dots -= 4 * HBLANK as u32;
+                self.hblank(memory, &mut dispstat);
+            }
+            PPUModes::VBLANK => {
+                if self.available_dots < 4 * (HBLANK + HDRAW) as u32 {
+                    // accumulate enough dots to draw entire lin
+                    return;
+                }
+                self.available_dots -= 4 * (HBLANK + HDRAW) as u32;
+                self.vblank(&mut dispstat);
+            }
         };
 
         // get background pixels with priority
