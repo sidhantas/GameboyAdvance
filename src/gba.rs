@@ -1,5 +1,5 @@
 use std::convert::identity;
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::Arc;
 
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
@@ -23,12 +23,13 @@ pub struct GBA {
 impl GBA {
     #[cfg(test)]
     pub fn new_no_bios() -> Self {
-        use std::sync::mpsc::sync_channel;
+        use std::sync::mpsc::channel;
+
 
         Self {
             memory: GBAMemory::new(),
             cpu: CPU::new(),
-            ppu: PPU::new(sync_channel(1).0),
+            ppu: PPU::new(channel().0),
             display_buffer: Arc::new(DisplayBuffer::new()),
         }
     }
@@ -37,7 +38,7 @@ impl GBA {
         bios: String,
         rom: String,
         display_buffer: Arc<DisplayBuffer>,
-        ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
+        ppu_to_display_sender: Sender<PPUToDisplayCommands>,
     ) -> Self {
         let mut memory = GBAMemory::new();
         memory.initialize_bios(bios).unwrap();

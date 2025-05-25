@@ -13,7 +13,10 @@ pub struct Oam {
     view_width: Cell<Option<i32>>,
     height: Cell<Option<i32>>,
     view_height: Cell<Option<i32>>,
+    center: Cell<Option<(i32, i32)>>,
+    view_center: Cell<Option<(i32, i32)>>,
     rotation_and_scaling_enabled: Cell<Option<bool>>,
+    rotation_and_scaling_parameter: Cell<Option<Option<usize>>>,
     double_sized: Cell<Option<bool>>,
 }
 
@@ -220,10 +223,35 @@ impl Oam {
     }
 
     pub fn rotation_scaling_parameter(&self) -> Option<usize> {
-        if self.rotation_and_scaling_enabled() {
-            return Some(((self.data[1] & 0x3E00) >> 9) as usize);
+        if let Some(rotation_and_scaling_parameter) = self.rotation_and_scaling_parameter.get() {
+            return rotation_and_scaling_parameter;
         }
-        None
+        let parameter = if self.rotation_and_scaling_enabled() {
+            Some(((self.data[1] & 0x3E00) >> 9) as usize)
+        } else {
+            None
+        };
+        self.rotation_and_scaling_parameter.set(Some(parameter));
+        parameter
+    }
+
+    pub fn center(&self) -> (i32, i32) {
+        if let Some(center) = self.center.get() {
+            return center;
+        }
+        let center = (self.width() / 2, self.height() / 2);
+        self.center.set(Some(center));
+        center
+    }
+
+    pub fn view_center(&self) -> (i32, i32) {
+        if let Some(view_center) = self.view_center.get() {
+            return view_center;
+        }
+        let view_center = (self.view_width() / 2, self.view_height() / 2);
+        self.view_center.set(Some(view_center));
+        view_center
+
     }
 
     pub fn horizontal_flip(&self) -> bool {

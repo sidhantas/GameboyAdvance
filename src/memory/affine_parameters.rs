@@ -37,14 +37,16 @@ impl AffineParameters {
     }
 
     pub fn transform_coordinates(&self, x: i32, y: i32, oam: &Oam) -> (i32, i32) {
-        let (center_x, center_y) = (oam.view_width() / 2, oam.view_height() / 2);
-        let (relative_x, relative_y) = (x - center_x, y - center_y);
+        let (view_center_x, view_center_y) = oam.view_center();
+        let (relative_x, relative_y) = (x - view_center_x, y - view_center_y);
         let transform_x = relative_x as f32 * self.0[0][0] + relative_x as f32 * self.0[1][0];
         let transform_y = relative_y as f32 * self.0[0][1] + relative_y as f32 * self.0[1][1];
+    
+        let (center_x, center_y) = oam.center();
 
         (
-            transform_x as i32 + oam.width() / 2,
-            transform_y as i32 + oam.height() / 2,
+            transform_x as i32 + center_x,
+            transform_y as i32 + center_y,
         )
     }
 }

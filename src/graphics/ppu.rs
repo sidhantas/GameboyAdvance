@@ -4,11 +4,11 @@ use crate::memory::memory::GBAMemory;
 use crate::memory::oam::Oam;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 use super::display::DisplayBuffer;
-use super::ppu_modes::hblank::OAMQueue;
+use super::layers::OBJPixel;
 
 pub const HDRAW: i32 = 240;
 pub const HBLANK: i32 = 68;
@@ -36,22 +36,22 @@ pub struct PPU {
     pub(super) current_mode: PPUModes,
     pub x: i32,
     pub y: i32,
-    pub(super) current_line_objects: OAMQueue,
-    pub(super) active_objects: Option<BinaryHeap<Reverse<usize>>>,
+    pub obj_buffer: [Option<OBJPixel>; HDRAW as usize],
+    pub(super) active_objects: Vec<Oam>,
     pub show_borders: bool,
-    pub(super) ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
+    pub(super) ppu_to_display_sender: Sender<PPUToDisplayCommands>,
 }
 
 impl PPU {
-    pub fn new(ppu_to_display_sender: SyncSender<PPUToDisplayCommands>) -> Self {
+    pub fn new(ppu_to_display_sender: Sender<PPUToDisplayCommands>) -> Self {
         Self {
             usable_cycles: 0,
             available_dots: 0,
             current_mode: PPUModes::HDRAW,
             x: 0,
             y: 0,
-            active_objects: Some(BinaryHeap::new()),
-            current_line_objects: OAMQueue::new(),
+            active_objects: Vec::new(),
+            obj_buffer: [(); HDRAW as usize].map(|_| None),
             show_borders: false,
             ppu_to_display_sender,
         }
@@ -63,7 +63,6 @@ impl PPU {
         self.current_mode = PPUModes::HDRAW;
         self.x = 0;
         self.y = 0;
-        self.current_line_objects = OAMQueue::new();
     }
     pub fn advance_ppu(
         &mut self,

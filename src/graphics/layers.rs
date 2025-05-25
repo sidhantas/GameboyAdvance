@@ -29,7 +29,7 @@ impl Default for Layers {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone,Debug, Copy)]
 pub struct OBJPixel {
     pub priority: u16,
     pub pixel: RGBComponents,

@@ -13,24 +13,6 @@ impl CPU {
         instruction: ARMByteCode,
         memory: &mut GBAMemory,
     ) -> CYCLES {
-        let shift_amount;
-        let mut cycles = 0;
-        if instruction.bit_is_set(25) {
-            shift_amount = (instruction & 0x0000_0F00) >> 7;
-        } else {
-            // The first cycle gets the register we shift by
-            // The rest of the operation happens on the next cycle in an I cycle
-            if instruction.bit_is_set(4) {
-                // shift by register
-                cycles += self.advance_pipeline(memory) + 1;
-                let shift_register = (instruction & 0x0000_0F00) >> 8;
-                shift_amount = self.get_register(shift_register);
-            } else {
-                shift_amount = (instruction & 0x0000_0F80) >> 7;
-            }
-        }
-        let rn = (0x000F_0000 & instruction) >> 16;
-        let rd = (0x0000_F000 & instruction) >> 12;
         let opcode = (instruction & 0x01E0_0000) >> 21;
         let operation: ALUOperation = match opcode {
             0x0 => CPU::arm_and,
@@ -75,6 +57,24 @@ impl CPU {
             0xf => CPU::arm_mvn,
             _ => unreachable!("Impossible to decode opcode"),
         };
+        let shift_amount;
+        let mut cycles = 0;
+        if instruction.bit_is_set(25) {
+            shift_amount = (instruction & 0x0000_0F00) >> 7;
+        } else {
+            // The first cycle gets the register we shift by
+            // The rest of the operation happens on the next cycle in an I cycle
+            if instruction.bit_is_set(4) {
+                // shift by register
+                cycles += self.advance_pipeline(memory) + 1;
+                let shift_register = (instruction & 0x0000_0F00) >> 8;
+                shift_amount = self.get_register(shift_register);
+            } else {
+                shift_amount = (instruction & 0x0000_0F80) >> 7;
+            }
+        }
+        let rn = (0x000F_0000 & instruction) >> 16;
+        let rd = (0x0000_F000 & instruction) >> 12;
 
         let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
         let operand2 = if instruction.bit_is_set(25) {
@@ -143,12 +143,13 @@ impl CPU {
         ));
     }
 
+    #[inline(never)]
+    #[no_mangle]
     pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
-        let operand2 = !operand2;
-        let result = operand1 + operand2 + 1; // use two's complement to make setting flags easier
+        let result = operand1 - operand2; // use two's complement to make setting flags easier
 
-        self.set_arithmetic_flags(result, operand1, operand2, 1, set_flags);
         self.set_register(rd, result);
+        self.set_arithmetic_flags(result, operand1, !operand2, 1, set_flags);
 
         self.set_executed_instruction(format_args!(
             "SUB {:#X} {:#X} {:#X}",
@@ -363,7 +364,11 @@ impl CPU {
         if set_flags == false {
             return;
         }
-        self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+        if result.get_bit(31) > 0 {
+            self.set_flag(FlagsRegister::N);
+        } else {
+            self.reset_flag(FlagsRegister::N);
+        }
         if result == 0 {
             self.set_flag(FlagsRegister::Z);
         } else {
@@ -384,7 +389,11 @@ impl CPU {
         }
         let result_sign = result.get_bit(31);
         let operand2_sign = operand2.get_bit(31);
-        self.set_flag_from_bit(FlagsRegister::N, result_sign as u8);
+        if result_sign > 0 {
+            self.set_flag(FlagsRegister::N);
+        } else {
+            self.reset_flag(FlagsRegister::N);
+        }
         if result == 0 {
             self.set_flag(FlagsRegister::Z);
         } else {

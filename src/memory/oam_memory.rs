@@ -5,10 +5,13 @@ use crate::memory::oam::Oam;
 use super::{
     affine_parameters::{AffineParameters, NUM_OAM_AFFINE_PARAMETERS},
     memory_block::{MemoryBlock, SimpleMemoryBlock},
+    oam::NUM_OAM_ENTRIES,
 };
 pub struct OAMBlock {
     memory: SimpleMemoryBlock,
     affine_parameters: Vec<AffineParameters>,
+    pub is_dirty: bool,
+    active_objects: Vec<Oam>,
 }
 const OAM_SIZE: usize = 0x400;
 const OAM_MIRROR_MASK: usize = 0x3FF;
@@ -25,6 +28,8 @@ impl OAMBlock {
         Self {
             memory: oam,
             affine_parameters,
+            is_dirty: true,
+            active_objects: Vec::new(),
         }
     }
 
@@ -32,12 +37,12 @@ impl OAMBlock {
         self.affine_parameters[group] = AffineParameters::create_parameters(&self.memory, group);
     }
 
-    pub fn get_affine_paramters(&self, group: usize) -> &AffineParameters {
-        &self.affine_parameters[group]
+    pub fn get_affine_paramters(&self, group: usize) -> AffineParameters {
+        self.affine_parameters[group].clone()
     }
 
     pub fn oam_read(&self, oam_num: usize) -> Oam {
-        let oam_slice: &[u8; 6] = self.memory.memory[oam_num * 0x08..][..6]
+        let oam_slice: [u8; 6] = self.memory.memory[oam_num * 0x08..][..6]
             .try_into()
             .unwrap();
         let oam_slice: [u16; 3] = unsafe { oam_slice.align_to::<u16>().1.try_into().unwrap() };
@@ -53,6 +58,7 @@ impl OAMBlock {
                 self.update_affine_paramters(group);
             }
         }
+        self.is_dirty = true;
     }
 }
 

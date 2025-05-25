@@ -49,25 +49,42 @@ pub trait Bits: PrimInt + Shr<u8> + BitAnd + Eq {
     fn reset_bit(&mut self, bit: u8);
     fn get_bit(self, bit: u8) -> Self;
 }
-
-impl Bits for WORD {
+impl Bits for u64 {
     fn bit_is_set(&self, bit: u8) -> bool {
-        assert!(bit < 32);
         return self >> bit & 0x01 != 0;
     }
 
     fn set_bit(&mut self, bit: u8) {
-        assert!(bit < 32);
         *self |= 1 << bit;
     }
 
     fn reset_bit(&mut self, bit: u8) {
-        assert!(bit < 32);
+        *self &= !(1 << bit);
+    }
+
+    fn get_bit(self, bit: u8) -> u64 {
+        return (self >> bit & 0x01) as u64;
+    }
+
+    fn twos_complement(self) -> u64 {
+        return !self + 1;
+    }
+}
+
+impl Bits for WORD {
+    fn bit_is_set(&self, bit: u8) -> bool {
+        return self >> bit & 0x01 != 0;
+    }
+
+    fn set_bit(&mut self, bit: u8) {
+        *self |= 1 << bit;
+    }
+
+    fn reset_bit(&mut self, bit: u8) {
         *self &= !(1 << bit);
     }
 
     fn get_bit(self, bit: u8) -> WORD {
-        assert!(bit < 32);
         return (self >> bit & 0x01) as WORD;
     }
 
@@ -78,22 +95,18 @@ impl Bits for WORD {
 
 impl Bits for HWORD {
     fn bit_is_set(&self, bit: u8) -> bool {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
         return self >> bit & 0x01 != 0;
     }
 
     fn set_bit(&mut self, bit: u8) {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
         *self |= 1 << bit;
     }
 
     fn reset_bit(&mut self, bit: u8) {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
         *self &= !(1 << bit);
     }
 
     fn get_bit(self, bit: u8) -> Self {
-        assert!(bit < (size_of::<Self>() * 8) as u8);
         return (self >> bit & 0x01) as Self;
     }
 
@@ -104,22 +117,18 @@ impl Bits for HWORD {
 
 impl Bits for BYTE {
     fn bit_is_set(&self, bit: u8) -> bool {
-        assert!(bit < 8);
         return self >> bit & 0x01 != 0;
     }
 
     fn set_bit(&mut self, bit: u8) {
-        assert!(bit < 8);
         *self |= 1 << bit;
     }
 
     fn reset_bit(&mut self, bit: u8) {
-        assert!(bit < 8);
         *self &= !(1 << bit);
     }
 
     fn get_bit(self, bit: u8) -> BYTE {
-        assert!(bit < 8);
         return (self >> bit & 0x01) as BYTE;
     }
 

@@ -28,13 +28,13 @@ impl<'a> Tile<'a> {
         Self::get_tile_single_obj(memory, oam, relative_tile as usize)
     }
 
-    fn get_tile_single_obj(memory: &'a GBAMemory, oam: &Oam, tile_num: usize) -> Self {
-        if oam.color_pallete() == 0 {
+    fn get_tile_single_obj(memory: &'a GBAMemory, object: &Oam, tile_num: usize) -> Self {
+        if object.color_pallete() == 0 {
             Self::FourBit {
                 tile: memory.vram.memory[0x10000 + tile_num * 32..][..32]
                     .try_into()
                     .unwrap(),
-                pallete_num: oam.pallete_number(),
+                pallete_num: object.pallete_number(),
             }
         } else {
             Self::EightBit {

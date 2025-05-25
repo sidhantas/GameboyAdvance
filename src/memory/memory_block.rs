@@ -54,7 +54,6 @@ impl SimpleMemoryBlock {
 
         Some(
             slice[mirror_masked_address..][..SIZE]
-                .as_ref()
                 .try_into()
                 .unwrap(),
         )

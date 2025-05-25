@@ -13,7 +13,7 @@ use std::{
     cell::RefCell,
     io::{self, Stdout},
     rc::Rc,
-    sync::{mpsc::SyncSender, Arc},
+    sync::{mpsc::Sender, Arc},
     time::Duration,
 };
 use tui::{
@@ -53,7 +53,7 @@ impl Debugger {
         bios: String,
         rom: String,
         pixel_buffer: Arc<DisplayBuffer>,
-        ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
+        ppu_to_display_sender: Sender<PPUToDisplayCommands>,
     ) -> Self {
         let breakpoints = Some(Vec::<Breakpoint>::new());
         let triggered_watchpoints = Rc::new(RefCell::new(Vec::<TriggeredWatchpoints>::new()));
@@ -95,7 +95,7 @@ pub fn start_debugger(
     bios: String,
     rom: String,
     pixel_buffer: Arc<DisplayBuffer>,
-    ppu_to_display_sender: SyncSender<PPUToDisplayCommands>,
+    ppu_to_display_sender: Sender<PPUToDisplayCommands>,
 ) -> Result<(), std::io::Error> {
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
