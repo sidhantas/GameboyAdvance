@@ -143,8 +143,6 @@ impl CPU {
         ));
     }
 
-    #[inline(never)]
-    #[no_mangle]
     pub fn arm_sub(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
         let result = operand1 - operand2; // use two's complement to make setting flags easier
 
@@ -359,7 +357,6 @@ impl CPU {
         0
     }
 
-    #[inline(never)]
     pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags == false {
             return;

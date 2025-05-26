@@ -29,7 +29,7 @@ impl Default for Layers {
     }
 }
 
-#[derive(Clone,Debug, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub struct OBJPixel {
     pub priority: u16,
     pub pixel: RGBComponents,
@@ -42,6 +42,7 @@ pub struct BGPixel {
     pub pixel: Option<RGBComponents>,
 }
 
+#[derive(Clone, Copy)]
 pub enum LayerPixel {
     OBJ(OBJPixel),
     BG(BGPixel),
@@ -55,7 +56,7 @@ impl LayerPixel {
         }
     }
 
-    pub fn priority(&self) -> u16 {
+    pub const fn priority(&self) -> u16 {
         match self {
             LayerPixel::OBJ(obj) => obj.priority,
             LayerPixel::BG(bg) => bg.priority,
@@ -78,30 +79,26 @@ impl BGPixel {
 
 impl Layers {
     pub fn get_top_layer(&self) -> LayerPixel {
-        let highest_priority_background_pixel = self.get_highest_priority_bg_pixel();
-        if let Some(obj_pixel) = self.obj {
-            if obj_pixel.priority <= highest_priority_background_pixel.priority {
-                return LayerPixel::OBJ(obj_pixel);
-            }
-        }
-
-        LayerPixel::BG(highest_priority_background_pixel)
-    }
-
-    fn get_highest_priority_bg_pixel(&self) -> BGPixel {
-        let bg_layers = [self.bg3, self.bg2, self.bg1, self.bg0];
-        let mut highest_priority_pixel = self.bd;
-
-        for layer in bg_layers {
-            if let Some(bg_pixel) = layer {
-                if bg_pixel.priority <= highest_priority_pixel.priority && bg_pixel.pixel.is_some()
-                {
-                    highest_priority_pixel = bg_pixel
+        let pixels = [
+            self.bg3.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg2.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg1.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg0.map(|pixel| LayerPixel::BG(pixel)),
+            self.obj.map(|pixel| LayerPixel::OBJ(pixel)),
+        ];
+        pixels.into_iter().fold(
+            LayerPixel::BG(self.bd),
+            |top_pixel: LayerPixel, new_pixel: Option<LayerPixel>| {
+                let Some(pixel) = new_pixel else {
+                    return top_pixel;
+                };
+                if pixel.priority() <= top_pixel.priority() {
+                    pixel
+                } else {
+                    top_pixel
                 }
-            }
-        }
-
-        highest_priority_pixel
+            },
+        )
     }
 
     pub fn get_enabled_layers(

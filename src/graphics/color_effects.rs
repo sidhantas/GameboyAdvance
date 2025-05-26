@@ -13,46 +13,20 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
     let binding = memory.io_load(BLDCNT);
     let bldcnt = BldCnt(&binding);
 
-    let blend_mode = if let Some(obj_pixel) = &layers.obj {
-        if obj_pixel.is_semi_transparent {
-            BlendMode::BldAlpha
-        } else {
-            bldcnt.bld_mode()
-        }
-    } else {
-        bldcnt.bld_mode()
-    };
+    let blend_mode = get_blend_mode(&layers, &bldcnt);
 
     match blend_mode {
         BlendMode::BldAlpha => {
             let (target_layers_a, target_layers_b) =
                 TargetLayer::get_enabled_layers(&layers, &bldcnt);
 
-            let target_pixel_a = if let Some(obj_pixel) = target_layers_a.obj {
-                if obj_pixel.is_semi_transparent {
-                    LayerPixel::OBJ(obj_pixel)
-                } else {
-                    let Some(target_pixel_a) = target_layers_a.get_top_pixel(false) else {
-                        return layers.get_top_layer().pixel();
-                    };
-                    target_pixel_a
-                }
-            } else {
-                let Some(target_pixel_a) = target_layers_a.get_top_pixel(false) else {
-                    return layers.get_top_layer().pixel();
-                };
-                target_pixel_a
-            };
-
-            let Some(target_pixel_b) =
-                target_layers_b.get_top_pixel(matches!(target_pixel_a, LayerPixel::OBJ(_)))
-            else {
+            let Some(target_pixel_a) = target_layers_a.get_target_pixel_a() else {
                 return layers.get_top_layer().pixel();
             };
 
-            if target_pixel_b.priority() < target_pixel_a.priority() {
-                return target_pixel_b.pixel();
-            }
+            let Some(target_pixel_b) = target_layers_b.get_target_pixel_b(target_pixel_a) else {
+                return layers.get_top_layer().pixel();
+            };
 
             let bldalpha = BldAlpha(memory.io_load(BLDALPHA));
             let eva = bldalpha.eva();
@@ -80,6 +54,19 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
     }
 }
 
+fn get_blend_mode(layers: &Layers, bldcnt: &BldCnt<'_>) -> BlendMode {
+    let blend_mode = if let Some(obj_pixel) = &layers.obj {
+        if obj_pixel.is_semi_transparent {
+            BlendMode::BldAlpha
+        } else {
+            bldcnt.bld_mode()
+        }
+    } else {
+        bldcnt.bld_mode()
+    };
+    blend_mode
+}
+
 #[derive(Default)]
 struct TargetLayer {
     pub bg0: Option<BGPixel>,
@@ -91,6 +78,71 @@ struct TargetLayer {
 }
 
 impl TargetLayer {
+    pub fn get_target_pixel_a(&self) -> Option<LayerPixel> {
+        if let Some(obj) = self.obj {
+            if obj.is_semi_transparent {
+                return Some(LayerPixel::OBJ(obj));
+            }
+        }
+
+        let pixels = [
+            self.bd.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg3.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg2.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg1.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg0.map(|pixel| LayerPixel::BG(pixel)),
+            self.obj.map(|pixel| LayerPixel::OBJ(pixel)),
+        ];
+
+        pixels.into_iter().fold(
+            None,
+            |top_pixel: Option<LayerPixel>, new_pixel: Option<LayerPixel>| {
+                let Some(current_top_pixel) = top_pixel else {
+                    return new_pixel;
+                };
+                let Some(pixel) = new_pixel else {
+                    return top_pixel;
+                };
+                if pixel.priority() <= current_top_pixel.priority() {
+                    new_pixel
+                } else {
+                    top_pixel
+                }
+            },
+        )
+    }
+
+    pub fn get_target_pixel_b(&self, target_pixel_a: LayerPixel) -> Option<LayerPixel> {
+        let target_pixel_a_priority = target_pixel_a.priority();
+        let pixels = [
+            self.bd.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg3.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg2.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg1.map(|pixel| LayerPixel::BG(pixel)),
+            self.bg0.map(|pixel| LayerPixel::BG(pixel)),
+            self.obj.map(|pixel| LayerPixel::OBJ(pixel)),
+        ];
+
+        pixels.into_iter().fold(
+            None,
+            |top_pixel: Option<LayerPixel>, new_pixel: Option<LayerPixel>| {
+                let Some(current_top_pixel) = top_pixel else {
+                    return new_pixel;
+                };
+                let Some(pixel) = new_pixel else {
+                    return top_pixel;
+                };
+                if pixel.priority() <= current_top_pixel.priority()
+                    && pixel.priority() < target_pixel_a_priority
+                {
+                    new_pixel
+                } else {
+                    top_pixel
+                }
+            },
+        )
+    }
+
     pub fn get_enabled_layers(layers: &Layers, bldcnt: &BldCnt) -> (Self, Self) {
         let mut target_layers_a = TargetLayer::default();
         let mut target_layers_b = TargetLayer::default();
@@ -110,7 +162,6 @@ impl TargetLayer {
         if bldcnt.target_a_obj_enabled() {
             target_layers_a.obj = layers.obj;
         }
-
         if bldcnt.target_a_bd_enabled() {
             target_layers_a.bd = Some(layers.bd);
         }

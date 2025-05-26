@@ -191,12 +191,10 @@ impl CPU {
         self.registers.set_register(register_num as usize, value);
     }
 
-    #[inline(always)]
     pub fn set_flag(&mut self, flag: FlagsRegister) {
         self.cpsr.set_flag(flag);
     }
 
-    #[inline(always)]
     pub fn reset_flag(&mut self, flag: FlagsRegister) {
         self.cpsr.reset_flag(flag);
     }

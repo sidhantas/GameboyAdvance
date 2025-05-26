@@ -54,36 +54,31 @@ impl PPU {
                 continue;
             }
             for i in object.x()..object.x() + object.view_width() {
-                if i < 0 || i >= HDRAW {
+                if i < 0 || i >= HDRAW || self.obj_buffer[i as usize].is_some() {
+                    continue;
+                };
+                let offset_x = i - object.x();
+                let offset_y = self.y - object.y();
+                let (transform_x, transform_y) =
+                    Self::transform_coordinates(memory, &object, offset_x, offset_y);
+                if transform_x < 0
+                    || transform_x > object.width()
+                    || transform_y <= 0
+                    || transform_y >= object.height()
+                {
                     continue;
                 }
-                if let None = self.obj_buffer[i as usize] {
-                    let offset_x = i - object.x();
-                    let offset_y = self.y - object.y();
-                    let (transform_x, transform_y) =
-                        Self::transform_coordinates(memory, &object, offset_x, offset_y);
-                    if transform_x < 0
-                        || transform_x > object.width()
-                        || transform_y <= 0
-                        || transform_y >= object.height()
-                    {
-                        continue;
-                    }
-                    let (tile_x, tile_y, pixel_x, pixel_y) =
-                        Self::get_tile_coordinates(transform_x, transform_y);
-                    let tile = Tile::get_tile_relative_obj(memory, &object, tile_x, tile_y);
-                    if let Some(pixel) =
-                        pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
-                    {
-                        self.obj_buffer[i as usize] = Some(OBJPixel {
-                            priority: object.priority(),
-                            pixel,
-                            is_semi_transparent: matches!(
-                                object.obj_mode(),
-                                OBJMode::SemiTransparent
-                            ),
-                        });
-                    }
+                let (tile_x, tile_y, pixel_x, pixel_y) =
+                    Self::get_tile_coordinates(transform_x, transform_y);
+                let tile = Tile::get_tile_relative_obj(memory, &object, tile_x, tile_y);
+                if let Some(pixel) =
+                    pallete.get_pixel_from_tile(&tile, pixel_x as usize, pixel_y as usize)
+                {
+                    self.obj_buffer[i as usize] = Some(OBJPixel {
+                        priority: object.priority(),
+                        pixel,
+                        is_semi_transparent: matches!(object.obj_mode(), OBJMode::SemiTransparent),
+                    });
                 }
             }
         }
