@@ -94,7 +94,7 @@ impl PPU {
                 memory,
                 obj_pixel,
                 dispcnt.get_bg_mode(),
-                &default_context,
+                current_context,
             );
 
             display_buffer[(self.y * HDRAW + x) as usize] =
