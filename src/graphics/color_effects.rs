@@ -1,6 +1,7 @@
 use crate::memory::{
     io_handlers::{BLDALPHA, BLDCNT},
     memory::GBAMemory,
+    oam::OBJMode,
     wrappers::blending::{BldAlpha, BldCnt, BlendMode},
 };
 
@@ -21,11 +22,18 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
                 TargetLayer::get_enabled_layers(&layers, &bldcnt);
 
             let Some(target_pixel_a) = target_layers_a.get_target_pixel_a() else {
-                return layers.get_top_layer().pixel();
+                return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
             };
 
             let Some(target_pixel_b) = target_layers_b.get_target_pixel_b(target_pixel_a) else {
-                return layers.get_top_layer().pixel();
+                return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
+            };
+
+            let Some(target_pixel_a) = target_pixel_a.pixel() else {
+                return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
+            };
+            let Some(target_pixel_b) = target_pixel_b.pixel() else {
+                return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
             };
 
             let bldalpha = BldAlpha(memory.io_load(BLDALPHA));
@@ -33,15 +41,15 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
             let evb = bldalpha.evb();
 
             let pixel_a = RGBComponents {
-                r: ((target_pixel_a.pixel().r as u16 * eva as u16) / 16) as u16,
-                g: ((target_pixel_a.pixel().g as u16 * eva as u16) / 16) as u16,
-                b: ((target_pixel_a.pixel().b as u16 * eva as u16) / 16) as u16,
+                r: ((target_pixel_a.r as f32 * eva as f32) / 16.) as u16,
+                g: ((target_pixel_a.g as f32 * eva as f32) / 16.) as u16,
+                b: ((target_pixel_a.b as f32 * eva as f32) / 16.) as u16,
             };
 
             let pixel_b = RGBComponents {
-                r: ((target_pixel_b.pixel().r as u16 * evb as u16) / 16) as u16,
-                g: ((target_pixel_b.pixel().g as u16 * evb as u16) / 16) as u16,
-                b: ((target_pixel_b.pixel().b as u16 * evb as u16) / 16) as u16,
+                r: ((target_pixel_b.r as f32 * evb as f32) / 16.) as u16,
+                g: ((target_pixel_b.g as f32 * evb as f32) / 16.) as u16,
+                b: ((target_pixel_b.b as f32 * evb as f32) / 16.) as u16,
             };
 
             RGBComponents {
@@ -50,21 +58,17 @@ pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponen
                 b: pixel_a.b + pixel_b.b,
             }
         }
-        _ => return layers.get_top_layer().pixel(),
+        _ => return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop()),
     }
 }
 
 fn get_blend_mode(layers: &Layers, bldcnt: &BldCnt<'_>) -> BlendMode {
-    let blend_mode = if let Some(obj_pixel) = &layers.obj {
-        if obj_pixel.is_semi_transparent {
-            BlendMode::BldAlpha
-        } else {
-            bldcnt.bld_mode()
+    if let Some(obj_pixel) = &layers.obj {
+        if obj_pixel.mode == OBJMode::SemiTransparent {
+            return BlendMode::BldAlpha;
         }
-    } else {
-        bldcnt.bld_mode()
-    };
-    blend_mode
+    }
+    bldcnt.bld_mode()
 }
 
 #[derive(Default)]
@@ -80,7 +84,7 @@ struct TargetLayer {
 impl TargetLayer {
     pub fn get_target_pixel_a(&self) -> Option<LayerPixel> {
         if let Some(obj) = self.obj {
-            if obj.is_semi_transparent {
+            if obj.mode == OBJMode::SemiTransparent {
                 return Some(LayerPixel::OBJ(obj));
             }
         }
@@ -127,13 +131,18 @@ impl TargetLayer {
             None,
             |top_pixel: Option<LayerPixel>, new_pixel: Option<LayerPixel>| {
                 let Some(current_top_pixel) = top_pixel else {
-                    return new_pixel;
+                    if let Some(pixel) = new_pixel {
+                        if pixel.priority() > target_pixel_a_priority {
+                            return new_pixel;
+                        }
+                    }
+                    return None;
                 };
                 let Some(pixel) = new_pixel else {
                     return top_pixel;
                 };
                 if pixel.priority() <= current_top_pixel.priority()
-                    && pixel.priority() < target_pixel_a_priority
+                    && pixel.priority() > target_pixel_a_priority
                 {
                     new_pixel
                 } else {
@@ -186,39 +195,6 @@ impl TargetLayer {
         }
 
         (target_layers_a, target_layers_b)
-    }
-
-    pub fn get_top_pixel(&self, exclude_obj: bool) -> Option<LayerPixel> {
-        let background_pixels = [self.bd, self.bg3, self.bg2, self.bg1, self.bg0];
-
-        let mut highest_priority_bg_pixel: Option<BGPixel> = None;
-
-        for bg_pixel in background_pixels {
-            if let Some(pixel) = highest_priority_bg_pixel {
-                if let bg_pix @ Some(bg_pixel) = bg_pixel {
-                    if bg_pixel.priority <= pixel.priority {
-                        highest_priority_bg_pixel = bg_pix;
-                    }
-                }
-            } else {
-                highest_priority_bg_pixel = bg_pixel;
-            }
-        }
-
-        if !exclude_obj {
-            if let Some(bg_pixel) = highest_priority_bg_pixel {
-                if let Some(obj_pixel) = self.obj {
-                    if obj_pixel.priority <= bg_pixel.priority {
-                        return Some(LayerPixel::OBJ(obj_pixel));
-                    }
-                }
-                return Some(LayerPixel::BG(bg_pixel));
-            } else {
-                return self.obj.map(|obj| LayerPixel::OBJ(obj));
-            }
-        }
-
-        return highest_priority_bg_pixel.map(|bg_pixel| LayerPixel::BG(bg_pixel));
     }
 }
 

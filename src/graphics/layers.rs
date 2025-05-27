@@ -1,10 +1,20 @@
 use crate::memory::{
     io_handlers::{BG0CNT, BG1CNT, BG2CNT, BG3CNT},
     memory::GBAMemory,
+    oam::OBJMode,
     wrappers::{bgcnt::BGCnt, dispcnt::Dispcnt},
 };
 
 use super::{pallete::BGPalleteData, ppu_modes::hdraw::RGBComponents, wrappers::tile::Tile};
+
+pub struct DisplayContext {
+    pub bg0_enabled: bool,
+    pub bg1_enabled: bool,
+    pub bg2_enabled: bool,
+    pub bg3_enabled: bool,
+    pub obj_enabled: bool,
+    pub color_special_effects_enabled: bool,
+}
 
 #[derive(Clone)]
 pub struct Layers {
@@ -33,7 +43,7 @@ impl Default for Layers {
 pub struct OBJPixel {
     pub priority: u16,
     pub pixel: RGBComponents,
-    pub is_semi_transparent: bool,
+    pub mode: OBJMode,
 }
 
 #[derive(Clone, Copy)]
@@ -49,10 +59,10 @@ pub enum LayerPixel {
 }
 
 impl LayerPixel {
-    pub fn pixel(&self) -> RGBComponents {
+    pub fn pixel(&self) -> Option<RGBComponents> {
         match self {
-            LayerPixel::OBJ(obj) => obj.pixel,
-            LayerPixel::BG(bg) => bg.pixel.unwrap_or(RGBComponents::backdrop()),
+            LayerPixel::OBJ(obj) => Some(obj.pixel),
+            LayerPixel::BG(bg) => bg.pixel,
         }
     }
 
@@ -92,7 +102,7 @@ impl Layers {
                 let Some(pixel) = new_pixel else {
                     return top_pixel;
                 };
-                if pixel.priority() <= top_pixel.priority() {
+                if pixel.priority() <= top_pixel.priority() && pixel.pixel().is_some(){
                     pixel
                 } else {
                     top_pixel
@@ -101,36 +111,53 @@ impl Layers {
         )
     }
 
+    pub fn get_top_bg_pixel(&self) -> BGPixel {
+        let pixels = [self.bg3, self.bg2, self.bg1, self.bg0];
+        pixels
+            .into_iter()
+            .fold(self.bd, |top_pixel: BGPixel, new_pixel: Option<BGPixel>| {
+                let Some(pixel) = new_pixel else {
+                    return top_pixel;
+                };
+                if pixel.priority <= top_pixel.priority {
+                    pixel
+                } else {
+                    top_pixel
+                }
+            })
+    }
+
     pub fn get_enabled_layers(
         x: i32,
         y: i32,
-        dispcnt: &Dispcnt,
         memory: &GBAMemory,
         obj: Option<OBJPixel>,
+        bg_mode: u16,
+        context: &DisplayContext,
     ) -> Self {
         let mut layers = Layers::default();
 
-        if dispcnt.bg0_enabled() {
+        if context.bg0_enabled {
             let bgcnt = BGCnt(memory.io_load(BG0CNT));
-            layers.bg0 = Some(Self::get_background_pixel(x, y, bgcnt, memory, &dispcnt));
+            layers.bg0 = Some(Self::get_background_pixel(x, y, bgcnt, memory, bg_mode));
         }
 
-        if dispcnt.bg1_enabled() {
+        if context.bg1_enabled {
             let bgcnt = BGCnt(memory.io_load(BG1CNT));
-            layers.bg1 = Some(Self::get_background_pixel(x, y, bgcnt, memory, &dispcnt));
+            layers.bg1 = Some(Self::get_background_pixel(x, y, bgcnt, memory, bg_mode));
         }
 
-        if dispcnt.bg2_enabled() {
+        if context.bg2_enabled {
             let bgcnt = BGCnt(memory.io_load(BG2CNT));
-            layers.bg2 = Some(Self::get_background_pixel(x, y, bgcnt, memory, &dispcnt));
+            layers.bg2 = Some(Self::get_background_pixel(x, y, bgcnt, memory, bg_mode));
         }
 
-        if dispcnt.bg3_enabled() {
+        if context.bg3_enabled {
             let bgcnt = BGCnt(memory.io_load(BG3CNT));
-            layers.bg3 = Some(Self::get_background_pixel(x, y, bgcnt, memory, &dispcnt));
+            layers.bg3 = Some(Self::get_background_pixel(x, y, bgcnt, memory, bg_mode));
         }
 
-        if dispcnt.obj_enabled() {
+        if context.obj_enabled {
             layers.obj = obj;
         }
 
@@ -142,7 +169,7 @@ impl Layers {
         y: i32,
         bgcnt: BGCnt,
         memory: &GBAMemory,
-        dispcnt: &Dispcnt,
+        bg_mode: u16,
     ) -> BGPixel {
         let tile_x = x / 8;
         let tile_y = y / 8;
@@ -154,14 +181,8 @@ impl Layers {
             .unwrap();
         let pallete = BGPalleteData(pallete_region);
 
-        let tile = match dispcnt.get_bg_mode() {
-            0x2 => Tile::get_tile_relative_bg(
-                memory,
-                &bgcnt,
-                dispcnt,
-                tile_y as usize,
-                tile_x as usize,
-            ),
+        let tile = match bg_mode {
+            0x2 => Tile::get_tile_relative_bg(memory, &bgcnt, tile_y as usize, tile_x as usize),
             _ => {
                 return BGPixel {
                     priority: 3,

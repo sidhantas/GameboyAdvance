@@ -33,14 +33,6 @@ impl<'a> BldCnt<'a> {
             _ => unreachable!(),
         }
     }
-    pub fn get_target_layers_a(&self) -> u16 {
-        self.0 & 0x3F
-    }
-
-    pub fn get_target_layers_b(&self) -> u16 {
-        (self.0 >> 7) & 0x3F
-    }
-
     pub fn target_a_bg0_enabled(&self) -> bool {
         self.0.bit_is_set(0)
     }

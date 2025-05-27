@@ -37,6 +37,7 @@ pub struct PPU {
     pub x: i32,
     pub y: i32,
     pub obj_buffer: [Option<OBJPixel>; HDRAW as usize],
+    pub obj_window: [bool; HDRAW as usize],
     pub(super) active_objects: Vec<Oam>,
     pub show_borders: bool,
     pub(super) ppu_to_display_sender: Sender<PPUToDisplayCommands>,
@@ -51,7 +52,8 @@ impl PPU {
             x: 0,
             y: 0,
             active_objects: Vec::new(),
-            obj_buffer: [(); HDRAW as usize].map(|_| None),
+            obj_buffer: [None; HDRAW as usize],
+            obj_window: [false; HDRAW as usize],
             show_borders: false,
             ppu_to_display_sender,
         }

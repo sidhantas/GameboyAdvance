@@ -106,31 +106,27 @@ fn draw_object_borders(pixel_buffer: &Arc<DisplayBuffer>, borders: Vec<Border>) 
             buff[(y * HDRAW + i) as usize] = 0x00FF0000;
         }
         for j in y..y + height {
-            if x < 0 {
-                break;
-            }
             if j >= VDRAW {
                 break;
             }
             if j < 0 {
                 continue;
             }
-            buff[(j * HDRAW + x) as usize] = 0x00FF0000;
+            if x >= 0 {
+                buff[(j * HDRAW + x) as usize] = 0x00FF0000;
+            }
             if x + width < HDRAW {
                 buff[(j * HDRAW + x + width) as usize] = 0x00FF0000;
             }
         }
         for i in x..=(x + width) {
-            if y < 0 {
-                break;
-            }
             if (y + height) >= VDRAW {
                 break;
             }
             if i > HDRAW {
                 break;
             }
-            if i < 0b0 {
+            if i < 0 {
                 continue;
             }
             buff[((y + height) * HDRAW + i) as usize] = 0x00FF0000;

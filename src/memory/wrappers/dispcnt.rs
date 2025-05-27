@@ -1,5 +1,6 @@
 use crate::utils::bits::Bits;
 
+#[derive(Clone, Copy)]
 pub struct Dispcnt(pub u16);
 
 impl Dispcnt {
@@ -48,6 +49,20 @@ impl Dispcnt {
 
     pub fn obj_enabled(&self) -> bool {
         self.0.bit_is_set(12)
+    }
+
+    pub fn window_0_enabled(&self) -> bool {
+        self.0.bit_is_set(13)
+    }
+    pub fn window_1_enabled(&self) -> bool {
+        self.0.bit_is_set(14)
+    }
+    pub fn obj_window_enabled(&self) -> bool {
+        self.0.bit_is_set(15)
+    }
+
+    pub fn winout_enabled(&self) -> bool {
+        self.window_0_enabled() || self.window_1_enabled() || self.obj_window_enabled()
     }
 }
 

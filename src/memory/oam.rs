@@ -20,7 +20,7 @@ pub struct Oam {
     double_sized: Cell<Option<bool>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum OBJMode {
     Normal,
     SemiTransparent,

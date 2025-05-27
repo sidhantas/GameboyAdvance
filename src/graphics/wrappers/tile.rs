@@ -48,7 +48,6 @@ impl<'a> Tile<'a> {
     pub fn get_tile_relative_bg(
         memory: &'a GBAMemory,
         bgcnt: &BGCnt,
-        dispcnt: &Dispcnt,
         y: usize,
         x: usize,
     ) -> Self {

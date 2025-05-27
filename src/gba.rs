@@ -1,5 +1,5 @@
 use std::convert::identity;
-use std::sync::mpsc::{Sender, SyncSender};
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
@@ -24,7 +24,6 @@ impl GBA {
     #[cfg(test)]
     pub fn new_no_bios() -> Self {
         use std::sync::mpsc::channel;
-
 
         Self {
             memory: GBAMemory::new(),

@@ -266,9 +266,9 @@ impl GBAMemory {
             memory_block.writeu8(address, value);
         }
 
-        //if let Some(breakpoint_checker) = &self.breakpoint_checker {
-        //    breakpoint_checker(self, address);
-        //}
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+        }
 
         self.wait_cycles_u16[region]
     }
@@ -278,9 +278,9 @@ impl GBAMemory {
         if let Some(memory_block) = self.get_memory_block_mut(region) {
             memory_block.writeu16(address, value);
         }
-        //if let Some(breakpoint_checker) = &self.breakpoint_checker {
-        //    breakpoint_checker(self, address);
-        //}
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+        }
 
         self.wait_cycles_u16[region]
     }
@@ -290,9 +290,9 @@ impl GBAMemory {
         if let Some(memory_block) = self.get_memory_block_mut(region) {
             memory_block.writeu32(address, value);
         }
-        //if let Some(breakpoint_checker) = &self.breakpoint_checker {
-        //    breakpoint_checker(self, address);
-        //}
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+        }
 
         self.wait_cycles_u32[region]
     }
@@ -301,9 +301,9 @@ impl GBAMemory {
         let region = address >> 24;
         let read = self.get_memory_block(region).readu8(address);
 
-        //if let Some(breakpoint_checker) = &self.breakpoint_checker {
-        //    breakpoint_checker(self, address);
-        //}
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+        }
 
         MemoryFetch {
             cycles: self.wait_cycles_u16[region],
@@ -319,9 +319,9 @@ impl GBAMemory {
     pub fn readu16(&self, address: usize) -> MemoryFetch<u16> {
         let region = address >> 24;
         let read = self.get_memory_block(region).readu16(address);
-        //if let Some(breakpoint_checker) = &self.breakpoint_checker {
-        //    breakpoint_checker(self, address);
-        //}
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+        }
         MemoryFetch {
             cycles: self.wait_cycles_u16[region],
             data: read,
@@ -331,9 +331,9 @@ impl GBAMemory {
     pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
         let region = address >> 24;
         let read = self.get_memory_block(region).readu32(address);
-        //if let Some(breakpoint_checker) = &self.breakpoint_checker {
-        //    breakpoint_checker(self, address);
-        //}
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+        }
         MemoryFetch {
             cycles: self.wait_cycles_u32[region],
             data: read.rotate_right(8 * (address as u32 & 0b11)),
