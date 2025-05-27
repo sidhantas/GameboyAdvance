@@ -127,13 +127,13 @@ mod tests {
     #[test]
     fn ppu_sets_vblank_flag_when_in_vblank() {
         let mut gba = GBA::new_no_bios();
-        gba.memory.writeu16(IO_BASE + DISPSTAT, VBLANK_ENABLE); // Enable VBLANK
-        assert_eq!(gba.memory.readu16(IO_BASE + DISPSTAT).data, 0x8);
+        gba.memory.writeu16(0x4000000 + DISPSTAT, VBLANK_ENABLE); // Enable VBLANK
+        assert_eq!(gba.memory.readu16(0x4000000 + DISPSTAT).data, 0x8);
 
         for _ in 0..((VDRAW + 1) * (HDRAW + HBLANK) * 4) {
             gba.step();
         }
 
-        assert_eq!(gba.memory.readu16(IO_BASE + DISPSTAT).data, 0x9);
+        assert_eq!(gba.memory.readu16(0x4000000 + DISPSTAT).data, 0x9);
     }
 }

@@ -83,9 +83,14 @@ impl PPU {
                 continue;
             }
             for i in object.x()..object.x() + object.view_width() {
-                if i < 0 || i >= HDRAW || self.obj_buffer[i as usize].is_some() {
+                if i < 0 || i >= HDRAW {
                     continue;
                 };
+                if let Some(current_obj) = self.obj_buffer[i as usize] {
+                    if current_obj.priority <= object.priority() {
+                        continue;
+                    }
+                }
                 let offset_x = i - object.x();
                 let offset_y = self.y - object.y();
                 let (transform_x, transform_y) =

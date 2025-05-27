@@ -104,7 +104,7 @@ mod timer_tests {
         tmcnt.set_bit(7); // enables timer
         memory.ppu_io_write(TM0CNT_H, tmcnt);
 
-        timers.tick(1, &mut memory);
+        timers.tick(1);
 
         assert_eq!(timers.0[0].counter, 1);
     }
@@ -118,7 +118,7 @@ mod timer_tests {
         tmcnt.set_bit(1); // set prescalar to 256 clocks
         memory.ppu_io_write(TM0CNT_H, tmcnt);
 
-        timers.tick(256, &mut memory);
+        timers.tick(256);
 
         assert_eq!(timers.0[0].counter, 1);
     }
@@ -132,7 +132,7 @@ mod timer_tests {
         tmcnt.set_bit(1); // set prescalar to 256 clocks
         memory.ppu_io_write(TM0CNT_H, tmcnt);
 
-        timers.tick(255, &mut memory);
+        timers.tick(255);
 
         assert_eq!(timers.0[0].counter, 0);
     }
@@ -150,7 +150,7 @@ mod timer_tests {
         tmcnt1.set_bit(2); // enable count up timing
         memory.ppu_io_write(TM1CNT_H, tmcnt1);
 
-        timers.tick(u16::MAX as u32 + 1, &mut memory);
+        timers.tick(u16::MAX as u32 + 1);
 
         assert_eq!(timers.0[0].counter, 1);
         assert_eq!(timers.0[1].counter, 1);
@@ -166,7 +166,7 @@ mod timer_tests {
         memory.ppu_io_write(TM0CNT_L, reload_value);
         memory.ppu_io_write(TM0CNT_H, tm0cnt_h);
 
-        timers.tick(u16::MAX as u32 + 1, &mut memory);
+        timers.tick(u16::MAX as u32 + 1);
 
         assert_eq!(timers.0[0].counter, (reload_value + 1) as u32);
     }
@@ -181,11 +181,11 @@ mod timer_tests {
         memory.ppu_io_write(TM0CNT_H, tmcnt0);
         memory.ppu_io_write(IE, 1 << 3); // Enable Timer0 IRQ
         memory.ppu_io_write(IME, 1); // Enable Timer0 IRQ
-        timers.tick(u16::MAX as u32 + 1, &mut memory);
+        timers.tick(u16::MAX as u32 + 1);
 
         assert_eq!(memory.io_load(IF), 1 << 3);
         assert!(matches!(
-            memory.cpu_commands.get(0).unwrap(),
+            memory.ioram.cpu_commands.get(0).unwrap(),
             CPUCallbacks::RaiseIrq
         ));
     }

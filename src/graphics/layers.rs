@@ -102,7 +102,7 @@ impl Layers {
                 let Some(pixel) = new_pixel else {
                     return top_pixel;
                 };
-                if pixel.priority() <= top_pixel.priority() && pixel.pixel().is_some(){
+                if pixel.priority() <= top_pixel.priority() && pixel.pixel().is_some() {
                     pixel
                 } else {
                     top_pixel

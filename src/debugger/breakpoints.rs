@@ -9,6 +9,7 @@ pub enum BreakType {
     WatchAddress(usize, usize),
 }
 
+#[derive(Debug)]
 pub enum TriggeredWatchpoints {
     Address(usize),
     Error(MemoryError),

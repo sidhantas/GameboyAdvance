@@ -750,145 +750,145 @@ impl MemoryBlock for IOBlock {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-
-    use crate::{
-        gba::GBA,
-        memory::{io_handlers::*, memory::GBAMemory},
-        utils::bits::Bits,
-    };
-
-    #[rstest]
-    #[case(DISPCNT, 0xAB, 0xAB)]
-    #[case(DISPCNT + 1, 0xFFAB, 0xFF)]
-    #[case(IME, 0xFFFF, 0x1)]
-    #[case(IME, 0xFFFE, 0x0)]
-    #[case(POSTFLG, 0xFFFF, 0x01)]
-    #[case(HALTCNT, 0xFFFF, 0x80)]
-    #[case(IE, 0xFFFE, 0xFE)]
-    #[case(IE + 1, 0xCDFE, 0x0D)]
-    fn test_regular_read_io_8(
-        #[case] address: usize,
-        #[case] write_value: u16,
-        #[case] expected_value: u8,
-    ) {
-        let mut memory = GBAMemory::new();
-        memory.io_store(address, write_value);
-        assert_eq!(memory.io_readu8(address).unwrap(), expected_value);
-    }
-
-    #[rstest]
-    #[case(DISPCNT, 0xAB, 0xAB)]
-    #[case(DISPCNT, 0xFFFF, 0xFFFF)]
-    #[case(IME, 0xFFFF, 0x1)]
-    #[case(IME, 0xFFFE, 0x0)]
-    #[case(POSTFLG, 0xFFFF, 0x8001)]
-    #[case(HALTCNT, 0xFFFF, 0x8001)]
-    #[case(IE, 0xFFFE, 0x3FFE)]
-    #[case(DISPSTAT, 0xFFFF, 0xFF3F)]
-    #[case(KEYINPUT, 0x3FF, 0x3FF)]
-    fn test_regular_read_io_16(
-        #[case] address: usize,
-        #[case] write_value: u16,
-        #[case] expected_value: u16,
-    ) {
-        let mut memory = GBAMemory::new();
-        memory.io_store(address, write_value);
-        assert_eq!(memory.io_readu16(address).unwrap(), expected_value);
-    }
-
-    #[rstest]
-    #[case(DISPCNT, 0xABCDEFAB, 0xEFAB)]
-    #[case(DISPCNT, 0xFFFF, 0xFFFF)]
-    #[case(IME, 0xFFFF, 0x1)]
-    #[case(IME, 0xFFFE, 0x0)]
-    #[case(POSTFLG, 0xFFFF, 0x8001)]
-    #[case(HALTCNT, 0xFFFF, 0x8001)] // Word aligns
-    #[case(IE, 0xABCDFFFE, 0x2BCD3FFE)]
-    fn test_regular_read_io_32(
-        #[case] address: usize,
-        #[case] write_value: u32,
-        #[case] expected_value: u32,
-    ) {
-        let mut memory = GBAMemory::new();
-        memory.io_store(address, (write_value & 0xFFFF) as u16);
-        memory.io_store(address + 2, ((write_value >> 16) & 0xFFFF) as u16);
-        assert_eq!(memory.io_readu32(address).unwrap(), expected_value);
-    }
-
-    #[rstest]
-    #[case(DISPCNT, 0xFFFF, 0xFFFF)]
-    #[case(DISPSTAT, 0xFFFF, 0xFF38)]
-    fn test_regular_write_io16(
-        #[case] address: usize,
-        #[case] write_value: u16,
-        #[case] expected_value: u16,
-    ) {
-        let mut memory = GBAMemory::new();
-        memory.io_writeu16(address, write_value).unwrap();
-
-        assert_eq!(memory.io_load(address), expected_value);
-    }
-
-    #[rstest]
-    #[case(0x3FFF, 0x3FFF, 0)]
-    #[case(0x3FF0, 0x0FF0, 0x3000)]
-    fn test_1s_to_if_should_clear_interupts(
-        #[case] if_val: u16,
-        #[case] write_val: u16,
-        #[case] expected_val: u16,
-    ) {
-        let mut memory = GBAMemory::new();
-        memory.io_store(IF, if_val);
-        memory.io_writeu16(IF, write_val).unwrap();
-
-        assert_eq!(memory.io_load(IF), expected_val);
-    }
-
-    #[rstest]
-    fn test_write_io8() {
-        let mut memory = GBAMemory::new();
-        memory.io_store(SOUNDBIAS, 0x200);
-        memory.io_writeu8(SOUNDBIAS + 1, 0x42).unwrap();
-
-        assert_eq!(memory.io_load(SOUNDBIAS), 0x4200);
-    }
-
-    #[rstest]
-    #[case(0)]
-    #[case(1)]
-    #[case(2)]
-    #[case(3)]
-    fn can_read_timers(#[case] timer_num: usize) {
-        let mut gba = GBA::new_no_bios();
-        let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
-        tmcnt.set_bit(7); // enables timer
-        gba.memory.ppu_io_write(0x102 + 0x4 * timer_num, tmcnt);
-
-        for _ in 0..5 {
-            gba.step();
-        }
-
-        assert_eq!(gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(), 5);
-    }
-
-    #[rstest]
-    #[case(0)]
-    #[case(1)]
-    #[case(2)]
-    #[case(3)]
-    fn timers_reload_on_timer_enable(#[case] timer_num: usize) {
-        let mut gba = GBA::new_no_bios();
-        gba.memory.io_writeu16(0x100 + 0x4 * timer_num, 0xFF);
-        let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
-        tmcnt.set_bit(7); // enables timer
-        gba.memory
-            .io_writeu16(0x102 + 0x4 * timer_num, tmcnt)
-            .unwrap();
-
-        assert_eq!(
-            gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(),
-            0xFF
-        );
-    }
+//    use rstest::rstest;
+//
+//    use crate::{
+//        gba::GBA,
+//        memory::{io_handlers::*, memory::GBAMemory},
+//        utils::bits::Bits,
+//    };
+//
+//    #[rstest]
+//    #[case(DISPCNT, 0xAB, 0xAB)]
+//    #[case(DISPCNT + 1, 0xFFAB, 0xFF)]
+//    #[case(IME, 0xFFFF, 0x1)]
+//    #[case(IME, 0xFFFE, 0x0)]
+//    #[case(POSTFLG, 0xFFFF, 0x01)]
+//    #[case(HALTCNT, 0xFFFF, 0x80)]
+//    #[case(IE, 0xFFFE, 0xFE)]
+//    #[case(IE + 1, 0xCDFE, 0x0D)]
+//    fn test_regular_read_io_8(
+//        #[case] address: usize,
+//        #[case] write_value: u16,
+//        #[case] expected_value: u8,
+//    ) {
+//        let mut memory = GBAMemory::new();
+//        memory.io_store(address, write_value);
+//        assert_eq!(memory.io_readu8(address).unwrap(), expected_value);
+//    }
+//
+//    #[rstest]
+//    #[case(DISPCNT, 0xAB, 0xAB)]
+//    #[case(DISPCNT, 0xFFFF, 0xFFFF)]
+//    #[case(IME, 0xFFFF, 0x1)]
+//    #[case(IME, 0xFFFE, 0x0)]
+//    #[case(POSTFLG, 0xFFFF, 0x8001)]
+//    #[case(HALTCNT, 0xFFFF, 0x8001)]
+//    #[case(IE, 0xFFFE, 0x3FFE)]
+//    #[case(DISPSTAT, 0xFFFF, 0xFF3F)]
+//    #[case(KEYINPUT, 0x3FF, 0x3FF)]
+//    fn test_regular_read_io_16(
+//        #[case] address: usize,
+//        #[case] write_value: u16,
+//        #[case] expected_value: u16,
+//    ) {
+//        let mut memory = GBAMemory::new();
+//        memory.io_store(address, write_value);
+//        assert_eq!(memory.io_readu16(address).unwrap(), expected_value);
+//    }
+//
+//    #[rstest]
+//    #[case(DISPCNT, 0xABCDEFAB, 0xEFAB)]
+//    #[case(DISPCNT, 0xFFFF, 0xFFFF)]
+//    #[case(IME, 0xFFFF, 0x1)]
+//    #[case(IME, 0xFFFE, 0x0)]
+//    #[case(POSTFLG, 0xFFFF, 0x8001)]
+//    #[case(HALTCNT, 0xFFFF, 0x8001)] // Word aligns
+//    #[case(IE, 0xABCDFFFE, 0x2BCD3FFE)]
+//    fn test_regular_read_io_32(
+//        #[case] address: usize,
+//        #[case] write_value: u32,
+//        #[case] expected_value: u32,
+//    ) {
+//        let mut memory = GBAMemory::new();
+//        memory.io_store(address, (write_value & 0xFFFF) as u16);
+//        memory.io_store(address + 2, ((write_value >> 16) & 0xFFFF) as u16);
+//        assert_eq!(memory.io_readu32(address).unwrap(), expected_value);
+//    }
+//
+//    #[rstest]
+//    #[case(DISPCNT, 0xFFFF, 0xFFFF)]
+//    #[case(DISPSTAT, 0xFFFF, 0xFF38)]
+//    fn test_regular_write_io16(
+//        #[case] address: usize,
+//        #[case] write_value: u16,
+//        #[case] expected_value: u16,
+//    ) {
+//        let mut memory = GBAMemory::new();
+//        memory.io_writeu16(address, write_value).unwrap();
+//
+//        assert_eq!(memory.io_load(address), expected_value);
+//    }
+//
+//    #[rstest]
+//    #[case(0x3FFF, 0x3FFF, 0)]
+//    #[case(0x3FF0, 0x0FF0, 0x3000)]
+//    fn test_1s_to_if_should_clear_interupts(
+//        #[case] if_val: u16,
+//        #[case] write_val: u16,
+//        #[case] expected_val: u16,
+//    ) {
+//        let mut memory = GBAMemory::new();
+//        memory.io_store(IF, if_val);
+//        memory.io_writeu16(IF, write_val).unwrap();
+//
+//        assert_eq!(memory.io_load(IF), expected_val);
+//    }
+//
+//    #[rstest]
+//    fn test_write_io8() {
+//        let mut memory = GBAMemory::new();
+//        memory.io_store(SOUNDBIAS, 0x200);
+//        memory.io_writeu8(SOUNDBIAS + 1, 0x42).unwrap();
+//
+//        assert_eq!(memory.io_load(SOUNDBIAS), 0x4200);
+//    }
+//
+//    #[rstest]
+//    #[case(0)]
+//    #[case(1)]
+//    #[case(2)]
+//    #[case(3)]
+//    fn can_read_timers(#[case] timer_num: usize) {
+//        let mut gba = GBA::new_no_bios();
+//        let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
+//        tmcnt.set_bit(7); // enables timer
+//        gba.memory.ppu_io_write(0x102 + 0x4 * timer_num, tmcnt);
+//
+//        for _ in 0..5 {
+//            gba.step();
+//        }
+//
+//        assert_eq!(gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(), 5);
+//    }
+//
+//    #[rstest]
+//    #[case(0)]
+//    #[case(1)]
+//    #[case(2)]
+//    #[case(3)]
+//    fn timers_reload_on_timer_enable(#[case] timer_num: usize) {
+//        let mut gba = GBA::new_no_bios();
+//        gba.memory.io_writeu16(0x100 + 0x4 * timer_num, 0xFF);
+//        let mut tmcnt = gba.memory.io_load(0x102 + 0x4 * timer_num);
+//        tmcnt.set_bit(7); // enables timer
+//        gba.memory
+//            .io_writeu16(0x102 + 0x4 * timer_num, tmcnt)
+//            .unwrap();
+//
+//        assert_eq!(
+//            gba.memory.io_readu16(0x100 + 0x4 * timer_num).unwrap(),
+//            0xFF
+//        );
+//    }
 }

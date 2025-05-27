@@ -63,9 +63,6 @@ impl Debugger {
             let Some(memory_breakpoints) = memory.breakpoints.as_ref() else {
                 return;
             };
-            if memory_breakpoints.is_empty() {
-                return;
-            }
             let triggered_breakpoints = &memory.triggered_breakpoints;
             for watchpoint in memory_breakpoints.iter() {
                 if let BreakType::WatchAddress(low, high) = watchpoint.break_type {

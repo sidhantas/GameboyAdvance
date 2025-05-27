@@ -8,7 +8,7 @@ use super::{
     oam::NUM_OAM_ENTRIES,
 };
 pub struct OAMBlock {
-    memory: SimpleMemoryBlock,
+    pub memory: SimpleMemoryBlock,
     affine_parameters: Vec<AffineParameters>,
     pub is_dirty: bool,
     active_objects: Vec<Oam>,

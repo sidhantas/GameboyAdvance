@@ -58,11 +58,11 @@ impl PPU {
             color_special_effects_enabled: true,
         };
         let winout_context = DisplayContext {
-            bg0_enabled: winout.bg0_enabled()&& default_context.bg0_enabled,
-            bg1_enabled: winout.bg1_enabled()&& default_context.bg1_enabled,
-            bg2_enabled: winout.bg2_enabled()&& default_context.bg2_enabled,
-            bg3_enabled: winout.bg3_enabled()&& default_context.bg3_enabled,
-            obj_enabled: winout.obj_enabled()&& default_context.obj_enabled,
+            bg0_enabled: winout.bg0_enabled() && default_context.bg0_enabled,
+            bg1_enabled: winout.bg1_enabled() && default_context.bg1_enabled,
+            bg2_enabled: winout.bg2_enabled() && default_context.bg2_enabled,
+            bg3_enabled: winout.bg3_enabled() && default_context.bg3_enabled,
+            obj_enabled: winout.obj_enabled() && default_context.obj_enabled,
             color_special_effects_enabled: winout.color_special_effects_enabled(),
         };
         let obj_window_context = DisplayContext {
@@ -76,7 +76,10 @@ impl PPU {
         for x in 0..HDRAW {
             let obj_pixel = self.get_obj_pixel(x as usize);
             let current_context = if dispcnt.winout_enabled() {
-                if self.obj_window[x as usize] && dispcnt.obj_enabled() && dispcnt.obj_window_enabled() {
+                if self.obj_window[x as usize]
+                    && dispcnt.obj_enabled()
+                    && dispcnt.obj_window_enabled()
+                {
                     &obj_window_context
                 } else {
                     &winout_context
@@ -91,7 +94,7 @@ impl PPU {
                 memory,
                 obj_pixel,
                 dispcnt.get_bg_mode(),
-                &current_context,
+                &default_context,
             );
 
             display_buffer[(self.y * HDRAW + x) as usize] =

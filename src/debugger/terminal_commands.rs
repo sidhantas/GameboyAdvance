@@ -7,7 +7,7 @@ use crate::{
     memory::oam::Oam,
     utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
-use std::{fmt::Display, mem, time::Instant};
+use std::{convert::identity, fmt::Display, mem, time::Instant};
 
 pub enum TerminalCommandErrors {
     CouldNotFindCommand,
@@ -204,21 +204,21 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
         None => 1,
     };
 
-    let cpu = &mut debugger.gba;
+    let gba = &mut debugger.gba;
     let timer = Instant::now();
     for _ in 0..num_executions {
-        mem::swap(&mut cpu.memory.breakpoints, &mut debugger.breakpoints);
-        cpu.step();
-        mem::swap(&mut cpu.memory.breakpoints, &mut debugger.breakpoints);
+        mem::swap(&mut gba.memory.breakpoints, &mut debugger.breakpoints);
+        gba.step();
+        mem::swap(&mut gba.memory.breakpoints, &mut debugger.breakpoints);
         for breakpoint in debugger.breakpoints.as_ref().unwrap().iter() {
             match breakpoint.break_type {
                 BreakType::Break(break_pc) => {
-                    if cpu.cpu.get_pc() == break_pc {
+                    if gba.cpu.get_pc() == break_pc {
                         return Ok(String::from("Breakpoint encountered"));
                     }
                 }
                 BreakType::WatchRegister(register, value) => {
-                    if cpu.cpu.get_register(register) == value {
+                    if gba.cpu.get_register(register) == value {
                         return Ok(format!("Watchpoint encountered {}", breakpoint.break_type));
                     }
                 }
@@ -226,7 +226,7 @@ fn next_handler(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, Term
             }
         }
         let mut encountered_watchpoints = String::new();
-        for watchpoint in debugger.triggered_watchpoints.borrow_mut().drain(..) {
+        for watchpoint in gba.memory.triggered_breakpoints.borrow_mut().drain(..) {
             match watchpoint {
                 TriggeredWatchpoints::Address(address) => {
                     encountered_watchpoints
@@ -427,7 +427,7 @@ fn dissassemble_oam(
         orient: {:#?},\n\
         tile: {}\n\
         rotation scaling: {}\n\
-        rotation scaling param: {:#?}\n\
+        rotation scaling param: {}\n\
         double size: {}\n\
         disabled: {}\n\
         mode: {:#?}\n\
@@ -440,7 +440,8 @@ fn dissassemble_oam(
         oam.obj_shape(),
         oam.tile_number(),
         oam.rotation_and_scaling_enabled(),
-        oam.rotation_scaling_parameter(),
+        oam.rotation_scaling_parameter()
+            .map_or("None".to_string(), |param| format!("{param}")),
         oam.double_sized(),
         oam.obj_disabled(),
         oam.obj_mode(),

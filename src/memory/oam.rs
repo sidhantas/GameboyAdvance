@@ -251,7 +251,6 @@ impl Oam {
         let view_center = (self.view_width() / 2, self.view_height() / 2);
         self.view_center.set(Some(view_center));
         view_center
-
     }
 
     pub fn horizontal_flip(&self) -> bool {

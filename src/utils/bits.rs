@@ -187,9 +187,13 @@ mod fixed88_tests {
     #[case(0b1000000000101100, -0.171875)]
     #[case(0b00, 0.)]
     #[case(0xb8, 0.71875)]
+    #[case(0x0100, 1.)]
+    #[case(0x0040, 0.25)]
     pub fn converts_fixed_point_to_f32(#[case] fixed88: u16, #[case] expected_output: f32) {
         let result = dbg!(fixed88_point_to_floating_point(fixed88));
         println!("0b{:0>32b}", result.to_bits());
         assert_eq!(result, expected_output);
     }
 }
+
+
