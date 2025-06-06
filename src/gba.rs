@@ -72,11 +72,15 @@ impl GBA {
             }
             self.memory.ppu_io_write(IF, if_flag);
         }
+
         for command in self.memory.ioram.cpu_commands.drain(..) {
             match command {
                 CPUCallbacks::Halt => self.cpu.halt(),
                 CPUCallbacks::RaiseIrq => {
                     self.cpu.interrupt_triggered = true;
+                }
+                CPUCallbacks::DMA(dma_num) => {
+
                 }
                 _ => panic!("{:#?}", command),
             }

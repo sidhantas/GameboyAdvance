@@ -78,6 +78,7 @@ pub enum CPUCallbacks {
     Halt,
     Stop,
     RaiseIrq,
+    DMA(usize)
 }
 
 #[derive(Debug)]
