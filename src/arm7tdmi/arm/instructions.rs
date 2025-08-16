@@ -31,8 +31,11 @@ impl Default for ARMDecodedInstruction {
 
 impl CPU {
     pub fn set_executed_instruction(&mut self, name: Arguments<'_>) {
-        //self.executed_instruction.clear();
-        //write!(self.executed_instruction, "{}", name).unwrap();
+        if !self.show_executed_instructions {
+            return;
+        }
+        self.executed_instruction.clear();
+        write!(self.executed_instruction, "{}", name).unwrap();
     }
 
     pub fn arm_branch(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
@@ -74,6 +77,7 @@ impl CPU {
             } else {
                 self.set_flag(FlagsRegister::Z);
             }
+            self.reset_flag(FlagsRegister::C);
         }
 
         self.set_executed_instruction(format_args!("MUL {} {} {}", rd, rm, rs));
@@ -93,7 +97,36 @@ impl CPU {
         instruction: ARMByteCode,
         memory: &mut GBAMemory,
     ) -> CYCLES {
-        panic!("Not implemented");
+        let rd = (instruction & 0x000F_0000) >> 16;
+        let rn = (instruction & 0x0000_F000) >> 12;
+        let rs = (instruction & 0x0000_0F00) >> 8;
+        let rm = instruction & 0x0000_000F;
+        let set_flags = instruction.bit_is_set(20);
+
+        let operand1 = self.get_register(rm) as u64;
+        let operand2 = self.get_register(rs) as u64;
+        let acc = self.get_register(rn) as u64;
+
+        let result = (operand1 * operand2 + acc) as u32;
+        if set_flags {
+            self.set_flag_from_bit(FlagsRegister::N, result.get_bit(31) as u8);
+            if result == 0 {
+                self.reset_flag(FlagsRegister::Z);
+            } else {
+                self.set_flag(FlagsRegister::Z);
+            }
+            self.reset_flag(FlagsRegister::C);
+        }
+        self.set_executed_instruction(format_args!("MUL {} {} {} {}", rd, rn, rm, rs));
+        if operand2 & 0xFFFF_FF00 == 0 || operand2 & 0xFFFF_FF00 == 0xFFFF_FF00 {
+            2
+        } else if operand2 & 0xFFFF_0000 == 0 || operand2 & 0xFFFF_0000 == 0xFFFF_0000 {
+            3
+        } else if operand2 & 0xFF00_0000 == 0 || operand2 & 0xFF00_0000 == 0xFFFF_0000 {
+            4
+        } else {
+            5
+        }
     }
 
     pub fn arm_multiply_long(

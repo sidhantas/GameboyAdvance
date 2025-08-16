@@ -32,7 +32,7 @@ impl CPU {
                 self.get_flag(FlagsRegister::Z) == 1
                     || self.get_flag(FlagsRegister::N) != self.get_flag(FlagsRegister::V)
             } //LE
-            _ => panic!("Impossible/Undefined condition code"),
+            _ => panic!("Impossible/Undefined condition code {:#b}", condition),
         };
 
         // We don't use the fetched instruction but we need to do it to get the correct cycle count

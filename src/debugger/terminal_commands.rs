@@ -7,7 +7,7 @@ use crate::{
     memory::oam::Oam,
     utils::utils::{try_parse_num, try_parse_reg, ParsingError},
 };
-use std::{convert::identity, fmt::Display, mem, time::Instant};
+use std::{fmt::Display, mem, time::Instant};
 
 pub enum TerminalCommandErrors {
     CouldNotFindCommand,
@@ -49,7 +49,7 @@ pub struct TerminalHistoryEntry {
     pub result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 13] = [
+pub const TERMINAL_COMMANDS: [TerminalCommand; 14] = [
     TerminalCommand {
         name: "next",
         _arguments: 1,
@@ -127,6 +127,12 @@ pub const TERMINAL_COMMANDS: [TerminalCommand; 13] = [
         _arguments: 1,
         _description: "Resets CPU",
         handler: reset_gba,
+    },
+    TerminalCommand {
+        name: "toggle-decode",
+        _arguments: 1,
+        _description: "Shows decoded instruction",
+        handler: show_decode,
     },
 ];
 
@@ -478,4 +484,10 @@ fn reset_gba(debugger: &mut Debugger, _args: Vec<&str>) -> Result<String, Termin
     debugger.gba.reset();
 
     Ok(String::new())
+}
+
+fn show_decode(debugger: &mut Debugger, _args: Vec<&str>) -> Result<String, TerminalCommandErrors> {
+    debugger.gba.cpu.show_executed_instructions = !debugger.gba.cpu.show_executed_instructions;
+
+    Ok(String::from("Enabled Decoding Instructions"))
 }

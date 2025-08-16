@@ -1,5 +1,7 @@
 use core::panic;
-use std::fs::{remove_file, File, OpenOptions};
+use std::{
+    collections::VecDeque, fmt::Display, fs::{remove_file, File, OpenOptions}, io::Write
+};
 
 use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
 
@@ -35,13 +37,13 @@ pub enum FlagsRegister {
     V = 28,
 }
 
-//#[derive(Default, Debug)]
-//struct Status {
-//    pub instruction_count: usize,
-//    pub registers: [WORD; 16],
-//    pub cpsr: PSR,
-//    pub cycles: u64,
-//}
+#[derive(Default, Debug)]
+struct Status {
+    pub instruction_count: usize,
+    pub registers: [WORD; 16],
+    pub cpsr: PSR,
+    pub cycles: u64,
+}
 
 #[derive(Debug)]
 pub struct CPU {
@@ -54,8 +56,10 @@ pub struct CPU {
     pub spsr: [PSR; 5],
     pub output_file: File,
     pub cycles: u64,
-    //status_history: VecDeque<Status>,
+    status_history: VecDeque<Status>,
     pub interrupt_triggered: bool,
+    instruction_count: usize,
+    pub(crate) show_executed_instructions: bool
 }
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
@@ -78,9 +82,11 @@ impl CPU {
                 .open(OUTPUT_FILE)
                 .unwrap(),
             cycles: 0,
-            //status_history: VecDeque::with_capacity(HISTORY_SIZE),
+            status_history: VecDeque::with_capacity(HISTORY_SIZE),
             is_halted: false,
             interrupt_triggered: false,
+            instruction_count: 0,
+            show_executed_instructions: false
         };
         cpu
     }
@@ -92,6 +98,18 @@ impl CPU {
 
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
+
+//        self.status_history.push_back(Status {
+//            cycles: self.cycles,
+//            registers: self.registers.active_registers.clone(),
+//            cpsr: self.cpsr.clone(),
+//            instruction_count: self.instruction_count,
+//        });
+//
+//        if self.status_history.len() > HISTORY_SIZE {
+//            self.status_history.pop_front();
+//        }
+        self.instruction_count += 1;
         if self.interrupt_triggered {
             self.raise_irq(memory);
             self.interrupt_triggered = false;
@@ -236,7 +254,6 @@ impl CPU {
     }
 
     pub fn set_flag_from_bit(&mut self, flag: FlagsRegister, bit: u8) {
-        assert!(bit == 0 || bit == 1);
         if bit == 0 {
             self.reset_flag(flag);
             return;
@@ -361,25 +378,25 @@ impl CPU {
     //}
 }
 
-//impl Display for Status {
-//    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//        write!(f, "{} ", self.instruction_count)?;
-//        for i in self.registers {
-//            write!(f, "{:08x} ", i)?;
-//        }
-//
-//        write!(f, "{:08x} ", self.cpsr)?;
-//        write!(f, "{}\n", self.cycles)
-//    }
-//}
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ", self.instruction_count)?;
+        for i in self.registers {
+            write!(f, "{:08x} ", i)?;
+        }
 
-//impl Drop for CPU {
-//    fn drop(&mut self) {
-//        for i in self.status_history.iter().skip(1) {
-//            self.output_file.write(format!("{}", i).as_bytes()).unwrap();
-//        }
-//    }
-//}
+        write!(f, "{:08x} ", u32::from(self.cpsr))?;
+        write!(f, "{}\n", self.cycles)
+    }
+}
+
+impl Drop for CPU {
+    fn drop(&mut self) {
+        for i in self.status_history.iter().skip(1) {
+            self.output_file.write(format!("{}", i).as_bytes()).unwrap();
+        }
+    }
+}
 
 #[cfg(test)]
 mod cpu_tests {

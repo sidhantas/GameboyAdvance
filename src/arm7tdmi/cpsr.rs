@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::utils::bits::{self, Bits};
 
 use super::cpu::{CPUMode, FlagsRegister, InstructionMode};
@@ -12,6 +14,18 @@ pub struct PSR {
     carry: bool,
     zero: bool,
     sign: bool,
+}
+
+impl Default for PSR {
+    fn default() -> Self {
+        Self::new_spsr()
+    }
+}
+
+impl Display for PSR {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#x}", u32::from(*self))
+    }
 }
 
 impl From<PSR> for u32 {

@@ -158,6 +158,10 @@ impl CPU {
                     executable: CPU::sdt_sign_extend_byte_or_halfword,
                 }
             }
+            _ if thumb_decoders::is_thumb_swi(instruction) => ARMDecodedInstruction {
+                instruction,
+                executable: CPU::arm_software_interrupt,
+            },
             _ if thumb_decoders::is_sdt_imm_offset(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::sdt_imm_offset,
@@ -335,13 +339,14 @@ mod thumb_decoders {
     pub fn is_unconditional_branch(instruction: u32) -> bool {
         instruction & 0xF800 == 0xE000
     }
-
     pub fn is_set_link_register(instruction: u32) -> bool {
         instruction & 0xF800 == 0xF000
     }
-
     pub fn is_long_branch_with_link(instruction: u32) -> bool {
         instruction & 0xF800 == 0xF800
+    }
+    pub fn is_thumb_swi(instruction: u32) -> bool {
+        instruction & 0xFF00 == 0xDF00
     }
 }
 

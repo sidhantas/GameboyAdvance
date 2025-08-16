@@ -4,15 +4,12 @@ use crate::{
         display::Border,
         ppu::{HDRAW, VDRAW},
     },
-    io::timers::Timers,
     types::{BYTE, CYCLES, HWORD, WORD},
 };
-use core::panic;
 use std::{
     cell::RefCell,
     fmt::Display,
     fs::File,
-    hint::unreachable_unchecked,
     io::{Read, Seek},
     rc::Rc,
     usize,
@@ -256,7 +253,7 @@ impl GBAMemory {
             OAM_REGION => &self.oam,
             ROM0A_REGION..=ROM2B_REGION => &self.rom,
             SRAM_REGION => &self.sram,
-            _ => unreachable!(),
+            _ => unreachable!("{}", region),
         }
     }
 
