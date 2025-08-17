@@ -40,9 +40,19 @@ impl CPU {
 
     pub fn arm_branch(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
-        if instruction.bit_is_set(24) {
-            self.set_register(LINK_REGISTER, self.get_pc() - 4);
-        }
+        let offset = instruction & 0x00FF_FFFF;
+        let offset = sign_extend(offset << 2, 25);
+        let destination = offset + self.get_pc();
+        self.set_pc(destination);
+        cycles += self.flush_pipeline(memory);
+        self.set_executed_instruction(format_args!("B {:#010x}", destination));
+
+        cycles
+    }
+
+    pub fn arm_branch_and_link(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 1;
+        self.set_register(LINK_REGISTER, self.get_pc() - 4);
         let offset = instruction & 0x00FF_FFFF;
         let offset = sign_extend(offset << 2, 25);
         let destination = offset + self.get_pc();

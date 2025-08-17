@@ -75,7 +75,7 @@ pub enum CPUCallbacks {
     Halt,
     Stop,
     RaiseIrq,
-    DMA(usize)
+    DMA(usize),
 }
 
 #[derive(Debug)]
@@ -99,21 +99,21 @@ impl Display for MemoryError {
     }
 }
 
-const EX_WRAM_MIRROR_MASK: usize = 0x3FFFF;
+const EXWRAM_MIRROR_MASK: usize = 0x3FFFF;
 const IWRAM_MIRROR_MASK: usize = 0x7FFF;
 const BGRAM_MIRROR_MASK: usize = 0x3FF;
 const OAM_MIRROR_MASK: usize = 0x3FF;
 
 pub struct GBAMemory {
-    bios: SimpleMemoryBlock,
-    exwram: SimpleMemoryBlock,
-    iwram: SimpleMemoryBlock,
+    bios: SimpleMemoryBlock<0xFFFFFF>,
+    exwram: SimpleMemoryBlock<EXWRAM_MIRROR_MASK>,
+    iwram: SimpleMemoryBlock<IWRAM_MIRROR_MASK>,
     pub ioram: IOBlock,
-    pub pallete_ram: SimpleMemoryBlock,
-    pub vram: SimpleMemoryBlock,
+    pub pallete_ram: SimpleMemoryBlock<BGRAM_MIRROR_MASK>,
+    pub vram: SimpleMemoryBlock<0xFFFFFF>,
     pub oam: OAMBlock,
-    rom: SimpleMemoryBlock,
-    sram: SimpleMemoryBlock,
+    rom: SimpleMemoryBlock<0xFFFFFF>,
+    sram: SimpleMemoryBlock<0xFFFFFF>,
     active_region: u32,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
@@ -156,15 +156,15 @@ impl GBAMemory {
         wait_cycles_u32[ROM2B_REGION] = 8;
 
         let mut memory = Self {
-            bios: SimpleMemoryBlock::new(BIOS_SIZE, 0xFFFFFF),
-            exwram: SimpleMemoryBlock::new(EXWRAM_SIZE, EX_WRAM_MIRROR_MASK),
-            iwram: SimpleMemoryBlock::new(IWRAM_SIZE, IWRAM_MIRROR_MASK),
+            bios: SimpleMemoryBlock::new(BIOS_SIZE),
+            exwram: SimpleMemoryBlock::new(EXWRAM_SIZE),
+            iwram: SimpleMemoryBlock::new(IWRAM_SIZE),
             ioram: IOBlock::new(),
-            pallete_ram: SimpleMemoryBlock::new(BGRAM_SIZE, BGRAM_MIRROR_MASK),
-            vram: SimpleMemoryBlock::new(VRAM_SIZE, 0xFFFFFF),
+            pallete_ram: SimpleMemoryBlock::new(BGRAM_SIZE),
+            vram: SimpleMemoryBlock::new(VRAM_SIZE),
             oam: OAMBlock::new(),
-            rom: SimpleMemoryBlock::new(ROM_SIZE, 0xFFFFFF),
-            sram: SimpleMemoryBlock::new(SRAM_SIZE, 0xFFFFFF),
+            rom: SimpleMemoryBlock::new(ROM_SIZE),
+            sram: SimpleMemoryBlock::new(SRAM_SIZE),
             wait_cycles_u16,
             active_region: 0,
             wait_cycles_u32,
@@ -336,6 +336,29 @@ impl GBAMemory {
             cycles: self.wait_cycles_u32[region],
             data: read.rotate_right(8 * (address as u32 & 0b11)),
         }
+    }
+
+    pub fn readu32_double(&self, address: usize) -> (MemoryFetch<u32>, MemoryFetch<u32>) {
+        let region = address >> 24;
+        let memory_block = &self.get_memory_block(region);
+        let read_1 = memory_block.readu32(address);
+        let read_2 = memory_block.readu32(address + 4);
+
+        if let Some(breakpoint_checker) = &self.breakpoint_checker {
+            breakpoint_checker(self, address);
+            breakpoint_checker(self, address + 4);
+        }
+
+        (
+            MemoryFetch {
+                cycles: self.wait_cycles_u32[region],
+                data: read_1.rotate_right(8 * (address as u32 & 0b11)),
+            },
+            MemoryFetch {
+                cycles: self.wait_cycles_u32[region],
+                data: read_2.rotate_right(8 * (address as u32 & 0b11)),
+            },
+        )
     }
 
     pub fn get_oam_borders(&self) -> Vec<Border> {

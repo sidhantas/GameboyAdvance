@@ -9,16 +9,14 @@ pub trait MemoryBlock {
     fn readu32(&self, address: usize) -> u32;
 }
 
-pub struct SimpleMemoryBlock {
+pub struct SimpleMemoryBlock<const MASK: usize> {
     pub memory: Vec<u8>,
-    memory_mask: usize,
 }
 
-impl SimpleMemoryBlock {
-    pub fn new(size: usize, mask: usize) -> Self {
-        SimpleMemoryBlock {
-            memory: vec![0; size],
-            memory_mask: mask,
+impl<const MASK: usize> SimpleMemoryBlock<MASK> {
+    pub fn new(size: usize) -> Self {
+        SimpleMemoryBlock::<MASK> {
+            memory: vec![0; size + 4],
         }
     }
     fn get_memory_slice_mut<const SIZE: usize>(
@@ -26,7 +24,7 @@ impl SimpleMemoryBlock {
         address: usize,
     ) -> Option<&mut [u8; SIZE]> {
         let address = address & Self::get_slice_alignment(SIZE);
-        let mirror_masked_address = address & self.memory_mask;
+        let mirror_masked_address = address & MASK;
 
         let slice: &mut Vec<u8> = self.memory.as_mut();
 
@@ -42,21 +40,13 @@ impl SimpleMemoryBlock {
         )
     }
 
-    fn get_memory_slice<const SIZE: usize>(&self, address: usize) -> Option<[u8; SIZE]> {
+    fn get_memory_slice<const SIZE: usize>(&self, address: usize) -> [u8; SIZE] {
         let address = address & Self::get_slice_alignment(SIZE);
-        let mirror_masked_address = address & self.memory_mask;
+        let mirror_masked_address = address & MASK;
 
         let slice: &Vec<u8> = self.memory.as_ref();
 
-        if mirror_masked_address + SIZE > slice.len() {
-            return None;
-        };
-
-        Some(
-            slice[mirror_masked_address..][..SIZE]
-                .try_into()
-                .unwrap(),
-        )
+        slice[mirror_masked_address..][..SIZE].try_into().unwrap()
     }
 
     const fn get_slice_alignment(size: usize) -> usize {
@@ -69,7 +59,7 @@ impl SimpleMemoryBlock {
     }
 }
 
-impl MemoryBlock for SimpleMemoryBlock {
+impl<const MASK: usize> MemoryBlock for SimpleMemoryBlock<MASK> {
     fn writeu8(&mut self, address: usize, value: u8) {
         let Some(slice) = self.get_memory_slice_mut::<{ size_of::<u8>() }>(address) else {
             return;
@@ -92,25 +82,19 @@ impl MemoryBlock for SimpleMemoryBlock {
     }
 
     fn readu8(&self, address: usize) -> u8 {
-        let Some(slice) = self.get_memory_slice::<{ size_of::<u8>() }>(address) else {
-            return 0;
-        };
+        let slice = self.get_memory_slice::<{ size_of::<u8>() }>(address);
 
         slice[0]
     }
 
     fn readu16(&self, address: usize) -> u16 {
-        let Some(slice) = self.get_memory_slice::<{ size_of::<u16>() }>(address) else {
-            return 0;
-        };
+        let slice = self.get_memory_slice::<{ size_of::<u16>() }>(address);
 
         u16::from_le_bytes(slice)
     }
 
     fn readu32(&self, address: usize) -> u32 {
-        let Some(slice) = self.get_memory_slice::<{ size_of::<u32>() }>(address) else {
-            return 0;
-        };
+        let slice = self.get_memory_slice::<{ size_of::<u32>() }>(address);
 
         u32::from_le_bytes(slice)
     }

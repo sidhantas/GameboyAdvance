@@ -92,6 +92,10 @@ impl CPU {
                     instruction,
                 }
             }
+            _ if arm_decoders::is_branch_and_link_instruction(instruction) => ARMDecodedInstruction {
+                executable: CPU::arm_branch_and_link,
+                instruction,
+            },
             _ if arm_decoders::is_branch_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_branch,
                 instruction,
@@ -217,24 +221,24 @@ impl CPU {
 mod arm_decoders {
     use super::ARMByteCode;
 
-    #[inline(always)]
     pub fn is_multiply_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0b0000_1111_1100_0000_0000_0000_1111_0000
             == 0b0000_0000_0000_0000_0000_0000_0000_1001_0000
     }
 
-    #[inline(always)]
     pub fn is_multiply_long_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0b0000_1111_1000_0000_0000_0000_1111_0000
             == 0b0000_0000_1000_0000_0000_0000_0000_1001_0000
     }
 
-    #[inline(always)]
     pub fn is_branch_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0x0E00_0000 == 0x0A00_0000
     }
 
-    #[inline(always)]
+    pub fn is_branch_and_link_instruction(instruction: ARMByteCode) -> bool {
+        instruction & 0x0F00_0000 == 0x0B00_0000
+    }
+
     pub fn is_single_data_swap(instruction: ARMByteCode) -> bool {
         instruction & 0x0FB0_0FF0 == 0x0100_0090
     }

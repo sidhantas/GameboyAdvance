@@ -7,7 +7,7 @@ pub const NUM_OAM_AFFINE_PARAMETERS: usize = 32;
 pub struct AffineParameters([[f32; 2]; 2]);
 
 impl AffineParameters {
-    pub fn create_parameters(oam_memory: &SimpleMemoryBlock, group: usize) -> Self {
+    pub fn create_parameters<const MASK: usize>(oam_memory: &SimpleMemoryBlock<MASK>, group: usize) -> Self {
         Self([
             [
                 fixed88_point_to_floating_point(u16::from_le_bytes(

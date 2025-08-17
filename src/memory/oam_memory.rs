@@ -8,7 +8,7 @@ use super::{
     oam::NUM_OAM_ENTRIES,
 };
 pub struct OAMBlock {
-    pub memory: SimpleMemoryBlock,
+    pub memory: SimpleMemoryBlock<OAM_MIRROR_MASK>,
     affine_parameters: Vec<AffineParameters>,
     pub is_dirty: bool,
     active_objects: Vec<Oam>,
@@ -18,7 +18,7 @@ const OAM_MIRROR_MASK: usize = 0x3FF;
 
 impl OAMBlock {
     pub fn new() -> Self {
-        let oam = SimpleMemoryBlock::new(OAM_SIZE, OAM_MIRROR_MASK);
+        let oam = SimpleMemoryBlock::new(OAM_SIZE);
         let mut affine_parameters = Vec::with_capacity(NUM_OAM_AFFINE_PARAMETERS);
 
         for i in 0..NUM_OAM_AFFINE_PARAMETERS {

@@ -137,14 +137,24 @@ impl CPU {
     }
 
     pub fn flush_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 0;
-        self.prefetch[0] = None;
-        self.prefetch[1] = None;
+        let pc = self.get_pc() as usize;
+        let (prefetch_1, prefetch_0) = {
+            match self.get_instruction_mode() {
+                InstructionMode::ARM => {
+                    self.set_pc(pc as u32 + 8);
+                    memory.readu32_double(pc)
+                },
+                InstructionMode::THUMB => {
+                    self.set_pc(pc as u32 + 4);
+                    (memory.readu16(pc).into(), memory.readu16(pc + 2).into())
+                },
+            }
+        };
 
-        cycles += self.advance_pipeline(memory);
-        cycles += self.advance_pipeline(memory);
+        self.prefetch[1] = Some(prefetch_1.data);
+        self.prefetch[0] = Some(prefetch_0.data);
 
-        cycles
+        prefetch_1.cycles + prefetch_0.cycles
     }
 
     pub fn advance_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
