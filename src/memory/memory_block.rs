@@ -19,25 +19,16 @@ impl<const MASK: usize> SimpleMemoryBlock<MASK> {
             memory: vec![0; size + 4],
         }
     }
-    fn get_memory_slice_mut<const SIZE: usize>(
-        &mut self,
-        address: usize,
-    ) -> Option<&mut [u8; SIZE]> {
+    fn get_memory_slice_mut<const SIZE: usize>(&mut self, address: usize) -> &mut [u8; SIZE] {
         let address = address & Self::get_slice_alignment(SIZE);
         let mirror_masked_address = address & MASK;
 
         let slice: &mut Vec<u8> = self.memory.as_mut();
 
-        if mirror_masked_address + SIZE > slice.len() {
-            return None;
-        };
-
-        Some(
-            slice[mirror_masked_address..][..SIZE]
-                .as_mut()
-                .try_into()
-                .unwrap(),
-        )
+        slice[mirror_masked_address..][..SIZE]
+            .as_mut()
+            .try_into()
+            .unwrap()
     }
 
     fn get_memory_slice<const SIZE: usize>(&self, address: usize) -> [u8; SIZE] {
@@ -61,23 +52,17 @@ impl<const MASK: usize> SimpleMemoryBlock<MASK> {
 
 impl<const MASK: usize> MemoryBlock for SimpleMemoryBlock<MASK> {
     fn writeu8(&mut self, address: usize, value: u8) {
-        let Some(slice) = self.get_memory_slice_mut::<{ size_of::<u8>() }>(address) else {
-            return;
-        };
+        let slice = self.get_memory_slice_mut::<{ size_of::<u8>() }>(address);
         slice.copy_from_slice(&value.to_le_bytes())
     }
 
     fn writeu16(&mut self, address: usize, value: u16) {
-        let Some(slice) = self.get_memory_slice_mut::<{ size_of::<u16>() }>(address) else {
-            return;
-        };
+        let slice = self.get_memory_slice_mut::<{ size_of::<u16>() }>(address);
         slice.copy_from_slice(&value.to_le_bytes())
     }
 
     fn writeu32(&mut self, address: usize, value: u32) {
-        let Some(slice) = self.get_memory_slice_mut::<{ size_of::<u32>() }>(address) else {
-            return;
-        };
+        let slice = self.get_memory_slice_mut::<{ size_of::<u32>() }>(address);
         slice.copy_from_slice(&value.to_le_bytes())
     }
 
