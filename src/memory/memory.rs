@@ -328,19 +328,17 @@ impl GBAMemory {
 
     pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
         let region = address >> 24;
-        let read = {
-            match region {
-                BIOS_REGION => self.bios.readu32(address),
-                EXWRAM_REGION => self.exwram.readu32(address),
-                IWRAM_REGION => self.iwram.readu32(address),
-                IORAM_REGION => self.ioram.readu32(address),
-                BGRAM_REGION => self.pallete_ram.readu32(address),
-                VRAM_REGION => self.vram.readu32(address),
-                OAM_REGION => self.oam.readu32(address),
-                ROM0A_REGION..=ROM2B_REGION => self.rom.readu32(address),
-                SRAM_REGION => self.sram.readu32(address),
-                _ => unreachable!(),
-            }
+        let read = match region {
+            BIOS_REGION => self.bios.readu32(address),
+            EXWRAM_REGION => self.exwram.readu32(address),
+            IWRAM_REGION => self.iwram.readu32(address),
+            IORAM_REGION => self.ioram.readu32(address),
+            BGRAM_REGION => self.pallete_ram.readu32(address),
+            VRAM_REGION => self.vram.readu32(address),
+            OAM_REGION => self.oam.readu32(address),
+            ROM0A_REGION..=ROM2B_REGION => self.rom.readu32(address),
+            SRAM_REGION => self.sram.readu32(address),
+            _ => unreachable!(/* "{}", region */), // Commented out because it's faster if we don't
         };
         //if let Some(breakpoint_checker) = &self.breakpoint_checker {
         //    breakpoint_checker(self, address);
@@ -353,9 +351,30 @@ impl GBAMemory {
 
     pub fn readu32_double(&self, address: usize) -> (MemoryFetch<u32>, MemoryFetch<u32>) {
         let region = address >> 24;
-        let memory_block = &self.get_memory_block(region);
-        let read_1 = memory_block.readu32(address);
-        let read_2 = memory_block.readu32(address + 4);
+        let read_1 = match region {
+            BIOS_REGION => self.bios.readu32(address),
+            EXWRAM_REGION => self.exwram.readu32(address),
+            IWRAM_REGION => self.iwram.readu32(address),
+            IORAM_REGION => self.ioram.readu32(address),
+            BGRAM_REGION => self.pallete_ram.readu32(address),
+            VRAM_REGION => self.vram.readu32(address),
+            OAM_REGION => self.oam.readu32(address),
+            ROM0A_REGION..=ROM2B_REGION => self.rom.readu32(address),
+            SRAM_REGION => self.sram.readu32(address),
+            _ => unreachable!(/* "{}", region */), // Commented out because it's faster if we don't
+        };
+        let read_2 = match region {
+            BIOS_REGION => self.bios.readu32(address + 4),
+            EXWRAM_REGION => self.exwram.readu32(address + 4),
+            IWRAM_REGION => self.iwram.readu32(address + 4),
+            IORAM_REGION => self.ioram.readu32(address + 4),
+            BGRAM_REGION => self.pallete_ram.readu32(address + 4),
+            VRAM_REGION => self.vram.readu32(address + 4),
+            OAM_REGION => self.oam.readu32(address + 4),
+            ROM0A_REGION..=ROM2B_REGION => self.rom.readu32(address + 4),
+            SRAM_REGION => self.sram.readu32(address + 4),
+            _ => unreachable!(/* "{}", region */), // Commented out because it's faster if we don't
+        };
 
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
             breakpoint_checker(self, address);
