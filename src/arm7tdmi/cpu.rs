@@ -209,12 +209,10 @@ impl CPU {
         }
     }
 
-    #[inline]
     pub fn get_register(&self, register_num: REGISTER) -> WORD {
         self.registers.get_register(register_num as usize)
     }
 
-    #[inline]
     pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
         self.registers.set_register(register_num as usize, value);
     }
