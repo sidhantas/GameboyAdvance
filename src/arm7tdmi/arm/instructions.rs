@@ -31,11 +31,8 @@ impl Default for ARMDecodedInstruction {
 
 impl CPU {
     pub fn set_executed_instruction(&mut self, name: Arguments<'_>) {
-        //if !self.show_executed_instructions {
-        //    return;
-        //}
-        //self.executed_instruction.clear();
-        //write!(self.executed_instruction, "{}", name).unwrap();
+       self.executed_instruction.clear();
+       write!(self.executed_instruction, "{}", name).unwrap();
     }
 
     pub fn arm_branch(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {

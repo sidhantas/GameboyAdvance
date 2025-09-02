@@ -1,11 +1,436 @@
+#![allow(unused)]
+use num_traits::PrimInt;
+
 use crate::{
-    arm7tdmi::cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
+    arm7tdmi::{
+        cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
+        instruction_table::Operand,
+    },
     memory::memory::GBAMemory,
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
     utils::bits::Bits,
 };
 
+pub enum DataProcessingInstruction {
+    Arithmetic(
+        ArithmeticInstruction,
+        Option<REGISTER>,
+        REGISTER,
+        Operand,
+        Shift,
+        bool,
+    ),
+    Logical(
+        LogicalInstruction,
+        Option<REGISTER>,
+        REGISTER,
+        Operand,
+        Shift,
+        bool,
+    ),
+}
+
+pub enum ArithmeticInstruction {
+    Sub,
+    Rsb,
+    Add,
+    Adc,
+    Sbc,
+    Rsc,
+    Cmp,
+    Cmn,
+}
+
+pub enum LogicalInstruction {
+    And,
+    Eor,
+    Tst,
+    Teq,
+    Orr,
+    Mov,
+    Bic,
+    Mvn,
+}
+
+pub struct Shift(ShiftType, Operand);
+
+#[derive(Clone, Copy)]
+pub enum ShiftType {
+    LSL,
+    LSR,
+    ASR,
+    ROR,
+    RRX,
+}
+
 impl CPU {
+    pub fn decode_data_processing_instruction(
+        instruction: ARMByteCode,
+    ) -> DataProcessingInstruction {
+        let opcode = (instruction & 0x01E0_0000) >> 21;
+        let rn = (0x000F_0000 & instruction) >> 16;
+        let rd = (0x0000_F000 & instruction) >> 12;
+        let (operand2, shift) = get_operand2_and_shift(instruction);
+        let set_flags = instruction.bit_is_set(20) && rd != PC_REGISTER as u32;
+        match opcode {
+            0x0 => DataProcessingInstruction::Logical(
+                LogicalInstruction::And,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x1 => DataProcessingInstruction::Logical(
+                LogicalInstruction::Eor,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x2 => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Sub,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x3 => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Rsb,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x4 => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Add,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x5 => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Adc,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x6 => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Sbc,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x7 => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Rsc,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0x8 => DataProcessingInstruction::Logical(
+                LogicalInstruction::Tst,
+                None,
+                rn,
+                operand2,
+                shift,
+                true,
+            ),
+            0x9 => DataProcessingInstruction::Logical(
+                LogicalInstruction::Teq,
+                None,
+                rn,
+                operand2,
+                shift,
+                true,
+            ),
+            0xA => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Cmp,
+                None,
+                rn,
+                operand2,
+                shift,
+                true,
+            ),
+            0xB => DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Cmn,
+                None,
+                rn,
+                operand2,
+                shift,
+                true,
+            ),
+            0xC => DataProcessingInstruction::Logical(
+                LogicalInstruction::Orr,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0xD => DataProcessingInstruction::Logical(
+                LogicalInstruction::Mov,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0xE => DataProcessingInstruction::Logical(
+                LogicalInstruction::Bic,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            0xF => DataProcessingInstruction::Logical(
+                LogicalInstruction::Mvn,
+                Some(rd),
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn execute_data_processing_instruction(
+        &mut self,
+        memory: &mut GBAMemory,
+        data_processing_instruction: DataProcessingInstruction,
+    ) {
+        let destination;
+        let set_cpsr_flags;
+        let result = match data_processing_instruction {
+            DataProcessingInstruction::Arithmetic(
+                instruction,
+                rd,
+                rn,
+                operand2,
+                shift,
+                set_flags,
+            ) => {
+                destination = rd;
+                set_cpsr_flags = set_flags;
+                self.execute_arithmetic_instruction(
+                    memory,
+                    instruction,
+                    rn,
+                    operand2,
+                    shift,
+                    set_flags,
+                )
+            }
+            DataProcessingInstruction::Logical(instruction, rd, rn, operand2, shift, set_flags) => {
+                destination = rd;
+                set_cpsr_flags = set_flags;
+                self.execute_logical_instruction(
+                    memory,
+                    instruction,
+                    rn,
+                    operand2,
+                    shift,
+                    set_flags,
+                )
+            }
+        };
+
+        if let Some(destination) = destination {
+            self.set_register(destination, result);
+            if destination == PC_REGISTER as u32 {
+                if set_cpsr_flags {
+                    self.pop_spsr();
+                }
+                self.flush_pipeline(memory);
+            }
+        };
+    }
+
+    fn execute_arithmetic_instruction(
+        &mut self,
+        memory: &mut GBAMemory,
+        instruction: ArithmeticInstruction,
+        rn: REGISTER,
+        operand2: Operand,
+        shift: Shift,
+        set_flags: bool,
+    ) -> u32{
+        let rn_val = self.get_register(rn);
+        let shifted_operand2 = match operand2 {
+            Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
+            Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
+        };
+        match instruction {
+            ArithmeticInstruction::Sub => rn_val - shifted_operand2,
+            ArithmeticInstruction::Rsb => shifted_operand2 - rn_val,
+            ArithmeticInstruction::Add => rn_val + shifted_operand2,
+            ArithmeticInstruction::Adc => {
+                rn_val + shifted_operand2 + self.get_flag(FlagsRegister::C)
+            }
+            ArithmeticInstruction::Sbc => {
+                rn_val - shifted_operand2 + self.get_flag(FlagsRegister::C) - 1
+            }
+            ArithmeticInstruction::Rsc => {
+                shifted_operand2 - rn_val + self.get_flag(FlagsRegister::C) - 1
+            }
+            ArithmeticInstruction::Cmp => rn_val - shifted_operand2,
+            ArithmeticInstruction::Cmn => rn_val + shifted_operand2,
+        }
+    }
+
+    fn execute_logical_instruction(
+        &mut self,
+        memory: &mut GBAMemory,
+        instruction: LogicalInstruction,
+        rn: REGISTER,
+        operand2: Operand,
+        shift: Shift,
+        set_flags: bool,
+    ) -> u32 {
+        let rn_val = self.get_register(rn);
+        let shifted_operand2 = match operand2 {
+            Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
+            Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
+        };
+
+        match instruction {
+            LogicalInstruction::And => rn_val & shifted_operand2,
+            LogicalInstruction::Eor => rn_val ^ shifted_operand2,
+            LogicalInstruction::Tst => rn_val & shifted_operand2,
+            LogicalInstruction::Teq => rn_val ^ shifted_operand2,
+            LogicalInstruction::Orr => rn_val | shifted_operand2,
+            LogicalInstruction::Mov => shifted_operand2,
+            LogicalInstruction::Bic => rn_val & !shifted_operand2,
+            LogicalInstruction::Mvn => !shifted_operand2,
+        }
+
+    }
+
+    fn execute_immediate_shift(&mut self, imm: u32, shift: Shift) -> u32 {
+        let Shift(ShiftType::ROR, Operand::Immeidate(rotate_amount)) = shift else {
+            panic!("Invalid immediate shift");
+        };
+
+        if rotate_amount == 0 {
+            self.shifter_output = self.get_flag(FlagsRegister::C);
+            imm
+        } else {
+            self.shifter_output = imm.get_bit((rotate_amount as u8) - 1);
+            imm.rotate_right(rotate_amount)
+        }
+    }
+
+    fn execute_register_shift(
+        &mut self,
+        memory: &mut GBAMemory,
+        operand2_register: REGISTER,
+        shift: Shift,
+        set_flags: bool,
+    ) -> u32 {
+        let Shift(shift_type, shift_amount_operand) = shift;
+        let shift_amount = match shift_amount_operand {
+            Operand::Register(register) => {
+                self.advance_pipeline(memory);
+                self.get_register(register)
+            }
+            Operand::Immeidate(imm) => imm,
+        } & 0xFF;
+
+        let operand2 = self.get_register(operand2_register);
+        // Special cases
+        match (shift_type, shift_amount_operand) {
+            (ShiftType::LSL, Operand::Immeidate(0)) => {
+                self.shifter_output = self.get_flag(FlagsRegister::C);
+                return operand2;
+            }
+            (ShiftType::LSR, Operand::Immeidate(32)) => {
+                self.shifter_output = operand2.get_bit(31);
+                return 0;
+            }
+            (ShiftType::ASR, Operand::Immeidate(shift_amount @ 32)) => {
+                self.shifter_output = operand2.get_bit(31);
+                return ((operand2 as i32) >> shift_amount) as u32;
+            }
+            _ => {}
+        };
+
+        match (shift_type, shift_amount) {
+            (ShiftType::LSL, shift_amount) => {
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    return operand2;
+                } else if shift_amount < 31 {
+                    self.shifter_output = operand2.get_bit(32 - shift_amount as u8);
+                    return operand2 << shift_amount;
+                } else if shift_amount == 32 {
+                    self.shifter_output = operand2 & 0x1;
+                    return 0;
+                } else {
+                    self.shifter_output = 0;
+                    return 0;
+                }
+            }
+            (ShiftType::LSR, shift_amount) => {
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    return operand2;
+                } else if shift_amount < 31 {
+                    self.shifter_output = operand2.get_bit((shift_amount as u8) - 1);
+                    return operand2 >> shift_amount;
+                } else if shift_amount == 32 {
+                    self.shifter_output = operand2 >> 31;
+                    return 0;
+                } else {
+                    self.shifter_output = 0;
+                    return 0;
+                }
+            }
+            (ShiftType::ASR, shift_amount) => {
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    return operand2;
+                } else if shift_amount < 31 {
+                    self.shifter_output = operand2.get_bit((shift_amount as u8) - 1);
+                    return ((operand2 as i32) >> shift_amount) as u32;
+                } else if (operand2 >> 31) > 0 {
+                    self.shifter_output = 1;
+                    return u32::MAX;
+                } else {
+                    self.shifter_output = 0;
+                    return 0;
+                }
+            }
+            (ShiftType::ROR, shift_amount) => {
+                let rotate_amount = shift_amount & 0x1F;
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    return operand2;
+                } else if rotate_amount > 0 {
+                    self.shifter_output = operand2.get_bit((rotate_amount as u8) - 1);
+                    return operand2.rotate_right(rotate_amount);
+                } else {
+                    self.shifter_output = operand2 >> 31;
+                    return operand2;
+                }
+            }
+            (ShiftType::RRX, _) => {
+                self.shifter_output = operand2.get_bit(0);
+                return operand2 >> 1 | self.get_flag(FlagsRegister::C) << 31;
+            }
+        }
+    }
+
     pub fn data_processing_instruction(
         &mut self,
         instruction: ARMByteCode,
@@ -56,6 +481,7 @@ impl CPU {
                 set_flags,
             )
         };
+
         // Calling within the match branch is faster than getting the function and
         // then dynamically dispatching
         match opcode {
@@ -352,6 +778,46 @@ impl CPU {
             self.set_flag(FlagsRegister::C);
         }
     }
+}
+
+fn get_operand2_and_shift(instruction: u32) -> (Operand, Shift) {
+    if instruction.bit_is_set(25) {
+        let shift_amount = (instruction & 0x0000_0F00) >> 7;
+        return (
+            Operand::Immeidate(instruction & 0x0000_00FF),
+            Shift(ShiftType::ROR, Operand::Immeidate(shift_amount)),
+        );
+    } else {
+        let operand2 = Operand::Register(instruction & 0x0000_000F);
+        let shift_type = (instruction & 0x0000_0060) >> 5;
+        let shift_amount = if instruction.bit_is_set(4) {
+            Operand::Register((instruction & 0x0000_0F00) >> 8)
+        } else {
+            let immediate = (instruction & 0x0000_0F80) >> 7;
+            if immediate == 0 {
+                // Special Cases
+                return (
+                    operand2,
+                    match shift_type {
+                        0x0 => Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                        0x1 => Shift(ShiftType::LSR, Operand::Immeidate(32)),
+                        0x2 => Shift(ShiftType::ASR, Operand::Immeidate(32)),
+                        0x3 => Shift(ShiftType::RRX, Operand::Immeidate(1)),
+                        _ => unreachable!(),
+                    },
+                );
+            }
+            Operand::Immeidate(immediate)
+        };
+        let shift_type = match shift_type {
+            0x0 => ShiftType::LSL,
+            0x1 => ShiftType::LSR,
+            0x2 => ShiftType::ASR,
+            0x3 => ShiftType::ROR,
+            _ => unreachable!(),
+        };
+        return (operand2, Shift(shift_type, shift_amount));
+    };
 }
 #[cfg(test)]
 mod tests {

@@ -5,3 +5,4 @@ pub mod decoder;
 pub mod interrupts;
 pub mod registers;
 pub mod thumb;
+pub mod instruction_table;

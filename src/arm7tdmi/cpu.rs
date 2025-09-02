@@ -1,6 +1,9 @@
 use core::panic;
 use std::{
-    collections::VecDeque, fmt::Display, fs::{remove_file, File, OpenOptions}, io::Write
+    collections::VecDeque,
+    fmt::Display,
+    fs::{remove_file, File, OpenOptions},
+    io::Write,
 };
 
 use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
@@ -53,13 +56,14 @@ pub struct CPU {
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
     cpsr: PSR,
+    pub(super)shifter_output: u32,
     pub spsr: [PSR; 5],
     pub output_file: File,
     pub cycles: u64,
     status_history: VecDeque<Status>,
     pub interrupt_triggered: bool,
     instruction_count: usize,
-    pub(crate) show_executed_instructions: bool
+    pub(crate) show_executed_instructions: bool,
 }
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
@@ -76,6 +80,7 @@ impl CPU {
             prefetch: [None; 2],
             cpsr: PSR::new_cpsr(),
             spsr: [PSR::new_spsr(); 5],
+            shifter_output: 0,
             output_file: OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -86,7 +91,7 @@ impl CPU {
             is_halted: false,
             interrupt_triggered: false,
             instruction_count: 0,
-            show_executed_instructions: false
+            show_executed_instructions: false,
         };
         cpu
     }
@@ -99,16 +104,18 @@ impl CPU {
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
 
-//        self.status_history.push_back(Status {
-//            cycles: self.cycles,
-//            registers: self.registers.active_registers.clone(),
-//            cpsr: self.cpsr.clone(),
-//            instruction_count: self.instruction_count,
-//        });
-//
-//        if self.status_history.len() > HISTORY_SIZE {
-//            self.status_history.pop_front();
-//        }
+        //if self.registers.get_register(PC_REGISTER) != 0x350 {
+        //    self.status_history.push_back(Status {
+        //        cycles: self.cycles,
+        //        registers: self.registers.active_registers.clone(),
+        //        cpsr: self.cpsr.clone(),
+        //        instruction_count: self.instruction_count,
+        //    });
+        //}
+
+        if self.status_history.len() > HISTORY_SIZE {
+            self.status_history.pop_front();
+        }
         self.instruction_count += 1;
         if self.interrupt_triggered {
             self.raise_irq(memory);
@@ -143,11 +150,11 @@ impl CPU {
                 InstructionMode::ARM => {
                     self.set_pc(pc as u32 + 8);
                     memory.readu32_double(pc)
-                },
+                }
                 InstructionMode::THUMB => {
                     self.set_pc(pc as u32 + 4);
                     (memory.readu16(pc).into(), memory.readu16(pc + 2).into())
-                },
+                }
             }
         };
 
@@ -372,18 +379,18 @@ impl CPU {
         }
     }
 
-    //fn get_status(&self) -> Status {
-    //    let mut status = Status::default();
-    //    for i in 0..self.registers.len() {
-    //        status.registers[i] = self.get_register(i as REGISTER);
-    //    }
-    //    status.cpsr = self.cpsr;
-    //    status.cycles = 0;
-    //    unsafe {
-    //        status.instruction_count = INSTRUCTION_COUNT;
-    //    }
-    //    status
-    //}
+    fn get_status(&self) -> Status {
+        let mut status = Status::default();
+        for i in 0..self.registers.active_registers.len() {
+            status.registers[i] = self.get_register(i as REGISTER);
+        }
+        status.cpsr = self.cpsr;
+        status.cycles = 0;
+        unsafe {
+            status.instruction_count = INSTRUCTION_COUNT;
+        }
+        status
+    }
 }
 
 impl Display for Status {
