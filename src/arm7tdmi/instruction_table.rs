@@ -7,6 +7,7 @@ pub enum Instruction {
     DataProcessing(DataProcessingInstruction)
 }
 
+#[derive(Debug)]
 pub enum Operand {
     Register(REGISTER),
     Immeidate(u32)

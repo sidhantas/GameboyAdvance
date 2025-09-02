@@ -11,6 +11,7 @@ use crate::{
     utils::bits::Bits,
 };
 
+#[derive(Debug)]
 pub enum DataProcessingInstruction {
     Arithmetic(
         ArithmeticInstruction,
@@ -30,6 +31,7 @@ pub enum DataProcessingInstruction {
     ),
 }
 
+#[derive(Debug)]
 pub enum ArithmeticInstruction {
     Sub,
     Rsb,
@@ -41,6 +43,7 @@ pub enum ArithmeticInstruction {
     Cmn,
 }
 
+#[derive(Debug)]
 pub enum LogicalInstruction {
     And,
     Eor,
@@ -52,9 +55,10 @@ pub enum LogicalInstruction {
     Mvn,
 }
 
+#[derive(Debug)]
 pub struct Shift(ShiftType, Operand);
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ShiftType {
     LSL,
     LSR,
@@ -265,27 +269,69 @@ impl CPU {
         operand2: Operand,
         shift: Shift,
         set_flags: bool,
-    ) -> u32{
+    ) -> u32 {
         let rn_val = self.get_register(rn);
         let shifted_operand2 = match operand2 {
             Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
             Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
         };
         match instruction {
-            ArithmeticInstruction::Sub => rn_val - shifted_operand2,
-            ArithmeticInstruction::Rsb => shifted_operand2 - rn_val,
-            ArithmeticInstruction::Add => rn_val + shifted_operand2,
-            ArithmeticInstruction::Adc => {
-                rn_val + shifted_operand2 + self.get_flag(FlagsRegister::C)
+            ArithmeticInstruction::Sub => {
+                let result = rn_val - shifted_operand2;
+                self.set_arithmetic_flags(result, rn_val, !shifted_operand2, 1, set_flags);
+                result
             }
+            ArithmeticInstruction::Rsb => {
+                let result = shifted_operand2 - rn_val;
+                self.set_arithmetic_flags(result, !rn_val, shifted_operand2, 1, set_flags);
+                result
+            }
+            ArithmeticInstruction::Add => {
+                let result = rn_val + shifted_operand2;
+                self.set_arithmetic_flags(result, rn_val, shifted_operand2, 0, set_flags);
+                result
+            }
+            ArithmeticInstruction::Adc => {
+                let carry = self.get_flag(FlagsRegister::C);
+                let result = rn_val + shifted_operand2 + carry;
+                self.set_arithmetic_flags(result, rn_val, shifted_operand2, carry, set_flags);
+                result
+            }
+
             ArithmeticInstruction::Sbc => {
-                rn_val - shifted_operand2 + self.get_flag(FlagsRegister::C) - 1
+                let carry = self.get_flag(FlagsRegister::C);
+                let result = rn_val - shifted_operand2 + carry - 1;
+                self.set_arithmetic_flags(
+                    result,
+                    rn_val,
+                    shifted_operand2.twos_complement(),
+                    carry.twos_complement(),
+                    set_flags,
+                );
+                result
             }
             ArithmeticInstruction::Rsc => {
-                shifted_operand2 - rn_val + self.get_flag(FlagsRegister::C) - 1
+                let carry = self.get_flag(FlagsRegister::C);
+                let result = shifted_operand2 - rn_val + carry - 1;
+                self.set_arithmetic_flags(
+                    result,
+                    rn_val.twos_complement(),
+                    shifted_operand2,
+                    carry.twos_complement(),
+                    set_flags,
+                );
+                result
             }
-            ArithmeticInstruction::Cmp => rn_val - shifted_operand2,
-            ArithmeticInstruction::Cmn => rn_val + shifted_operand2,
+            ArithmeticInstruction::Cmp => {
+                let result = rn_val - shifted_operand2;
+                self.set_arithmetic_flags(result, rn_val, !shifted_operand2, 1, true);
+                result
+            }
+            ArithmeticInstruction::Cmn => {
+                let result = rn_val + shifted_operand2;
+                self.set_arithmetic_flags(result, rn_val, shifted_operand2, 0, true);
+                result
+            }
         }
     }
 
@@ -304,7 +350,7 @@ impl CPU {
             Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
         };
 
-        match instruction {
+        let result = match instruction {
             LogicalInstruction::And => rn_val & shifted_operand2,
             LogicalInstruction::Eor => rn_val ^ shifted_operand2,
             LogicalInstruction::Tst => rn_val & shifted_operand2,
@@ -313,8 +359,9 @@ impl CPU {
             LogicalInstruction::Mov => shifted_operand2,
             LogicalInstruction::Bic => rn_val & !shifted_operand2,
             LogicalInstruction::Mvn => !shifted_operand2,
-        }
-
+        };
+        self.set_logical_flags(result, set_flags);
+        result
     }
 
     fn execute_immediate_shift(&mut self, imm: u32, shift: Shift) -> u32 {
@@ -740,6 +787,11 @@ impl CPU {
         } else {
             self.reset_flag(FlagsRegister::Z);
         }
+        if self.shifter_output > 0 {
+            self.set_flag(FlagsRegister::C);
+        } else {
+            self.reset_flag(FlagsRegister::C);
+        }
     }
 
     pub fn set_arithmetic_flags(
@@ -819,6 +871,110 @@ fn get_operand2_and_shift(instruction: u32) -> (Operand, Shift) {
         return (operand2, Shift(shift_type, shift_amount));
     };
 }
+
+#[cfg(test)]
+mod enum_data_processing_instruction_tests {
+    use rstest::rstest;
+
+    use crate::arm7tdmi::arm::alu::{
+        ArithmeticInstruction, DataProcessingInstruction, LogicalInstruction, Shift, ShiftType,
+    };
+    use crate::arm7tdmi::cpsr::PSR;
+    use crate::arm7tdmi::cpu::CPU;
+    use crate::arm7tdmi::instruction_table::Operand;
+    use crate::gba::GBA;
+    use crate::{
+        arm7tdmi::cpu::{CPUMode, FlagsRegister},
+        types::REGISTER,
+    };
+
+    #[rstest]
+    #[case(
+        0xe0931002, // adds r1, r3, r2
+        DataProcessingInstruction::Arithmetic(
+            ArithmeticInstruction::Add,
+            Some(1),
+            3,
+            Operand::Register(2),
+            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            true
+        )
+    )]
+    #[case(
+        0xe01312a2, // ands r1, r3, r2 LSR #5
+        DataProcessingInstruction::Logical(
+            LogicalInstruction::And,
+            Some(1),
+            3,
+            Operand::Register(2),
+            Shift(ShiftType::LSR, Operand::Immeidate(5)),
+            true
+        )
+    )]
+    #[case(
+        0xe1931002, // orrs r1, r3, r2
+        DataProcessingInstruction::Logical(
+            LogicalInstruction::Orr,
+            Some(1),
+            3,
+            Operand::Register(2),
+            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            true
+        )
+    )]
+    #[case(
+        0xe1831002, // orr r1, r3, r2
+        DataProcessingInstruction::Logical(
+            LogicalInstruction::Orr,
+            Some(1),
+            3,
+            Operand::Register(2),
+            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            false
+        )
+    )]
+    #[case(
+        0xe0331002, // eors r1, r3, r2
+        DataProcessingInstruction::Logical(
+            LogicalInstruction::Eor,
+            Some(1),
+            3,
+            Operand::Register(2),
+            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            true
+        )
+    )]
+    fn able_to_decode_data_processing_instructions(
+        #[case] opcode: u32,
+        #[case] expected_instruction: DataProcessingInstruction,
+    ) {
+        let decoded_instruction = CPU::decode_data_processing_instruction(opcode);
+
+        assert!(matches!(decoded_instruction, expected_instruction))
+    }
+
+    #[test]
+    fn able_to_execute_data_processing_instruction() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(3, 5);
+        gba.cpu.set_register(2, 5);
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                ArithmeticInstruction::Add,
+                Some(1),
+                3,
+                Operand::Register(2),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_register(1), 10);
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
