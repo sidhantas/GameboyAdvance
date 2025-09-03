@@ -2,8 +2,6 @@ use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::memory::io_handlers::{DISPSTAT, VCOUNT};
 use crate::memory::memory::GBAMemory;
 use crate::memory::oam::Oam;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
