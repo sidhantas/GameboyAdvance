@@ -1,10 +1,13 @@
 #![allow(unused)]
+use std::fmt::Display;
+
 use num_traits::PrimInt;
 
 use crate::{
     arm7tdmi::{
+        cpsr::PSR,
         cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
-        instruction_table::Operand,
+        instruction_table::{DecodeARMInstructionToString, Execute, Operand},
     },
     memory::memory::GBAMemory,
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
@@ -29,6 +32,40 @@ pub enum DataProcessingInstruction {
         Shift,
         bool,
     ),
+    MSR(PSRRegister, bool, bool, Operand, u32),
+    MRS(REGISTER, PSRRegister),
+}
+
+impl DecodeARMInstructionToString for DataProcessingInstruction {
+    fn decode(&self, condition_code: &str) -> String {
+        match self {
+            DataProcessingInstruction::Arithmetic(instruction, rd, rn, _, _, set_flags) => format!(
+                "{instruction}{condition_code}{} {}{}",
+                if *set_flags { "s" } else { "" },
+                if let Some(rd) = rd {
+                    format!("r{} ", rd.to_string())
+                } else {
+                    "".into()
+                },
+
+            ),
+            DataProcessingInstruction::Logical(_, _, _, _, _, _) => todo!(),
+            DataProcessingInstruction::MSR(_, _, _, _, _) => todo!(),
+            DataProcessingInstruction::MRS(_, _) => todo!(),
+        }
+    }
+}
+
+impl Execute for DataProcessingInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        cpu.execute_data_processing_instruction(memory, self)
+    }
+}
+
+#[derive(Debug)]
+pub enum PSRRegister {
+    SPSR,
+    CPSR,
 }
 
 #[derive(Debug)]
@@ -41,6 +78,22 @@ pub enum ArithmeticInstruction {
     Rsc,
     Cmp,
     Cmn,
+}
+
+impl Display for ArithmeticInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op = match self {
+            ArithmeticInstruction::Sub => "sub",
+            ArithmeticInstruction::Rsb => "rsb",
+            ArithmeticInstruction::Add => "add",
+            ArithmeticInstruction::Adc => "adc",
+            ArithmeticInstruction::Sbc => "sbc",
+            ArithmeticInstruction::Rsc => "rsc",
+            ArithmeticInstruction::Cmp => "cmp",
+            ArithmeticInstruction::Cmn => "cmn",
+        };
+        write!(f, "{}", op)
+    }
 }
 
 #[derive(Debug)]
@@ -141,38 +194,74 @@ impl CPU {
                 shift,
                 set_flags,
             ),
-            0x8 => DataProcessingInstruction::Logical(
-                LogicalInstruction::Tst,
-                None,
-                rn,
-                operand2,
-                shift,
-                true,
-            ),
-            0x9 => DataProcessingInstruction::Logical(
-                LogicalInstruction::Teq,
-                None,
-                rn,
-                operand2,
-                shift,
-                true,
-            ),
-            0xA => DataProcessingInstruction::Arithmetic(
-                ArithmeticInstruction::Cmp,
-                None,
-                rn,
-                operand2,
-                shift,
-                true,
-            ),
-            0xB => DataProcessingInstruction::Arithmetic(
-                ArithmeticInstruction::Cmn,
-                None,
-                rn,
-                operand2,
-                shift,
-                true,
-            ),
+            0x8 => {
+                if instruction.bit_is_set(20) {
+                    DataProcessingInstruction::MRS(rd, PSRRegister::CPSR)
+                } else {
+                    DataProcessingInstruction::Logical(
+                        LogicalInstruction::Tst,
+                        None,
+                        rn,
+                        operand2,
+                        shift,
+                        true,
+                    )
+                }
+            }
+            0x9 => {
+                if instruction.bit_is_set(20) {
+                    DataProcessingInstruction::MSR(
+                        PSRRegister::SPSR,
+                        instruction.bit_is_set(19),
+                        instruction.bit_is_set(16),
+                        operand2,
+                        (instruction & 0x0000_0F00) >> 7,
+                    )
+                } else {
+                    DataProcessingInstruction::Logical(
+                        LogicalInstruction::Teq,
+                        None,
+                        rn,
+                        operand2,
+                        shift,
+                        true,
+                    )
+                }
+            }
+            0xA => {
+                if instruction.bit_is_set(20) {
+                    DataProcessingInstruction::MRS(rd, PSRRegister::CPSR)
+                } else {
+                    DataProcessingInstruction::Arithmetic(
+                        ArithmeticInstruction::Cmp,
+                        None,
+                        rn,
+                        operand2,
+                        shift,
+                        true,
+                    )
+                }
+            }
+            0xB => {
+                if instruction.bit_is_set(20) {
+                    DataProcessingInstruction::MSR(
+                        PSRRegister::SPSR,
+                        instruction.bit_is_set(19),
+                        instruction.bit_is_set(16),
+                        operand2,
+                        (instruction & 0x0000_0F00) >> 7,
+                    )
+                } else {
+                    DataProcessingInstruction::Arithmetic(
+                        ArithmeticInstruction::Cmn,
+                        None,
+                        rn,
+                        operand2,
+                        shift,
+                        true,
+                    )
+                }
+            }
             0xC => DataProcessingInstruction::Logical(
                 LogicalInstruction::Orr,
                 Some(rd),
@@ -213,9 +302,10 @@ impl CPU {
         &mut self,
         memory: &mut GBAMemory,
         data_processing_instruction: DataProcessingInstruction,
-    ) {
+    ) -> CYCLES {
         let destination;
         let set_cpsr_flags;
+        let mut cycles = 0;
         let result = match data_processing_instruction {
             DataProcessingInstruction::Arithmetic(
                 instruction,
@@ -248,6 +338,58 @@ impl CPU {
                     set_flags,
                 )
             }
+            DataProcessingInstruction::MSR(psr, move_flags, move_ctl, op, shift) => {
+                const FLG_MASK: u32 = 0xFF00_0000;
+                const CTL_MASK: u32 = 0x0000_00DF; // can't assign T-bit with this operation
+                let current_cpu_mode = self.get_cpu_mode();
+
+                let operand = match op {
+                    Operand::Register(reg) => self.get_register(reg),
+                    Operand::Immeidate(imm) => imm.rotate_right(shift),
+                };
+
+                let mut destination_psr: u32 = match psr {
+                    PSRRegister::SPSR => match self.get_current_spsr() {
+                        Some(spsr) => (*spsr).into(),
+                        None => return 0,
+                    },
+                    PSRRegister::CPSR => self.get_cpsr().into(),
+                };
+                if move_flags {
+                    destination_psr &= !FLG_MASK;
+                    destination_psr |= operand & FLG_MASK;
+                }
+
+                if move_ctl && !matches!(current_cpu_mode, CPUMode::USER) {
+                    destination_psr &= !CTL_MASK;
+                    destination_psr |= operand & CTL_MASK;
+                }
+
+                match psr {
+                    PSRRegister::SPSR => {
+                        let Some(spsr) = self.get_current_spsr() else {
+                            return 0;
+                        };
+                        *spsr = destination_psr.into();
+                    }
+                    PSRRegister::CPSR => self.set_cpsr(destination_psr.into()),
+                }
+                return 0;
+            }
+            DataProcessingInstruction::MRS(rd, psr) => {
+                let source_psr = match psr {
+                    PSRRegister::SPSR => match self.get_current_spsr() {
+                        Some(spsr) => *spsr,
+                        None => {
+                            return 0;
+                        }
+                    },
+                    PSRRegister::CPSR => self.get_cpsr(),
+                };
+
+                self.set_register(rd, source_psr.into());
+                return 0;
+            }
         };
 
         if let Some(destination) = destination {
@@ -256,9 +398,10 @@ impl CPU {
                 if set_cpsr_flags {
                     self.pop_spsr();
                 }
-                self.flush_pipeline(memory);
+                cycles += self.flush_pipeline(memory);
             }
         };
+        cycles
     }
 
     fn execute_arithmetic_instruction(
@@ -270,7 +413,10 @@ impl CPU {
         shift: Shift,
         set_flags: bool,
     ) -> u32 {
-        let rn_val = self.get_register(rn);
+        let mut rn_val = self.get_register(rn);
+        if matches!(shift, Shift(_, Operand::Register(_))) {
+            rn_val += 4
+        }
         let shifted_operand2 = match operand2 {
             Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
             Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
@@ -299,26 +445,14 @@ impl CPU {
             }
             ArithmeticInstruction::Sbc => {
                 let carry = self.get_flag(FlagsRegister::C);
-                let result = rn_val - shifted_operand2 - !carry;
-                self.set_arithmetic_flags(
-                    result,
-                    rn_val,
-                    !shifted_operand2,
-                    carry,
-                    set_flags,
-                );
+                let result = rn_val - shifted_operand2 + carry - 1;
+                self.set_arithmetic_flags(result, rn_val, !shifted_operand2, carry, set_flags);
                 result
             }
             ArithmeticInstruction::Rsc => {
                 let carry = self.get_flag(FlagsRegister::C);
-                let result = shifted_operand2 - rn_val - !carry;
-                self.set_arithmetic_flags(
-                    result,
-                    !rn_val,
-                    shifted_operand2,
-                    carry,
-                    set_flags,
-                );
+                let result = shifted_operand2 - rn_val + carry - 1;
+                self.set_arithmetic_flags(result, !rn_val, shifted_operand2, carry, set_flags);
                 result
             }
             ArithmeticInstruction::Cmp => {
@@ -343,7 +477,10 @@ impl CPU {
         shift: Shift,
         set_flags: bool,
     ) -> u32 {
-        let rn_val = self.get_register(rn);
+        let mut rn_val = self.get_register(rn);
+        if rn == 15 && matches!(shift, Shift(_, Operand::Register(_))) {
+            rn_val += 4
+        }
         let shifted_operand2 = match operand2 {
             Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
             Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
@@ -385,15 +522,17 @@ impl CPU {
         set_flags: bool,
     ) -> u32 {
         let Shift(shift_type, shift_amount_operand) = shift;
+        let mut operand2 = self.get_register(operand2_register);
         let shift_amount = match shift_amount_operand {
             Operand::Register(register) => {
-                self.advance_pipeline(memory);
+                if operand2_register == PC_REGISTER as u32 {
+                    operand2 += 4;
+                }
                 self.get_register(register)
             }
             Operand::Immeidate(imm) => imm,
         } & 0xFF;
 
-        let operand2 = self.get_register(operand2_register);
         // Special cases
         match (shift_type, shift_amount_operand) {
             (ShiftType::LSL, Operand::Immeidate(0)) => {
@@ -992,15 +1131,17 @@ mod enum_data_processing_instruction_tests {
         gba.cpu.set_register(2, register2_val);
         gba.cpu.set_register(3, register3_val);
 
-        gba.cpu
-            .execute_data_processing_instruction(&mut gba.memory, DataProcessingInstruction::Arithmetic(
-            operation,
-            Some(1),
-            2,
-            Operand::Register(3),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
-            true,
-        ));
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
 
         assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
     }
@@ -1024,15 +1165,17 @@ mod enum_data_processing_instruction_tests {
         gba.cpu.set_register(2, register2_val);
         gba.cpu.set_register(3, register3_val);
 
-        gba.cpu
-            .execute_data_processing_instruction(&mut gba.memory, DataProcessingInstruction::Arithmetic(
-            operation,
-            Some(1),
-            2,
-            Operand::Register(3),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
-            true,
-        ));
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
 
         assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
     }
@@ -1041,9 +1184,9 @@ mod enum_data_processing_instruction_tests {
     #[case(ArithmeticInstruction::Add, u32::MAX, 0x1)]
     #[case(ArithmeticInstruction::Adc, u32::MAX, 0x1)]
     #[case(ArithmeticInstruction::Sub, 0x10, 0x10)]
-    #[case(ArithmeticInstruction::Sbc, 0x10, 0x10)]
+    #[case(ArithmeticInstruction::Sbc, 0x11, 0x10)]
     #[case(ArithmeticInstruction::Rsb, 0x10, 0x10)]
-    #[case(ArithmeticInstruction::Rsc, 0x10, 0x10)]
+    #[case(ArithmeticInstruction::Rsc, 0x10, 0x11)]
     #[case(ArithmeticInstruction::Cmn, u32::MAX, 0x1)]
     #[case(ArithmeticInstruction::Cmp, 0x10, 0x10)]
     fn z_flag_correctly_set_by_arithmetic_instructions(
@@ -1056,25 +1199,251 @@ mod enum_data_processing_instruction_tests {
         gba.cpu.set_register(2, register2_val);
         gba.cpu.set_register(3, register3_val);
 
-        gba.cpu
-            .execute_data_processing_instruction(&mut gba.memory, DataProcessingInstruction::Arithmetic(
-            operation,
-            Some(1),
-            2,
-            Operand::Register(3),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
-            true,
-        ));
-
-        dbg!(gba.cpu.get_register(1));
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
 
         assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
+    }
+
+    #[rstest]
+    #[case(ArithmeticInstruction::Add, i32::MAX as u32, 0x1)]
+    #[case(ArithmeticInstruction::Adc, i32::MAX as u32, 0x1)]
+    #[case(ArithmeticInstruction::Sub, i32::MAX as u32, u32::MAX)]
+    #[case(ArithmeticInstruction::Sbc, i32::MAX as u32, 0xFFFFFFF0)]
+    #[case(ArithmeticInstruction::Rsb, 0xFFFFFFF0, i32::MAX as u32)]
+    #[case(ArithmeticInstruction::Rsc, 0xFFFFFFF0, i32::MAX as u32)]
+    #[case(ArithmeticInstruction::Cmn, i32::MAX as u32, 0x1)]
+    #[case(ArithmeticInstruction::Cmp, i32::MAX as u32, u32::MAX)]
+    fn v_flag_correctly_set_by_arithmetic_instruction(
+        #[case] operation: ArithmeticInstruction,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::V), 1);
+    }
+
+    #[rstest]
+    #[case(ArithmeticInstruction::Add, 3, -5i32 as u32)]
+    #[case(ArithmeticInstruction::Adc, 3, -5i32 as u32)]
+    #[case(ArithmeticInstruction::Sub, 4, 5)]
+    #[case(ArithmeticInstruction::Sbc, 3, 5)]
+    #[case(ArithmeticInstruction::Rsb, 5, 4)]
+    #[case(ArithmeticInstruction::Rsc, 5, 3)]
+    #[case(ArithmeticInstruction::Cmn, 3, -5i32 as u32)]
+    #[case(ArithmeticInstruction::Cmp, 3, 5)]
+    fn n_flag_correctly_set_by_arithmetic_instruction(
+        #[case] operation: ArithmeticInstruction,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+    }
+
+    #[rstest]
+    #[case(ArithmeticInstruction::Adc, 3, 5, 9)]
+    #[case(ArithmeticInstruction::Sbc, 10, 5, 5)]
+    #[case(ArithmeticInstruction::Rsc, 5, 10, 5)]
+    fn carry_operations_use_c_flag_correctly(
+        #[case] operation: ArithmeticInstruction,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+        #[case] expected_output: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_flag(FlagsRegister::C);
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Arithmetic(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_register(1), expected_output);
+    }
+
+    #[rstest]
+    #[case(LogicalInstruction::And, 0b10, 0b10, 0b10)]
+    #[case(LogicalInstruction::Orr, 0b10, 0b11, 0b11)]
+    #[case(LogicalInstruction::Eor, 0b10, 0b01, 0b11)]
+    #[case(LogicalInstruction::Mov, 0b00, 0b11, 0b11)]
+    #[case(LogicalInstruction::Mvn, 0b00, 0b10, !0b10)]
+    #[case(LogicalInstruction::Bic, 0b11, 0b01, 0b10)]
+    fn logical_instructions_work(
+        #[case] operation: LogicalInstruction,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+        #[case] expected_output: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Logical(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_register(1), expected_output);
+    }
+
+    #[rstest]
+    #[case(LogicalInstruction::And, 0b10, 0b01)]
+    #[case(LogicalInstruction::Orr, 0b00, 0b00)]
+    #[case(LogicalInstruction::Eor, 0b10, 0b10)]
+    #[case(LogicalInstruction::Tst, 0b10, 0b01)]
+    #[case(LogicalInstruction::Teq, u32::MAX, u32::MAX)]
+    #[case(LogicalInstruction::Mov, 0b00, 0b00)]
+    #[case(LogicalInstruction::Mvn, 0b00, u32::MAX)]
+    #[case(LogicalInstruction::Bic, 0b11, 0b11)]
+    fn z_flag_set_by_logical_instructions(
+        #[case] operation: LogicalInstruction,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Logical(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
+    }
+
+    #[rstest]
+    #[case(LogicalInstruction::And, u32::MAX, u32::MAX)]
+    #[case(LogicalInstruction::Orr, u32::MAX, 0b00)]
+    #[case(LogicalInstruction::Eor, u32::MAX, 0b10)]
+    #[case(LogicalInstruction::Tst, u32::MAX, u32::MAX)]
+    #[case(LogicalInstruction::Teq, u32::MAX, 0b00)]
+    #[case(LogicalInstruction::Mov, 0b00, u32::MAX)]
+    #[case(LogicalInstruction::Mvn, 0b00, 0b00)]
+    #[case(LogicalInstruction::Bic, u32::MAX, 0b11)]
+    fn n_flag_set_by_logical_instructions(
+        #[case] operation: LogicalInstruction,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Logical(
+                operation,
+                Some(1),
+                2,
+                Operand::Register(3),
+                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+    }
+
+    #[rstest]
+    #[case(ShiftType::LSL, 0xF0000000, 1)]
+    #[case(ShiftType::ROR, 0xF, 4)]
+    #[case(ShiftType::ASR, 0x2, 2)]
+    #[case(ShiftType::LSR, 0x10, 5)]
+    fn c_flag_set_by_barrel_shifter(
+        #[case] shift_type: ShiftType,
+        #[case] register2_val: u32,
+        #[case] register3_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_register(2, register2_val);
+        gba.cpu.set_register(3, register3_val);
+        gba.cpu.execute_data_processing_instruction(
+            &mut gba.memory,
+            DataProcessingInstruction::Logical(
+                LogicalInstruction::Mov,
+                Some(1),
+                2,
+                Operand::Register(2),
+                Shift(shift_type, Operand::Register(3)),
+                true,
+            ),
+        );
+
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use rstest::rstest;
 
     use crate::arm7tdmi::cpsr::PSR;

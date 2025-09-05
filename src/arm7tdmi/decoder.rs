@@ -4,11 +4,11 @@ use crate::types::*;
 
 use super::{
     arm::*,
-    cpu::{FlagsRegister, InstructionMode, CPU},
+    cpu::{FlagsRegister, InstructionMode, CPU}, instruction_table::Instruction,
 };
 
 impl CPU {
-    pub fn decode_instruction(&mut self, instruction: WORD) -> ARMDecodedInstruction {
+    pub fn decode_instruction(&mut self, instruction: WORD) -> Instruction {
         return match self.get_instruction_mode() {
             InstructionMode::ARM => self.decode_arm_instruction(instruction),
             InstructionMode::THUMB => self.decode_thumb_instruction(instruction),
@@ -43,16 +43,16 @@ impl CPU {
         }
     }
 
-    fn decode_arm_instruction(&mut self, instruction: ARMByteCode) -> ARMDecodedInstruction {
+    fn decode_arm_instruction(&mut self, instruction: ARMByteCode) -> Instruction {
         if !(self.condition_passed(instruction)) {
-            return ARMDecodedInstruction {
+            return Instruction::Funcpointer(ARMDecodedInstruction {
                 executable: CPU::arm_nop,
                 instruction,
                 ..Default::default()
-            };
+            });
         }
 
-        match instruction {
+        Instruction::Funcpointer(match instruction {
             _ if instruction == 0x00 => ARMDecodedInstruction {
                 executable: CPU::arm_nop,
                 instruction,
@@ -87,10 +87,7 @@ impl CPU {
                 }
             }
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
-                ARMDecodedInstruction {
-                    executable: CPU::data_processing_instruction,
-                    instruction,
-                }
+                return Instruction::DataProcessing(Self::decode_data_processing_instruction(instruction))
             }
             _ if arm_decoders::is_branch_and_link_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_branch_and_link,
@@ -115,11 +112,11 @@ impl CPU {
                 instruction,
                 ..Default::default()
             },
-        }
+        })
     }
 
-    fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
-        match instruction {
+    fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
+        Instruction::Funcpointer(match instruction {
             _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
                 ARMDecodedInstruction {
                     instruction,
@@ -214,7 +211,7 @@ impl CPU {
                 instruction,
                 executable: CPU::arm_not_implemented,
             },
-        }
+        })
     }
 }
 

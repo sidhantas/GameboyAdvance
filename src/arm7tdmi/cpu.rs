@@ -8,7 +8,7 @@ use std::{
 
 use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
 
-use super::{cpsr::PSR, registers::Registers};
+use super::{cpsr::PSR, instruction_table::Execute, registers::Registers};
 
 pub const PC_REGISTER: usize = 15;
 pub const LINK_REGISTER: u32 = 14;
@@ -113,9 +113,9 @@ impl CPU {
         //    });
         //}
 
-        if self.status_history.len() > HISTORY_SIZE {
-            self.status_history.pop_front();
-        }
+        //if self.status_history.len() > HISTORY_SIZE {
+        //    self.status_history.pop_front();
+        //}
         self.instruction_count += 1;
         if self.interrupt_triggered {
             self.raise_irq(memory);
@@ -128,11 +128,8 @@ impl CPU {
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
-            self.executed_instruction_hex = decoded_instruction.instruction;
             self.prefetch[1] = None;
-            execution_cycles +=
-                ((decoded_instruction.executable)(self, decoded_instruction.instruction, memory))
-                    as u64;
+            execution_cycles += decoded_instruction.execute(self, memory) as u64;
         }
 
         if let None = self.prefetch[1] {
