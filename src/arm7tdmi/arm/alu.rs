@@ -27,7 +27,7 @@ pub enum DataProcessingInstruction {
     Logical(
         LogicalInstruction,
         Option<REGISTER>,
-        REGISTER,
+        Option<REGISTER>,
         Operand,
         Shift,
         bool,
@@ -35,7 +35,6 @@ pub enum DataProcessingInstruction {
     MSR(PSRRegister, bool, bool, Operand, u32),
     MRS(REGISTER, PSRRegister),
 }
-
 
 impl Execute for DataProcessingInstruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
@@ -61,7 +60,6 @@ pub enum ArithmeticInstruction {
     Cmn,
 }
 
-
 #[derive(Debug)]
 pub enum LogicalInstruction {
     And,
@@ -74,9 +72,8 @@ pub enum LogicalInstruction {
     Mvn,
 }
 
-
 #[derive(Debug)]
-pub struct Shift(pub ShiftType, pub(crate)Operand);
+pub struct Shift(pub ShiftType, pub(crate) Operand);
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShiftType {
@@ -86,7 +83,6 @@ pub enum ShiftType {
     ROR,
     RRX,
 }
-
 
 impl CPU {
     pub fn decode_data_processing_instruction(
@@ -101,7 +97,7 @@ impl CPU {
             0x0 => DataProcessingInstruction::Logical(
                 LogicalInstruction::And,
                 Some(rd),
-                rn,
+                Some(rn),
                 operand2,
                 shift,
                 set_flags,
@@ -109,7 +105,7 @@ impl CPU {
             0x1 => DataProcessingInstruction::Logical(
                 LogicalInstruction::Eor,
                 Some(rd),
-                rn,
+                Some(rn),
                 operand2,
                 shift,
                 set_flags,
@@ -163,13 +159,13 @@ impl CPU {
                 set_flags,
             ),
             0x8 => {
-                if instruction.bit_is_set(20) {
+                if !instruction.bit_is_set(20) {
                     DataProcessingInstruction::MRS(rd, PSRRegister::CPSR)
                 } else {
                     DataProcessingInstruction::Logical(
                         LogicalInstruction::Tst,
                         None,
-                        rn,
+                        Some(rn),
                         operand2,
                         shift,
                         true,
@@ -177,9 +173,9 @@ impl CPU {
                 }
             }
             0x9 => {
-                if instruction.bit_is_set(20) {
+                if !instruction.bit_is_set(20) {
                     DataProcessingInstruction::MSR(
-                        PSRRegister::SPSR,
+                        PSRRegister::CPSR,
                         instruction.bit_is_set(19),
                         instruction.bit_is_set(16),
                         operand2,
@@ -189,7 +185,7 @@ impl CPU {
                     DataProcessingInstruction::Logical(
                         LogicalInstruction::Teq,
                         None,
-                        rn,
+                        Some(rn),
                         operand2,
                         shift,
                         true,
@@ -197,8 +193,8 @@ impl CPU {
                 }
             }
             0xA => {
-                if instruction.bit_is_set(20) {
-                    DataProcessingInstruction::MRS(rd, PSRRegister::CPSR)
+                if !instruction.bit_is_set(20) {
+                    DataProcessingInstruction::MRS(rd, PSRRegister::SPSR)
                 } else {
                     DataProcessingInstruction::Arithmetic(
                         ArithmeticInstruction::Cmp,
@@ -211,7 +207,7 @@ impl CPU {
                 }
             }
             0xB => {
-                if instruction.bit_is_set(20) {
+                if !instruction.bit_is_set(20) {
                     DataProcessingInstruction::MSR(
                         PSRRegister::SPSR,
                         instruction.bit_is_set(19),
@@ -233,7 +229,7 @@ impl CPU {
             0xC => DataProcessingInstruction::Logical(
                 LogicalInstruction::Orr,
                 Some(rd),
-                rn,
+                Some(rn),
                 operand2,
                 shift,
                 set_flags,
@@ -241,7 +237,7 @@ impl CPU {
             0xD => DataProcessingInstruction::Logical(
                 LogicalInstruction::Mov,
                 Some(rd),
-                rn,
+                None,
                 operand2,
                 shift,
                 set_flags,
@@ -249,7 +245,7 @@ impl CPU {
             0xE => DataProcessingInstruction::Logical(
                 LogicalInstruction::Bic,
                 Some(rd),
-                rn,
+                Some(rn),
                 operand2,
                 shift,
                 set_flags,
@@ -257,7 +253,7 @@ impl CPU {
             0xF => DataProcessingInstruction::Logical(
                 LogicalInstruction::Mvn,
                 Some(rd),
-                rn,
+                None,
                 operand2,
                 shift,
                 set_flags,
@@ -313,7 +309,7 @@ impl CPU {
 
                 let operand = match op {
                     Operand::Register(reg) => self.get_register(reg),
-                    Operand::Immeidate(imm) => imm.rotate_right(shift),
+                    Operand::Immediate(imm) => imm.rotate_right(shift),
                 };
 
                 let mut destination_psr: u32 = match psr {
@@ -386,7 +382,7 @@ impl CPU {
             rn_val += 4
         }
         let shifted_operand2 = match operand2 {
-            Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
+            Operand::Immediate(imm) => self.execute_immediate_shift(imm, shift),
             Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
         };
         match instruction {
@@ -440,17 +436,22 @@ impl CPU {
         &mut self,
         memory: &mut GBAMemory,
         instruction: LogicalInstruction,
-        rn: REGISTER,
+        rn: Option<REGISTER>,
         operand2: Operand,
         shift: Shift,
         set_flags: bool,
     ) -> u32 {
-        let mut rn_val = self.get_register(rn);
-        if rn == 15 && matches!(shift, Shift(_, Operand::Register(_))) {
-            rn_val += 4
-        }
+        let rn_val = if let Some(rn) = rn {
+            let mut rn_val = self.get_register(rn);
+            if rn == 15 && matches!(shift, Shift(_, Operand::Register(_))) {
+                rn_val += 4
+            }
+            rn_val
+        } else {
+            0
+        };
         let shifted_operand2 = match operand2 {
-            Operand::Immeidate(imm) => self.execute_immediate_shift(imm, shift),
+            Operand::Immediate(imm) => self.execute_immediate_shift(imm, shift),
             Operand::Register(reg) => self.execute_register_shift(memory, reg, shift, set_flags),
         };
 
@@ -469,7 +470,7 @@ impl CPU {
     }
 
     fn execute_immediate_shift(&mut self, imm: u32, shift: Shift) -> u32 {
-        let Shift(ShiftType::ROR, Operand::Immeidate(rotate_amount)) = shift else {
+        let Shift(ShiftType::ROR, Operand::Immediate(rotate_amount)) = shift else {
             panic!("Invalid immediate shift");
         };
 
@@ -498,20 +499,20 @@ impl CPU {
                 }
                 self.get_register(register)
             }
-            Operand::Immeidate(imm) => imm,
+            Operand::Immediate(imm) => imm,
         } & 0xFF;
 
         // Special cases
         match (shift_type, shift_amount_operand) {
-            (ShiftType::LSL, Operand::Immeidate(0)) => {
+            (ShiftType::LSL, Operand::Immediate(0)) => {
                 self.shifter_output = self.get_flag(FlagsRegister::C);
                 return operand2;
             }
-            (ShiftType::LSR, Operand::Immeidate(32)) => {
+            (ShiftType::LSR, Operand::Immediate(32)) => {
                 self.shifter_output = operand2.get_bit(31);
                 return 0;
             }
-            (ShiftType::ASR, Operand::Immeidate(shift_amount @ 32)) => {
+            (ShiftType::ASR, Operand::Immediate(shift_amount @ 32)) => {
                 self.shifter_output = operand2.get_bit(31);
                 return ((operand2 as i32) >> shift_amount) as u32;
             }
@@ -693,6 +694,7 @@ impl CPU {
         let result = operand1 + operand2;
         self.set_arithmetic_flags(result, operand1, operand2, 0, set_flags);
         self.set_register(rd, result);
+        self.set_executed_instruction(format_args!("ADD {rd} {:#X} {:#X}", operand1, operand2));
     }
 
     pub fn arm_and(&mut self, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) {
@@ -942,8 +944,8 @@ fn get_operand2_and_shift(instruction: u32) -> (Operand, Shift) {
     if instruction.bit_is_set(25) {
         let shift_amount = (instruction & 0x0000_0F00) >> 7;
         return (
-            Operand::Immeidate(instruction & 0x0000_00FF),
-            Shift(ShiftType::ROR, Operand::Immeidate(shift_amount)),
+            Operand::Immediate(instruction & 0x0000_00FF),
+            Shift(ShiftType::ROR, Operand::Immediate(shift_amount)),
         );
     } else {
         let operand2 = Operand::Register(instruction & 0x0000_000F);
@@ -957,15 +959,15 @@ fn get_operand2_and_shift(instruction: u32) -> (Operand, Shift) {
                 return (
                     operand2,
                     match shift_type {
-                        0x0 => Shift(ShiftType::LSL, Operand::Immeidate(0)),
-                        0x1 => Shift(ShiftType::LSR, Operand::Immeidate(32)),
-                        0x2 => Shift(ShiftType::ASR, Operand::Immeidate(32)),
-                        0x3 => Shift(ShiftType::RRX, Operand::Immeidate(1)),
+                        0x0 => Shift(ShiftType::LSL, Operand::Immediate(0)),
+                        0x1 => Shift(ShiftType::LSR, Operand::Immediate(32)),
+                        0x2 => Shift(ShiftType::ASR, Operand::Immediate(32)),
+                        0x3 => Shift(ShiftType::RRX, Operand::Immediate(1)),
                         _ => unreachable!(),
                     },
                 );
             }
-            Operand::Immeidate(immediate)
+            Operand::Immediate(immediate)
         };
         let shift_type = match shift_type {
             0x0 => ShiftType::LSL,
@@ -1002,7 +1004,7 @@ mod enum_data_processing_instruction_tests {
             Some(1),
             3,
             Operand::Register(2),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            Shift(ShiftType::LSL, Operand::Immediate(0)),
             true
         )
     )]
@@ -1011,9 +1013,9 @@ mod enum_data_processing_instruction_tests {
         DataProcessingInstruction::Logical(
             LogicalInstruction::And,
             Some(1),
-            3,
+            Some(3),
             Operand::Register(2),
-            Shift(ShiftType::LSR, Operand::Immeidate(5)),
+            Shift(ShiftType::LSR, Operand::Immediate(5)),
             true
         )
     )]
@@ -1022,9 +1024,9 @@ mod enum_data_processing_instruction_tests {
         DataProcessingInstruction::Logical(
             LogicalInstruction::Orr,
             Some(1),
-            3,
+            Some(3),
             Operand::Register(2),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            Shift(ShiftType::LSL, Operand::Immediate(0)),
             true
         )
     )]
@@ -1033,9 +1035,9 @@ mod enum_data_processing_instruction_tests {
         DataProcessingInstruction::Logical(
             LogicalInstruction::Orr,
             Some(1),
-            3,
+            Some(3),
             Operand::Register(2),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            Shift(ShiftType::LSL, Operand::Immediate(0)),
             false
         )
     )]
@@ -1044,9 +1046,9 @@ mod enum_data_processing_instruction_tests {
         DataProcessingInstruction::Logical(
             LogicalInstruction::Eor,
             Some(1),
-            3,
+            Some(3),
             Operand::Register(2),
-            Shift(ShiftType::LSL, Operand::Immeidate(0)),
+            Shift(ShiftType::LSL, Operand::Immediate(0)),
             true
         )
     )]
@@ -1072,7 +1074,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 3,
                 Operand::Register(2),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1106,7 +1108,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 2,
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1140,7 +1142,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 2,
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1174,7 +1176,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 2,
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1208,7 +1210,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 2,
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1242,7 +1244,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 2,
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1273,7 +1275,7 @@ mod enum_data_processing_instruction_tests {
                 Some(1),
                 2,
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1304,9 +1306,9 @@ mod enum_data_processing_instruction_tests {
             DataProcessingInstruction::Logical(
                 operation,
                 Some(1),
-                2,
+                Some(2),
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1338,9 +1340,9 @@ mod enum_data_processing_instruction_tests {
             DataProcessingInstruction::Logical(
                 operation,
                 Some(1),
-                2,
+                Some(2),
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1371,9 +1373,9 @@ mod enum_data_processing_instruction_tests {
             DataProcessingInstruction::Logical(
                 operation,
                 Some(1),
-                2,
+                Some(2),
                 Operand::Register(3),
-                Shift(ShiftType::LSL, Operand::Immeidate(0)),
+                Shift(ShiftType::LSL, Operand::Immediate(0)),
                 true,
             ),
         );
@@ -1399,7 +1401,7 @@ mod enum_data_processing_instruction_tests {
             DataProcessingInstruction::Logical(
                 LogicalInstruction::Mov,
                 Some(1),
-                2,
+                Some(2),
                 Operand::Register(2),
                 Shift(shift_type, Operand::Register(3)),
                 true,
@@ -1408,7 +1410,6 @@ mod enum_data_processing_instruction_tests {
 
         assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 1);
     }
-
 }
 
 //#[cfg(test)]

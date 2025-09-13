@@ -1,1 +1,1 @@
-mrs r0, SPSR
+msr CPSR, #0x800

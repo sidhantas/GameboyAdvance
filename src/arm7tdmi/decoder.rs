@@ -8,7 +8,7 @@ use super::{
 };
 
 impl CPU {
-    pub fn decode_instruction(&mut self, instruction: WORD) -> Instruction {
+    pub fn decode_instruction(&self, instruction: WORD) -> Instruction {
         return match self.get_instruction_mode() {
             InstructionMode::ARM => self.decode_arm_instruction(instruction),
             InstructionMode::THUMB => self.decode_thumb_instruction(instruction),
@@ -43,7 +43,7 @@ impl CPU {
         }
     }
 
-    fn decode_arm_instruction(&mut self, instruction: ARMByteCode) -> Instruction {
+    fn decode_arm_instruction(&self, instruction: ARMByteCode) -> Instruction {
         if !(self.condition_passed(instruction)) {
             return Instruction::Funcpointer(ARMDecodedInstruction {
                 executable: CPU::arm_nop,
@@ -374,93 +374,99 @@ mod sub_decoders {
     }
 }
 
-//#[cfg(test)]
-//mod arm_decoders_tests {
-//
-//    use arm_decoders::*;
-//
-//    use crate::{gba::GBA, memory::memory::GBAMemory};
-//
-//    use super::*;
-//
-//    fn test_decoder(decoder: fn(ARMByteCode) -> bool, instructions: Vec<u32>) {
-//        for instruction in instructions {
-//            assert!(decoder(instruction) == true);
-//        }
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_multiplication_instruction() {
-//        let multiplication_instructions = vec![0xE0230192, 0xE0250391];
-//        test_decoder(is_multiply_instruction, multiplication_instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_single_data_swap_instruction() {
-//        let single_data_swap_instructions = vec![0xE1013092, 0xE1413092];
-//        test_decoder(is_single_data_swap, single_data_swap_instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_software_interrupt_instruction() {
-//        let software_interrupt_ininstructions = vec![0xef173f18];
-//        test_decoder(is_software_interrupt, software_interrupt_ininstructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_halfword_data_transfer_register_offset() {
-//        let instructions = vec![0xe1c130b0];
-//        test_decoder(is_hw_or_signed_data_transfer, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_halfword_data_transfer_immediate_offset() {
-//        let instructions = vec![0xe1d207bb];
-//        test_decoder(is_hw_or_signed_data_transfer, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_single_data_transfer_instruction() {
-//        let instructions = vec![0xe7910003];
-//        test_decoder(is_load_or_store_register_unsigned, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_an_undefined_instruction() {
-//        let instructions = vec![0xe7000010];
-//        test_decoder(is_undefined, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_block_data_transfer() {
-//        let instructions = vec![0xe891003c];
-//        test_decoder(is_block_data_transfer, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_branch_instruction() {
-//        let instructions = vec![0xea000005];
-//        test_decoder(is_branch_instruction, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_branch_and_exchange_instruction() {
-//        let instructions = vec![0xe12fff11];
-//        test_decoder(is_branch_and_exchange_instruction, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_data_processing_instruction() {
-//        let instructions = vec![0xe2811001, 0xe2411001];
-//        test_decoder(is_data_processing_and_psr_transfer, instructions);
-//    }
-//
-//    #[test]
-//    fn it_recognizes_a_load_store_instruction() {
-//        let instructions = vec![0xe59f101c, 0xe58f101c];
-//        test_decoder(is_load_or_store_register_unsigned, instructions);
-//    }
-//
+#[cfg(test)]
+mod arm_decoders_tests {
+
+    use arm_decoders::*;
+
+    use crate::{gba::GBA, memory::memory::GBAMemory};
+
+    use super::*;
+
+    fn test_decoder(decoder: fn(ARMByteCode) -> bool, instructions: Vec<u32>) {
+        for instruction in instructions {
+            assert!(decoder(instruction) == true);
+        }
+    }
+
+    #[test]
+    fn it_recognizes_a_multiplication_instruction() {
+        let multiplication_instructions = vec![0xE0230192, 0xE0250391];
+        test_decoder(is_multiply_instruction, multiplication_instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_single_data_swap_instruction() {
+        let single_data_swap_instructions = vec![0xE1013092, 0xE1413092];
+        test_decoder(is_single_data_swap, single_data_swap_instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_software_interrupt_instruction() {
+        let software_interrupt_ininstructions = vec![0xef173f18];
+        test_decoder(is_software_interrupt, software_interrupt_ininstructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_jump() {
+        let branch_instruction = vec![0xE35E0000];
+        test_decoder(is_branch_instruction, branch_instruction);
+    }
+
+    #[test]
+    fn it_recognizes_a_halfword_data_transfer_register_offset() {
+        let instructions = vec![0xe1c130b0];
+        test_decoder(is_hw_or_signed_data_transfer, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_halfword_data_transfer_immediate_offset() {
+        let instructions = vec![0xe1d207bb];
+        test_decoder(is_hw_or_signed_data_transfer, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_single_data_transfer_instruction() {
+        let instructions = vec![0xe7910003];
+        test_decoder(is_load_or_store_register_unsigned, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_an_undefined_instruction() {
+        let instructions = vec![0xe7000010];
+        test_decoder(is_undefined, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_block_data_transfer() {
+        let instructions = vec![0xe891003c];
+        test_decoder(is_block_data_transfer, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_branch_instruction() {
+        let instructions = vec![0xea000005];
+        test_decoder(is_branch_instruction, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_branch_and_exchange_instruction() {
+        let instructions = vec![0xe12fff11];
+        test_decoder(is_branch_and_exchange_instruction, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_data_processing_instruction() {
+        let instructions = vec![0xe2811001, 0xe2411001];
+        test_decoder(is_data_processing_and_psr_transfer, instructions);
+    }
+
+    #[test]
+    fn it_recognizes_a_load_store_instruction() {
+        let instructions = vec![0xe59f101c, 0xe58f101c];
+        test_decoder(is_load_or_store_register_unsigned, instructions);
+    }
+
 //    #[test]
 //    fn it_finds_single_data_swap() {
 //        let mut gba = GBA::new_no_bios();
@@ -492,7 +498,7 @@ mod sub_decoders {
 //            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt
 //        );
 //    }
-//}
+}
 //
 //#[cfg(test)]
 //mod sub_decoder_tests {

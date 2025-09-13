@@ -56,7 +56,7 @@ pub struct CPU {
     pub executed_instruction_hex: ARMByteCode,
     pub executed_instruction: String,
     cpsr: PSR,
-    pub(super)shifter_output: u32,
+    pub(super) shifter_output: u32,
     pub spsr: [PSR; 5],
     pub output_file: File,
     pub cycles: u64,
@@ -104,18 +104,16 @@ impl CPU {
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
 
-        //if self.registers.get_register(PC_REGISTER) != 0x350 {
-        //    self.status_history.push_back(Status {
-        //        cycles: self.cycles,
-        //        registers: self.registers.active_registers.clone(),
-        //        cpsr: self.cpsr.clone(),
-        //        instruction_count: self.instruction_count,
-        //    });
-        //}
+        self.status_history.push_back(Status {
+            cycles: self.cycles,
+            registers: self.registers.active_registers.clone(),
+            cpsr: self.cpsr.clone(),
+            instruction_count: self.instruction_count,
+        });
 
-        //if self.status_history.len() > HISTORY_SIZE {
-        //    self.status_history.pop_front();
-        //}
+        if self.status_history.len() > HISTORY_SIZE {
+            self.status_history.pop_front();
+        }
         self.instruction_count += 1;
         if self.interrupt_triggered {
             self.raise_irq(memory);
@@ -128,6 +126,7 @@ impl CPU {
         let mut execution_cycles = 0;
         if let Some(value) = self.prefetch[1] {
             let decoded_instruction = self.decode_instruction(value);
+            self.executed_instruction_hex = value;
             self.prefetch[1] = None;
             execution_cycles += decoded_instruction.execute(self, memory) as u64;
         }
@@ -398,7 +397,7 @@ impl Display for Status {
         }
 
         write!(f, "{:08x} ", u32::from(self.cpsr))?;
-        write!(f, "{}\n", self.cycles)
+        write!(f, "0\n")
     }
 }
 

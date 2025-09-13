@@ -18,7 +18,7 @@ pub trait DecodeARMInstructionToString {
     fn instruction_to_string(&self, condition_code: &str) -> String;
 }
 
-fn condition_code_as_str(condition_code: u32) -> &'static str {
+pub fn condition_code_as_str(condition_code: u32) -> &'static str {
     match condition_code {
         0b0000 => "eq",
         0b0001 => "ne",
@@ -56,14 +56,5 @@ impl Execute for Instruction {
 #[derive(Debug)]
 pub enum Operand {
     Register(REGISTER),
-    Immeidate(u32),
-}
-
-impl Display for Operand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Operand::Register(reg) => write!(f, "r{reg}"),
-            Operand::Immeidate(imm) => write!(f, "#{imm}"),
-        }
-    }
+    Immediate(u32),
 }
