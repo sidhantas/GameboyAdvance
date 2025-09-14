@@ -25,7 +25,14 @@ use tui::{
 };
 
 use crate::{
-    arm7tdmi::{cpu::{CPUMode, FlagsRegister, InstructionMode, CPU}, instruction_table::{condition_code_as_str, DecodeARMInstructionToString, Instruction}},
+    arm7tdmi::{
+        cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
+        instruction_table::{
+            condition_code_as_str, DecodeARMInstructionToString, DecodeThumbInstructionToString,
+            Instruction,
+        },
+        thumb::alu::ThumbFullAdder,
+    },
     gba::{GBA, KILL_SIGNAL},
     graphics::display::DisplayBuffer,
     memory::{
@@ -315,10 +322,15 @@ fn draw_cpu(
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });
 
-    let executed_instruction_decode = cpu.decode_instruction((cpu.executed_instruction_hex & !0xF0000000) | 0b1110 << 28);
+    let executed_instruction_decode =
+        cpu.decode_instruction((cpu.executed_instruction_hex & !0xF0000000) | 0b1110 << 28);
     let executed_instruction_print = match executed_instruction_decode {
-        Instruction::DataProcessing(data_processing_instruction) => &data_processing_instruction.instruction_to_string(condition_code_as_str((cpu.executed_instruction_hex & 0xF0000000) >> 28)),
-        Instruction::Funcpointer(_) => &cpu.executed_instruction,
+        Instruction::DataProcessing(data_processing_instruction) => &data_processing_instruction
+            .instruction_to_string(condition_code_as_str(
+                (cpu.executed_instruction_hex & 0xF0000000) >> 28,
+            )),
+        Instruction::ThumbFullAdder(full_adder) => &full_adder.instruction_to_string(),
+        _ => &cpu.executed_instruction,
     };
 
     let executed_instruction =
@@ -569,11 +581,7 @@ fn draw_cpsr(
         flag_values[6],
     );
     f.render_widget(
-        Paragraph::new(format!(
-            "{:x}",
-            u32::from(cpu.get_cpsr())
-        ))
-        .alignment(Alignment::Center),
+        Paragraph::new(format!("{:x}", u32::from(cpu.get_cpsr()))).alignment(Alignment::Center),
         flag_values[7],
     );
     f.render_widget(block, flags_chunk);

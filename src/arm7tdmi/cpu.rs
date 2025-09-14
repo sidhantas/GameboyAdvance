@@ -104,17 +104,17 @@ impl CPU {
     pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
 
-        self.status_history.push_back(Status {
-            cycles: self.cycles,
-            registers: self.registers.active_registers.clone(),
-            cpsr: self.cpsr.clone(),
-            instruction_count: self.instruction_count,
-        });
+        //self.status_history.push_back(Status {
+        //    cycles: self.cycles,
+        //    registers: self.registers.active_registers.clone(),
+        //    cpsr: self.cpsr.clone(),
+        //    instruction_count: self.instruction_count,
+        //});
 
-        if self.status_history.len() > HISTORY_SIZE {
-            self.status_history.pop_front();
-        }
-        self.instruction_count += 1;
+        //if self.status_history.len() > HISTORY_SIZE {
+        //    self.status_history.pop_front();
+        //}
+        //self.instruction_count += 1;
         if self.interrupt_triggered {
             self.raise_irq(memory);
             self.interrupt_triggered = false;

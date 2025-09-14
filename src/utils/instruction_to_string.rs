@@ -8,7 +8,7 @@ use crate::{
             ArithmeticInstruction, DataProcessingInstruction, LogicalInstruction, PSRRegister,
             Shift, ShiftType,
         },
-        instruction_table::{DecodeARMInstructionToString, Operand},
+        instruction_table::{DecodeARMInstructionToString, DecodeThumbInstructionToString, Operand}, thumb::alu::{ThumbFullAdder, ThumbFullAdderOperations},
     },
     types::REGISTER,
 };
@@ -67,6 +67,8 @@ impl DecodeARMInstructionToString for DataProcessingInstruction {
         }
     }
 }
+
+
 impl Display for ArithmeticInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let op = match self {
@@ -97,6 +99,7 @@ impl Display for LogicalInstruction {
         write!(f, "{}", op)
     }
 }
+
 impl Display for Shift {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if matches!(self, Shift(ShiftType::LSL, Operand::Immediate(0))) {
@@ -123,6 +126,24 @@ impl Display for Operand {
         match self {
             Operand::Register(reg) => write!(f, "{}", print_register(reg)),
             Operand::Immediate(imm) => write!(f, "#{imm}"),
+        }
+    }
+}
+
+
+impl DecodeThumbInstructionToString for ThumbFullAdder {
+    fn instruction_to_string(&self) -> String {
+        let ThumbFullAdder(operation, rd, rs, op2) = self;
+
+        format!("{operation}s {}, {}, {op2}", print_register(rd), print_register(rs))
+    }
+}
+
+impl Display for ThumbFullAdderOperations {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ThumbFullAdderOperations::Add => write!(f, "add"),
+            ThumbFullAdderOperations::Sub => write!(f, "sub"),
         }
     }
 }

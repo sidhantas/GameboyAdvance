@@ -4,7 +4,8 @@ use crate::types::*;
 
 use super::{
     arm::*,
-    cpu::{FlagsRegister, InstructionMode, CPU}, instruction_table::Instruction,
+    cpu::{FlagsRegister, InstructionMode, CPU},
+    instruction_table::Instruction,
 };
 
 impl CPU {
@@ -87,12 +88,16 @@ impl CPU {
                 }
             }
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
-                return Instruction::DataProcessing(Self::decode_data_processing_instruction(instruction))
+                return Instruction::DataProcessing(Self::decode_data_processing_instruction(
+                    instruction,
+                ))
             }
-            _ if arm_decoders::is_branch_and_link_instruction(instruction) => ARMDecodedInstruction {
-                executable: CPU::arm_branch_and_link,
-                instruction,
-            },
+            _ if arm_decoders::is_branch_and_link_instruction(instruction) => {
+                ARMDecodedInstruction {
+                    executable: CPU::arm_branch_and_link,
+                    instruction,
+                }
+            }
             _ if arm_decoders::is_branch_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_branch,
                 instruction,
@@ -118,10 +123,7 @@ impl CPU {
     fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
         Instruction::Funcpointer(match instruction {
             _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_add_or_subtract_instruction,
-                }
+                return Instruction::ThumbFullAdder(CPU::decode_full_adder(instruction))
             }
             _ if thumb_decoders::is_move_shifted_register(instruction) => ARMDecodedInstruction {
                 instruction,
@@ -133,10 +135,11 @@ impl CPU {
                     executable: CPU::thumb_move_add_compare_add_subtract_immediate,
                 }
             }
-            _ if thumb_decoders::is_alu_operation(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_alu_instructions,
-            },
+            _ if thumb_decoders::is_alu_operation(instruction) => {
+                return Instruction::ThumbAluInstruction(CPU::decode_thumb_alu_instruction(
+                    instruction,
+                ))
+            }
             _ if thumb_decoders::is_thumb_bx(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::thumb_bx,
@@ -467,37 +470,37 @@ mod arm_decoders_tests {
         test_decoder(is_load_or_store_register_unsigned, instructions);
     }
 
-//    #[test]
-//    fn it_finds_single_data_swap() {
-//        let mut gba = GBA::new_no_bios();
-//        let instruction = 0xe1014093;
-//        assert!(gba.cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
-//    }
-//
-//    #[test]
-//    fn it_finds_block_data_transfer() {
-//        let mut gba = GBA::new_no_bios();
-//        let instruction = 0xe895001f;
-//        assert!(gba.cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
-//    }
-//    #[test]
-//    fn it_finds_a_branch_and_exchange_instruction() {
-//        let mut gba = GBA::new_no_bios();
-//        let instruction = 0xe12fff10;
-//        assert!(
-//            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange
-//        )
-//    }
-//
-//    #[test]
-//    fn it_finds_swi_instruction() {
-//        let mut gba = GBA::new_no_bios();
-//        let instruction = 0xef001234;
-//
-//        assert!(
-//            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt
-//        );
-//    }
+    //    #[test]
+    //    fn it_finds_single_data_swap() {
+    //        let mut gba = GBA::new_no_bios();
+    //        let instruction = 0xe1014093;
+    //        assert!(gba.cpu.decode_arm_instruction(instruction).executable == CPU::single_data_swap)
+    //    }
+    //
+    //    #[test]
+    //    fn it_finds_block_data_transfer() {
+    //        let mut gba = GBA::new_no_bios();
+    //        let instruction = 0xe895001f;
+    //        assert!(gba.cpu.decode_arm_instruction(instruction).executable == CPU::block_dt_execution)
+    //    }
+    //    #[test]
+    //    fn it_finds_a_branch_and_exchange_instruction() {
+    //        let mut gba = GBA::new_no_bios();
+    //        let instruction = 0xe12fff10;
+    //        assert!(
+    //            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_branch_and_exchange
+    //        )
+    //    }
+    //
+    //    #[test]
+    //    fn it_finds_swi_instruction() {
+    //        let mut gba = GBA::new_no_bios();
+    //        let instruction = 0xef001234;
+    //
+    //        assert!(
+    //            gba.cpu.decode_arm_instruction(instruction).executable == CPU::arm_software_interrupt
+    //        );
+    //    }
 }
 //
 //#[cfg(test)]

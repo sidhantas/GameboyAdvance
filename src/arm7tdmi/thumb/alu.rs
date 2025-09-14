@@ -1,9 +1,335 @@
 use crate::{
-    arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER},
+    arm7tdmi::{
+        arm::alu::ArithmeticInstruction,
+        cpu::{FlagsRegister, InstructionMode, CPU, PC_REGISTER},
+        instruction_table::{Execute, Operand},
+        thumb,
+    },
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER},
     utils::bits::{sign_extend, Bits},
 };
+
+pub struct ThumbFullAdder(
+    pub ThumbFullAdderOperations,
+    pub REGISTER,
+    pub REGISTER,
+    pub Operand,
+);
+
+pub enum ThumbFullAdderOperations {
+    Add,
+    Sub,
+}
+
+impl CPU {
+    pub fn decode_full_adder(instruction: u32) -> ThumbFullAdder {
+        let opcode = (instruction & 0x0600) >> 9;
+        let operand2 = (instruction & 0x01C0) >> 6;
+
+        let rd = instruction & 0x0007;
+        let rs = (instruction & 0x0038) >> 3;
+
+        let (full_adder_operation, operand2) = match opcode {
+            0 => (ThumbFullAdderOperations::Add, Operand::Register(operand2)),
+            1 => (ThumbFullAdderOperations::Sub, Operand::Register(operand2)),
+            2 => (ThumbFullAdderOperations::Add, Operand::Immediate(operand2)),
+            3 => (ThumbFullAdderOperations::Sub, Operand::Immediate(operand2)),
+            _ => unreachable!(),
+        };
+
+        ThumbFullAdder(full_adder_operation, rd, rs, operand2)
+    }
+}
+
+impl Execute for ThumbFullAdder {
+    fn execute(self, cpu: &mut CPU, _memory: &mut GBAMemory) -> CYCLES {
+        let ThumbFullAdder(operation, rd, rs, op2) = self;
+
+        let rs_val = cpu.get_register(rs);
+        let op2 = match op2 {
+            Operand::Register(reg) => cpu.get_register(reg),
+            Operand::Immediate(imm) => imm,
+        };
+
+        let result = match operation {
+            ThumbFullAdderOperations::Add => {
+                let result = rs_val + op2;
+                cpu.set_arithmetic_flags(result, rs_val, op2, 0, true);
+                result
+            }
+            ThumbFullAdderOperations::Sub => {
+                let result = rs_val - op2;
+                cpu.set_arithmetic_flags(result, rs_val, !op2, 1, true);
+                result
+            }
+        };
+
+        cpu.set_register(rd, result);
+
+        0
+    }
+}
+
+pub enum ThumbALUInstruction {
+    Arithmetic(ThumbArithmeticInstruction, REGISTER, REGISTER),
+    Logical(ThumbLogicalInstruction, REGISTER, REGISTER),
+    Shift(ThumbShiftInstruction, REGISTER, REGISTER),
+}
+
+pub enum ThumbArithmeticInstruction {
+    Adc,
+    Sbc,
+    Neg,
+    Cmp,
+    Cmn,
+    Mul,
+}
+
+pub enum ThumbLogicalInstruction {
+    And,
+    Eor,
+    Tst,
+    Orr,
+    Bic,
+    Mvn,
+}
+
+enum ThumbShiftInstruction {
+    Lsl,
+    Lsr,
+    Asr,
+    Ror,
+}
+
+impl CPU {
+    pub fn decode_thumb_alu_instruction(instruction: u32) -> ThumbALUInstruction {
+        let opcode = (instruction & 0x03C0) >> 6;
+
+        let rd = instruction & 0x0007;
+        let rs = (instruction & 0x0038) >> 3;
+
+        match opcode {
+            0x0 => ThumbALUInstruction::Logical(ThumbLogicalInstruction::And, rd, rs),
+            0x1 => ThumbALUInstruction::Logical(ThumbLogicalInstruction::Eor, rd, rs),
+            0x2 => ThumbALUInstruction::Shift(ThumbShiftInstruction::Lsl, rd, rs),
+            0x3 => ThumbALUInstruction::Shift(ThumbShiftInstruction::Lsr, rd, rs),
+            0x4 => ThumbALUInstruction::Shift(ThumbShiftInstruction::Asr, rd, rs),
+            0x5 => ThumbALUInstruction::Arithmetic(ThumbArithmeticInstruction::Adc, rd, rs),
+            0x6 => ThumbALUInstruction::Arithmetic(ThumbArithmeticInstruction::Sbc, rd, rs),
+            0x7 => ThumbALUInstruction::Shift(ThumbShiftInstruction::Ror, rd, rs),
+            0x8 => ThumbALUInstruction::Logical(ThumbLogicalInstruction::Tst, rd, rs),
+            0x9 => ThumbALUInstruction::Arithmetic(ThumbArithmeticInstruction::Neg, rd, rs),
+            0xa => ThumbALUInstruction::Arithmetic(ThumbArithmeticInstruction::Cmp, rd, rs),
+            0xb => ThumbALUInstruction::Arithmetic(ThumbArithmeticInstruction::Cmn, rd, rs),
+            0xc => ThumbALUInstruction::Logical(ThumbLogicalInstruction::Orr, rd, rs),
+            0xd => ThumbALUInstruction::Arithmetic(ThumbArithmeticInstruction::Mul, rd, rs),
+            0xe => ThumbALUInstruction::Logical(ThumbLogicalInstruction::Bic, rd, rs),
+            0xf => ThumbALUInstruction::Logical(ThumbLogicalInstruction::Mvn, rd, rs),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Execute for ThumbALUInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        match self {
+            ThumbALUInstruction::Arithmetic(thumb_arithmetic_instruction, rd, rs) => {
+                cpu.execute_thumb_arithmetic_instruction(thumb_arithmetic_instruction, rd, rs)
+            }
+            ThumbALUInstruction::Logical(thumb_logical_instruction, rd, rs) => {
+                cpu.execute_thumb_logical_instruction(thumb_logical_instruction, rd, rs)
+            }
+            ThumbALUInstruction::Shift(thumb_shift_instruction, rd, rs) => {
+                cpu.execute_thumb_shift_instruction(thumb_shift_instruction, rd, rs)
+            }
+        }
+    }
+}
+
+impl CPU {
+    fn execute_thumb_arithmetic_instruction(
+        &mut self,
+        instruction: ThumbArithmeticInstruction,
+        rd: REGISTER,
+        rs: REGISTER,
+    ) -> CYCLES {
+        let rs_val = self.get_register(rs);
+        let rd_val = self.get_register(rd);
+        let mut cycles = 0;
+        match instruction {
+            ThumbArithmeticInstruction::Adc => {
+                let carry = self.get_flag(FlagsRegister::C);
+                let result = rd_val + rs_val + carry;
+                self.set_arithmetic_flags(result, rd_val, rs_val, carry, true);
+                self.set_register(rd, result);
+            }
+            ThumbArithmeticInstruction::Sbc => {
+                let carry = self.get_flag(FlagsRegister::C);
+                let result = rd_val - rs_val + carry - 1;
+                self.set_arithmetic_flags(result, rd_val, !rs_val, carry, true);
+                self.set_register(rd, result);
+            }
+            ThumbArithmeticInstruction::Neg => {
+                let result = 0 - rs_val;
+                self.set_arithmetic_flags(result, 0, !rs_val, 1, true);
+                self.set_register(rd, result);
+            }
+            ThumbArithmeticInstruction::Cmp => {
+                let result = rd_val - rs_val;
+                self.set_arithmetic_flags(result, rd_val, !rs_val, 1, true);
+            }
+            ThumbArithmeticInstruction::Cmn => {
+                let result = rd_val + rs_val;
+                self.set_arithmetic_flags(result, rd_val, rs_val, 0, true);
+            }
+            ThumbArithmeticInstruction::Mul => {
+                let multiplier = self.get_register(rd);
+                cycles += if multiplier & 0xFFFF_FF00 == 0
+                    || multiplier & 0xFFFF_FF00 == 0xFFFF_FF00
+                {
+                    1
+                } else if multiplier & 0xFFFF_0000 == 0 || multiplier & 0xFFFF_0000 == 0xFFFF_0000 {
+                    2
+                } else if multiplier & 0xFF00_0000 == 0 || multiplier & 0xFF00_0000 == 0xFFFF_0000 {
+                    3
+                } else {
+                    4
+                };
+                self.thumb_mul(rd, rd_val, rs_val, true);
+            }
+        };
+
+        cycles
+    }
+
+    fn execute_thumb_logical_instruction(
+        &mut self,
+        instruction: ThumbLogicalInstruction,
+        rd: REGISTER,
+        rs: REGISTER,
+    ) -> CYCLES {
+        let rs_val = self.get_register(rs);
+        let rd_val = self.get_register(rd);
+
+        let result = match instruction {
+            ThumbLogicalInstruction::And => {
+                let result = rd_val & rs_val;
+                self.set_register(rd, result);
+                result
+            }
+            ThumbLogicalInstruction::Eor => {
+                let result = rd_val ^ rs_val;
+                self.set_register(rd, result);
+                result
+            }
+            ThumbLogicalInstruction::Tst => rd_val & rs_val,
+            ThumbLogicalInstruction::Orr => {
+                let result = rd_val | rs_val;
+                self.set_register(rd, result);
+                result
+            }
+            ThumbLogicalInstruction::Bic => {
+                let result = rd_val & !rs_val;
+                self.set_register(rd, result);
+                result
+            }
+            ThumbLogicalInstruction::Mvn => {
+                let result = !rs_val;
+                self.set_register(rd, result);
+                result
+            }
+        };
+
+        self.set_logical_flags(result, true);
+
+        0
+    }
+
+    fn execute_thumb_shift_instruction(
+        &mut self,
+        instruction: ThumbShiftInstruction,
+        rd: REGISTER,
+        rs: REGISTER,
+    ) -> CYCLES {
+        let mut shift_amount = self.get_register(rs) & 0xFF;
+        let mut rd_val = self.get_register(rd);
+
+        if rs == PC_REGISTER as u32 {
+            shift_amount += 2;
+        }
+
+        if rd == PC_REGISTER as u32 {
+            rd_val += 2;
+        }
+
+        let result = match instruction {
+            ThumbShiftInstruction::Lsl => {
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    rd_val
+                } else if shift_amount < 32 {
+                    self.shifter_output = rd_val.get_bit(32 - shift_amount as u8);
+                    rd_val << shift_amount
+                } else if shift_amount == 32 {
+                    self.shifter_output = rd_val & 0x1;
+                    0
+                } else {
+                    self.shifter_output = 0;
+                    0
+                }
+            }
+            ThumbShiftInstruction::Lsr => {
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    rd_val
+                } else if shift_amount < 32 {
+                    self.shifter_output = rd_val.get_bit((shift_amount as u8) - 1);
+                    rd_val >> shift_amount
+                } else if shift_amount == 32 {
+                    self.shifter_output = rd_val >> 31;
+                    0
+                } else {
+                    self.shifter_output = 0;
+                    0
+                }
+            }
+            ThumbShiftInstruction::Asr => {
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    rd_val
+                } else if shift_amount < 32 {
+                    self.shifter_output = rd_val.get_bit((shift_amount as u8) - 1);
+                    ((rd_val as i32) >> shift_amount) as u32
+                } else if (rd_val >> 31) > 0 {
+                    self.shifter_output = 1;
+                    u32::MAX
+                } else {
+                    self.shifter_output = 0;
+                    0
+                }
+            }
+            ThumbShiftInstruction::Ror => {
+                let rotate_amount = shift_amount & 0x1F;
+                if shift_amount == 0 {
+                    self.shifter_output = self.get_flag(FlagsRegister::C);
+                    rd_val
+                } else if rotate_amount > 0 {
+                    self.shifter_output = rd_val.get_bit((rotate_amount as u8) - 1);
+                    rd_val.rotate_right(rotate_amount)
+                } else {
+                    self.shifter_output = rd_val >> 31;
+                    rd_val
+                }
+            }
+        };
+
+        self.set_register(rd, result);
+        self.set_arm_logical_flags(result, true);
+
+        1
+    }
+}
 
 impl CPU {
     pub fn thumb_move_shifted_register_instruction(
@@ -214,9 +540,8 @@ impl CPU {
 
     fn thumb_cmp_imm(&mut self, rd: REGISTER, imm: u8) {
         let minuend = self.get_register(rd);
-        let imm = !(imm as u32);
-        let result = minuend + imm + 1;
-        self.set_arithmetic_flags(result, minuend, imm, 1, true);
+        let result = minuend - imm as u32;
+        self.set_arithmetic_flags(result, minuend, !(imm as u32), 1, true);
         self.set_executed_instruction(format_args!("CMP r{} {:#X}", rd, imm));
     }
 
@@ -470,11 +795,36 @@ impl CPU {
 #[cfg(test)]
 mod thumb_add_and_subtract_tests {
 
+    use rstest::rstest;
+
     use crate::{
-        arm7tdmi::cpu::{FlagsRegister, InstructionMode, CPU},
+        arm7tdmi::{
+            cpu::{FlagsRegister, InstructionMode},
+            instruction_table::{Execute, Operand},
+            thumb::alu::{ThumbFullAdder, ThumbFullAdderOperations},
+        },
         gba::GBA,
-        memory::memory::GBAMemory,
     };
+
+    #[rstest]
+    #[case(ThumbFullAdderOperations::Add, 20, 43, 63)]
+    #[case(ThumbFullAdderOperations::Add, 0xFFFFFFFF, 1, 0)]
+    #[case(ThumbFullAdderOperations::Sub, 0xFFFFFFFF, 1, 0xFFFFFFFE)]
+    fn able_to_execute_full_adder_instructions_with_register_op2(
+        #[case] operation: ThumbFullAdderOperations,
+        #[case] register2_val: u32,
+        #[case] register1_val: u32,
+        #[case] expected_result: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_register(1, register1_val);
+        gba.cpu.set_register(2, register2_val);
+        let instruction = ThumbFullAdder(operation, 3, 2, Operand::Register(1));
+
+        instruction.execute(&mut gba.cpu, &mut gba.memory);
+
+        assert_eq!(gba.cpu.get_register(3), expected_result);
+    }
 
     #[test]
     fn should_add_two_registers_together() {
