@@ -1,6 +1,6 @@
 use instructions::ARMDecodedInstruction;
 
-use crate::types::*;
+use crate::{arm7tdmi::arm::alu::ALUInstruction, types::*};
 
 use super::{
     arm::*,
@@ -88,9 +88,7 @@ impl CPU {
                 }
             }
             _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
-                return Instruction::DataProcessing(Self::decode_data_processing_instruction(
-                    instruction,
-                ))
+                return Instruction::ALUInstruction(ALUInstruction(instruction))
             }
             _ if arm_decoders::is_branch_and_link_instruction(instruction) => {
                 ARMDecodedInstruction {

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    arm7tdmi::thumb::{self, alu::{ThumbALUInstruction, ThumbFullAdder}},
+    arm7tdmi::{arm::alu::ALUInstruction, thumb::{self, alu::{ThumbALUInstruction, ThumbFullAdder}}},
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER},
 };
@@ -45,6 +45,7 @@ pub fn condition_code_as_str(condition_code: u32) -> &'static str {
 }
 
 pub enum Instruction {
+    ALUInstruction(ALUInstruction),
     DataProcessing(DataProcessingInstruction),
     Funcpointer(ARMDecodedInstruction),
     ThumbFullAdder(ThumbFullAdder),
@@ -54,6 +55,7 @@ pub enum Instruction {
 impl Execute for Instruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         match self {
+            Instruction::ALUInstruction(alu_instruction) => alu_instruction.execute(cpu, memory),
             Instruction::DataProcessing(instruction) => instruction.execute(cpu, memory),
             Instruction::Funcpointer(func) => (func.executable)(cpu, func.instruction, memory),
             Instruction::ThumbFullAdder(thumb_full_adder) => thumb_full_adder.execute(cpu, memory),

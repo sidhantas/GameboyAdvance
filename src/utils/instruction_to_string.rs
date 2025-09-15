@@ -8,7 +8,13 @@ use crate::{
             ArithmeticInstruction, DataProcessingInstruction, LogicalInstruction, PSRRegister,
             Shift, ShiftType,
         },
-        instruction_table::{DecodeARMInstructionToString, DecodeThumbInstructionToString, Operand}, thumb::alu::{ThumbFullAdder, ThumbFullAdderOperations},
+        instruction_table::{
+            DecodeARMInstructionToString, DecodeThumbInstructionToString, Operand,
+        },
+        thumb::alu::{
+            ThumbALUInstruction, ThumbArithmeticInstruction, ThumbFullAdder,
+            ThumbFullAdderOperations, ThumbLogicalInstruction, ThumbShiftInstruction,
+        },
     },
     types::REGISTER,
 };
@@ -34,7 +40,13 @@ impl DecodeARMInstructionToString for DataProcessingInstruction {
                     print_shifted_operand(op2, shift)
                 )
             }
-            DataProcessingInstruction::MSR(psr_register, write_flags, write_control, op2, shift) => {
+            DataProcessingInstruction::MSR(
+                psr_register,
+                write_flags,
+                write_control,
+                op2,
+                shift,
+            ) => {
                 let psr_register = match psr_register {
                     PSRRegister::SPSR => "spsr",
                     PSRRegister::CPSR => "cpsr",
@@ -62,12 +74,15 @@ impl DecodeARMInstructionToString for DataProcessingInstruction {
                     PSRRegister::SPSR => "spsr",
                     PSRRegister::CPSR => "cpsr",
                 };
-                format!("mrs{condition_code} {} {}", print_register(rd), psr_register)
-            },
+                format!(
+                    "mrs{condition_code} {} {}",
+                    print_register(rd),
+                    psr_register
+                )
+            }
         }
     }
 }
-
 
 impl Display for ArithmeticInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -130,12 +145,15 @@ impl Display for Operand {
     }
 }
 
-
 impl DecodeThumbInstructionToString for ThumbFullAdder {
     fn instruction_to_string(&self) -> String {
         let ThumbFullAdder(operation, rd, rs, op2) = self;
 
-        format!("{operation}s {}, {}, {op2}", print_register(rd), print_register(rs))
+        format!(
+            "{operation}s {}, {}, {op2}",
+            print_register(rd),
+            print_register(rs)
+        )
     }
 }
 
@@ -148,6 +166,65 @@ impl Display for ThumbFullAdderOperations {
     }
 }
 
+impl DecodeThumbInstructionToString for ThumbALUInstruction {
+    fn instruction_to_string(&self) -> String {
+        match self {
+            ThumbALUInstruction::Arithmetic(thumb_arithmetic_instruction, rd, rs) => {
+                match thumb_arithmetic_instruction {
+                    ThumbArithmeticInstruction::Adc => {
+                        return format!("adc {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbArithmeticInstruction::Sbc => {
+                        return format!("sbc {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbArithmeticInstruction::Neg => {
+                        return format!("neg {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbArithmeticInstruction::Cmp => {
+                        return format!("cmp {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbArithmeticInstruction::Cmn => {
+                        return format!("cmn {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbArithmeticInstruction::Mul => {
+                        return format!("mul {} {}", print_register(rd), print_register(rs))
+                    }
+                }
+            }
+            ThumbALUInstruction::Logical(thumb_logical_instruction, rd, rs) => {
+                return match thumb_logical_instruction {
+                    ThumbLogicalInstruction::And => {
+                        format!("and {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbLogicalInstruction::Eor => {
+                        format!("eor {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbLogicalInstruction::Tst => {
+                        format!("tst {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbLogicalInstruction::Orr => {
+                        format!("orr {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbLogicalInstruction::Bic => {
+                        format!("bic {} {}", print_register(rd), print_register(rs))
+                    }
+                    ThumbLogicalInstruction::Mvn => {
+                        format!("mvn {} {}", print_register(rd), print_register(rs))
+                    }
+                }
+            }
+            ThumbALUInstruction::Shift(thumb_shift_instruction, rd, rs) => {
+                match thumb_shift_instruction {
+                    ThumbShiftInstruction::Lsl => format!("lsl {} {}", print_register(rd), print_register(rs)),
+                    ThumbShiftInstruction::Lsr => format!("lsr {} {}", print_register(rd), print_register(rs)),
+                    ThumbShiftInstruction::Asr => format!("asr {} {}", print_register(rd), print_register(rs)),
+                    ThumbShiftInstruction::Ror => format!("ror {} {}", print_register(rd), print_register(rs)),
+                }
+            }
+        }
+    }
+}
+
 fn print_option_register(register: &Option<REGISTER>) -> String {
     (*register).map_or("".into(), |reg| {
         let mut print = print_register(&reg);
@@ -156,11 +233,9 @@ fn print_option_register(register: &Option<REGISTER>) -> String {
     })
 }
 
-fn print_register(register: &REGISTER) -> String {
+pub fn print_register(register: &REGISTER) -> String {
     let register = *register;
     match register {
-        11 => "fp".into(),
-        12 => "ip".into(),
         13 => "sp".into(),
         14 => "lr".into(),
         15 => "pc".into(),
@@ -168,21 +243,21 @@ fn print_register(register: &REGISTER) -> String {
     }
 }
 
-fn print_shifted_operand(operand2: &Operand, shift: &Shift) -> String {
+pub fn print_shifted_operand(operand2: &Operand, shift: &Shift) -> String {
     match operand2 {
         Operand::Register(_) => {
-            if let Shift(ShiftType::LSL, Operand::Immediate(0)) = shift{
+            if let Shift(ShiftType::LSL, Operand::Immediate(0)) = shift {
                 return format!("{operand2}");
             };
-            return format!("{operand2}{shift}")
-        },
+            return format!("{operand2}{shift}");
+        }
         Operand::Immediate(imm) => {
             let Shift(ShiftType::ROR, Operand::Immediate(shift_amount)) = shift else {
                 panic!("Invalid Shift")
             };
             let imm = imm.rotate_right(*shift_amount);
             return format!("#{imm}");
-        },
+        }
     }
 }
 

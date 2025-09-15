@@ -11,7 +11,10 @@ use crate::{
     },
     memory::memory::GBAMemory,
     types::{ARMByteCode, CYCLES, REGISTER, WORD},
-    utils::bits::Bits,
+    utils::{
+        bits::Bits,
+        instruction_to_string::{print_register, print_shifted_operand},
+    },
 };
 
 #[derive(Debug)]
@@ -82,6 +85,177 @@ pub enum ShiftType {
     ASR,
     ROR,
     RRX,
+}
+
+enum ALUOpcode {
+    Arithmetic(ArithmeticInstruction),
+    Logical(LogicalInstruction),
+}
+
+pub struct ALUInstruction(pub u32);
+
+impl ALUInstruction {
+    fn rd(&self) -> u32 {
+        (0x0000_F000 & self.0) >> 12
+    }
+
+    fn rn(&self) -> u32 {
+        (0x000F_0000 & self.0) >> 16
+    }
+
+    fn opcode(&self) -> ALUOpcode {
+        match (self.0 & 0x01E0_0000) >> 21 {
+            0x0 => ALUOpcode::Logical(LogicalInstruction::And),
+            0x1 => ALUOpcode::Logical(LogicalInstruction::Eor),
+            0x2 => ALUOpcode::Arithmetic(ArithmeticInstruction::Sub),
+            0x3 => ALUOpcode::Arithmetic(ArithmeticInstruction::Rsb),
+            0x4 => ALUOpcode::Arithmetic(ArithmeticInstruction::Add),
+            0x5 => ALUOpcode::Arithmetic(ArithmeticInstruction::Adc),
+            0x6 => ALUOpcode::Arithmetic(ArithmeticInstruction::Sbc),
+            0x7 => ALUOpcode::Arithmetic(ArithmeticInstruction::Rsc),
+            0x8 => ALUOpcode::Logical(LogicalInstruction::Tst),
+            0x9 => ALUOpcode::Logical(LogicalInstruction::Teq),
+            0xa => ALUOpcode::Arithmetic(ArithmeticInstruction::Cmp),
+            0xb => ALUOpcode::Arithmetic(ArithmeticInstruction::Cmn),
+            0xc => ALUOpcode::Logical(LogicalInstruction::Orr),
+            0xd => ALUOpcode::Logical(LogicalInstruction::Mov),
+            0xe => ALUOpcode::Logical(LogicalInstruction::Bic),
+            0xf => ALUOpcode::Logical(LogicalInstruction::Mvn),
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_operand2_and_shift(&self) -> (Operand, Shift) {
+        if self.0.bit_is_set(25) {
+            let shift_amount = (self.0 & 0x0000_0F00) >> 7;
+            return (
+                Operand::Immediate(self.0 & 0x0000_00FF),
+                Shift(ShiftType::ROR, Operand::Immediate(shift_amount)),
+            );
+        } else {
+            let operand2 = Operand::Register(self.0 & 0x0000_000F);
+            let shift_type = (self.0 & 0x0000_0060) >> 5;
+            let shift_amount = if self.0.bit_is_set(4) {
+                Operand::Register((self.0 & 0x0000_0F00) >> 8)
+            } else {
+                let immediate = (self.0 & 0x0000_0F80) >> 7;
+                if immediate == 0 {
+                    // Special Cases
+                    return (
+                        operand2,
+                        match shift_type {
+                            0x0 => Shift(ShiftType::LSL, Operand::Immediate(0)),
+                            0x1 => Shift(ShiftType::LSR, Operand::Immediate(32)),
+                            0x2 => Shift(ShiftType::ASR, Operand::Immediate(32)),
+                            0x3 => Shift(ShiftType::RRX, Operand::Immediate(1)),
+                            _ => unreachable!(),
+                        },
+                    );
+                }
+                Operand::Immediate(immediate)
+            };
+            let shift_type = match shift_type {
+                0x0 => ShiftType::LSL,
+                0x1 => ShiftType::LSR,
+                0x2 => ShiftType::ASR,
+                0x3 => ShiftType::ROR,
+                _ => unreachable!(),
+            };
+            return (operand2, Shift(shift_type, shift_amount));
+        };
+    }
+
+    fn set_flags(&self) -> bool {
+        self.0.bit_is_set(20)
+    }
+}
+
+impl DecodeARMInstructionToString for ALUInstruction {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        let rd = self.rd();
+        let rn = self.rn();
+        let (op2, shift) = self.get_operand2_and_shift();
+        match self.opcode() {
+            ALUOpcode::Arithmetic(arithmetic_instruction) => match arithmetic_instruction {
+                ArithmeticInstruction::Sub => format!(
+                    "sub {}, {}, {}",
+                    print_register(&rd),
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Rsb => format!(
+                    "rsb {}, {}, {}",
+                    print_register(&rd),
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Add => format!(
+                    "add {}, {}, {}",
+                    print_register(&rd),
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Adc => format!(
+                    "adc {}, {}, {}",
+                    print_register(&rd),
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Sbc => format!(
+                    "sbc {}, {}, {}",
+                    print_register(&rd),
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Rsc => format!(
+                    "rsc {}, {}, {}",
+                    print_register(&rd),
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Cmp => format!(
+                    "cmp {}, {}",
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+                ArithmeticInstruction::Cmn => format!(
+                    "cmn {}, {}",
+                    print_register(&rn),
+                    print_shifted_operand(&op2, &shift)
+                ),
+            },
+            ALUOpcode::Logical(logical_instruction) => todo!(),
+        }
+    }
+}
+
+impl Execute for ALUInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 0;
+        let (operand2, shift) = self.get_operand2_and_shift();
+        let result = match self.opcode() {
+            ALUOpcode::Arithmetic(instruction) => cpu.execute_arithmetic_instruction(
+                &mut cycles,
+                memory,
+                instruction,
+                self.rn(),
+                operand2,
+                shift,
+                self.set_flags(),
+            ),
+            ALUOpcode::Logical(instruction) => cpu.execute_logical_instruction(
+                &mut cycles,
+                memory,
+                instruction,
+                Some(self.rn()),
+                operand2,
+                shift,
+                self.set_flags(),
+            ),
+        };
+
+        cycles
+    }
 }
 
 impl CPU {
@@ -506,6 +680,7 @@ impl CPU {
         }
     }
 
+    #[inline(always)]
     fn execute_register_shift(
         &mut self,
         cycles: &mut CYCLES,
@@ -526,27 +701,6 @@ impl CPU {
             }
             Operand::Immediate(imm) => imm,
         } & 0xFF;
-
-        // Special cases
-        match (shift_type, shift_amount_operand) {
-            (ShiftType::LSL, Operand::Immediate(0)) => {
-                self.shifter_output = self.get_flag(FlagsRegister::C);
-                return operand2;
-            }
-            (ShiftType::LSR, Operand::Immediate(32)) => {
-                self.shifter_output = operand2.get_bit(31);
-                return 0;
-            }
-            (ShiftType::ASR, Operand::Immediate(32)) => {
-                self.shifter_output = operand2.get_bit(31);
-                if self.shifter_output > 0 {
-                    return u32::MAX;
-                } else {
-                    return 0;
-                }
-            }
-            _ => {}
-        };
 
         match (shift_type, shift_amount) {
             (ShiftType::LSL, shift_amount) => {

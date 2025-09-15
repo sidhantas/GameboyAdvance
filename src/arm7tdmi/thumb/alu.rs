@@ -95,7 +95,7 @@ pub enum ThumbLogicalInstruction {
     Mvn,
 }
 
-enum ThumbShiftInstruction {
+pub enum ThumbShiftInstruction {
     Lsl,
     Lsr,
     Asr,
