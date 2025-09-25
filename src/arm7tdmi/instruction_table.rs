@@ -6,7 +6,7 @@ use crate::{
         thumb::{
             self,
             alu::{
-                ThumbALUInstruction, ThumbALUOperation, ThumbArithmeticImmInstruction, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
+                ThumbALUInstruction, ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
             },
         },
     },
@@ -58,7 +58,10 @@ pub enum Instruction {
     ThumbAluInstruction(ThumbALUOperation),
     ThumbMoveShiftedRegister(ThumbMoveShiftedRegister),
     ThumbArithmeticImmInstruction(ThumbArithmeticImmInstruction),
-    ThumbHiRegisterInstruction(ThumbHiRegInstruction)
+    ThumbHiRegisterInstruction(ThumbHiRegInstruction),
+    ThumbBx(ThumbBx),
+    ThumbAdr(ThumbAdr),
+    ThumbAddToSp(ThumbAddToSp)
 }
 
 impl Execute for Instruction {
@@ -75,6 +78,9 @@ impl Execute for Instruction {
             Instruction::ThumbMoveShiftedRegister(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbArithmeticImmInstruction(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbHiRegisterInstruction(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbBx(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbAdr(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbAddToSp(instruction) => instruction.execute(cpu, memory),
         }
     }
 }

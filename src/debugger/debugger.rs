@@ -346,6 +346,15 @@ fn draw_cpu(
         Instruction::ThumbHiRegisterInstruction(instruction) => {
             &instruction.instruction_to_string()
         }
+        Instruction::ThumbBx(instruction) => {
+            &instruction.instruction_to_string()
+        }
+        Instruction::ThumbAdr(instruction) => {
+            &instruction.instruction_to_string()
+        }
+        Instruction::ThumbAddToSp(instruction) => {
+            &instruction.instruction_to_string()
+        }
         Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 

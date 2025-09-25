@@ -4,8 +4,7 @@ use crate::{
     arm7tdmi::{
         arm::alu::{ALUInstruction, MRSInstruction, MSRInstruction},
         thumb::alu::{
-            ThumbALUOperation, ThumbArithmeticImmInstruction, ThumbFullAdder,
-            ThumbHiRegInstruction, ThumbMoveShiftedRegister,
+            ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
         },
     },
     types::*,
@@ -149,10 +148,9 @@ impl CPU {
             _ if thumb_decoders::is_alu_operation(instruction) => {
                 return Instruction::ThumbAluInstruction(ThumbALUOperation(instruction))
             }
-            _ if thumb_decoders::is_thumb_bx(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_bx,
-            },
+            _ if thumb_decoders::is_thumb_bx(instruction) => {
+                return Instruction::ThumbBx(ThumbBx(instruction))
+            }
             _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => {
                 return Instruction::ThumbHiRegisterInstruction(ThumbHiRegInstruction(instruction))
             }
@@ -186,14 +184,10 @@ impl CPU {
                 instruction,
                 executable: CPU::thumb_sdt_sp_imm,
             },
-            _ if thumb_decoders::is_get_relative_address(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_get_relative_address,
-            },
-            _ if thumb_decoders::is_add_offset_to_sp(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_add_offset_to_sp,
-            },
+            _ if thumb_decoders::is_get_relative_address(instruction) => {
+                return Instruction::ThumbAdr(ThumbAdr(instruction))
+            }
+            _ if thumb_decoders::is_add_offset_to_sp(instruction) => return Instruction::ThumbAddToSp(ThumbAddToSp(instruction)),
             _ if thumb_decoders::is_push_pop(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::thumb_push_pop,

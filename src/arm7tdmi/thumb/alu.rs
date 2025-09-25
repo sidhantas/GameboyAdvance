@@ -582,6 +582,140 @@ impl DecodeThumbInstructionToString for ThumbHiRegInstruction {
     }
 }
 
+pub struct ThumbBx(pub u32);
+
+impl ThumbBx {
+    fn rs(&self) -> REGISTER {
+        (self.0.get_bit(6) << 3) | ((self.0 & 0x0038) >> 3)
+    }
+}
+
+impl Execute for ThumbBx {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 1;
+        let rs = self.rs();
+        let mut destination = cpu.get_register(rs);
+        if destination.bit_is_set(0) {
+            cpu.set_instruction_mode(InstructionMode::THUMB);
+        } else {
+            destination &= !2; // arm instructions must be word aligned
+            cpu.set_instruction_mode(InstructionMode::ARM);
+        };
+
+        cpu.set_pc(destination & !1); // bit 0 is forced to 0 before storing
+        cycles += cpu.flush_pipeline(memory);
+
+        cycles
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbBx {
+    fn instruction_to_string(&self) -> String {
+        format!("bx {}", print_register(&self.rs()))
+    }
+}
+
+pub struct ThumbAdr(pub u32);
+
+enum ThumbAdrRegister {
+    PC,
+    SP,
+}
+
+impl ThumbAdr {
+    fn register(&self) -> ThumbAdrRegister {
+        match self.0.get_bit(11) {
+            0b0 => ThumbAdrRegister::PC,
+            0b1 => ThumbAdrRegister::SP,
+            _ => unreachable!(),
+        }
+    }
+
+    fn rd(&self) -> REGISTER {
+        (self.0 & 0x0700) >> 8
+    }
+
+    fn imm(&self) -> u32 {
+        (self.0 & 0x00FF) * 4
+    }
+}
+
+impl Execute for ThumbAdr {
+    fn execute(self, cpu: &mut CPU, _memory: &mut GBAMemory) -> CYCLES {
+        let rd = self.rd();
+        let imm = self.imm();
+
+        let result = match self.register() {
+            ThumbAdrRegister::PC => (cpu.get_pc() & !2) + imm,
+            ThumbAdrRegister::SP => cpu.get_sp() + imm,
+        };
+
+        cpu.set_register(rd, result);
+
+        0
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbAdr {
+    fn instruction_to_string(&self) -> String {
+        let source_reg = match self.register() {
+            ThumbAdrRegister::PC => "pc",
+            ThumbAdrRegister::SP => "sp",
+        };
+        format!(
+            "adr {}, {source_reg}, {}",
+            print_register(&self.rd()),
+            Operand::Immediate(self.imm())
+        )
+    }
+}
+
+pub struct ThumbAddToSp(pub u32);
+
+enum ThumbAddToSpOpcodes {
+    Add,
+    Sub,
+}
+
+impl ThumbAddToSp {
+    fn opcode(&self) -> ThumbAddToSpOpcodes {
+        match self.0.get_bit(7) {
+            0b0 => ThumbAddToSpOpcodes::Add,
+            0b1 => ThumbAddToSpOpcodes::Sub,
+            _ => panic!(),
+        }
+    }
+
+    fn imm(&self) -> u32 {
+        (self.0 & 0x007F) * 4
+    }
+}
+
+impl Execute for ThumbAddToSp {
+    fn execute(self, cpu: &mut CPU, _memory: &mut GBAMemory) -> CYCLES {
+        let imm = self.imm();
+
+        let result = match self.opcode() {
+            ThumbAddToSpOpcodes::Add => cpu.get_sp() + imm,
+            ThumbAddToSpOpcodes::Sub => cpu.get_sp() - imm,
+        };
+
+        cpu.set_sp(result);
+
+        0
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbAddToSp {
+    fn instruction_to_string(&self) -> String {
+        let opcode = match self.opcode() {
+            ThumbAddToSpOpcodes::Add => "add",
+            ThumbAddToSpOpcodes::Sub => "sub",
+        };
+        format!("{opcode}, sp, {}", Operand::Immediate(self.imm()))
+    }
+}
+
 impl CPU {
     fn thumb_lsl(&mut self, rd: REGISTER, rs_val: u32, offset: u32, set_flags: bool) {
         let offset = offset & 0xFF;
@@ -735,94 +869,6 @@ impl CPU {
             }
         }
         self.set_register(rd, result);
-    }
-
-    pub fn thumb_hi_reg_operations(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 0;
-        let opcode = (instruction & 0x0300) >> 8;
-
-        let rd = (instruction.get_bit(7) << 3) | (instruction & 0x0007);
-        let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
-
-        let operation = match opcode {
-            0b00 => CPU::arm_add,
-            0b01 => CPU::arm_cmp,
-            0b10 => CPU::arm_mov,
-            _ => panic!(),
-        };
-
-        operation(
-            self,
-            rd,
-            self.get_register(rd),
-            self.get_register(rs),
-            false,
-        );
-
-        if rd == PC_REGISTER as u32 {
-            cycles += self.flush_pipeline(memory);
-        }
-
-        cycles
-    }
-
-    pub fn thumb_bx(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 1;
-        let rs = (instruction.get_bit(6) << 3) | ((instruction & 0x0038) >> 3);
-        let mut destination = self.get_register(rs);
-        if destination.bit_is_set(0) {
-            self.set_instruction_mode(InstructionMode::THUMB);
-        } else {
-            destination &= !2; // arm instructions must be word aligned
-            self.set_instruction_mode(InstructionMode::ARM);
-        };
-
-        self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
-        cycles += self.flush_pipeline(memory);
-        self.set_executed_instruction(format_args!("BX {:#010x}", destination));
-
-        cycles
-    }
-
-    pub fn thumb_get_relative_address(
-        &mut self,
-        instruction: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let opcode = instruction.get_bit(11);
-        let rd = (instruction & 0x0700) >> 8;
-        let imm = (instruction & 0x00FF) * 4;
-
-        let result = match opcode {
-            0b0 => (self.get_pc() & !2) + imm,
-            0b1 => self.get_sp() + imm,
-            _ => panic!(),
-        };
-
-        self.set_register(rd, result);
-
-        self.set_executed_instruction(format_args!("ADR r{}, {:#X}", rd, imm));
-        0
-    }
-
-    pub fn thumb_add_offset_to_sp(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
-        let opcode = instruction.get_bit(7);
-        let imm = (instruction & 0x007F) * 4;
-
-        let result = match opcode {
-            0b0 => self.get_sp() + imm,
-            0b1 => self.get_sp() - imm,
-            _ => panic!(),
-        };
-
-        self.set_sp(result);
-        self.set_executed_instruction(format_args!(
-            "ADD SP, {}{:#X}",
-            if opcode == 0b0 { "+" } else { "-" },
-            imm
-        ));
-
-        0
     }
 }
 
