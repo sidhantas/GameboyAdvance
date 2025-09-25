@@ -1,6 +1,15 @@
 use instructions::ARMDecodedInstruction;
 
-use crate::{arm7tdmi::arm::alu::ALUInstruction, types::*};
+use crate::{
+    arm7tdmi::{
+        arm::alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+        thumb::alu::{
+            ThumbALUOperation, ThumbArithmeticImmInstruction, ThumbFullAdder,
+            ThumbHiRegInstruction, ThumbMoveShiftedRegister,
+        },
+    },
+    types::*,
+};
 
 use super::{
     arm::*,
@@ -87,7 +96,13 @@ impl CPU {
                     instruction,
                 }
             }
-            _ if arm_decoders::is_data_processing_and_psr_transfer(instruction) => {
+            _ if arm_decoders::is_mrs(instruction) => {
+                return Instruction::MRS(MRSInstruction(instruction))
+            }
+            _ if arm_decoders::is_msr(instruction) => {
+                return Instruction::MSR(MSRInstruction(instruction))
+            }
+            _ if arm_decoders::is_data_processing(instruction) => {
                 return Instruction::ALUInstruction(ALUInstruction(instruction))
             }
             _ if arm_decoders::is_branch_and_link_instruction(instruction) => {
@@ -121,31 +136,26 @@ impl CPU {
     fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
         Instruction::Funcpointer(match instruction {
             _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
-                return Instruction::ThumbFullAdder(CPU::decode_full_adder(instruction))
+                return Instruction::ThumbFullAdder(ThumbFullAdder(instruction))
             }
-            _ if thumb_decoders::is_move_shifted_register(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_move_shifted_register_instruction,
-            },
+            _ if thumb_decoders::is_move_shifted_register(instruction) => {
+                return Instruction::ThumbMoveShiftedRegister(ThumbMoveShiftedRegister(instruction))
+            }
             _ if thumb_decoders::is_move_compare_add_subtract_immediate(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::thumb_move_add_compare_add_subtract_immediate,
-                }
-            }
-            _ if thumb_decoders::is_alu_operation(instruction) => {
-                return Instruction::ThumbAluInstruction(CPU::decode_thumb_alu_instruction(
+                return Instruction::ThumbArithmeticImmInstruction(ThumbArithmeticImmInstruction(
                     instruction,
                 ))
+            }
+            _ if thumb_decoders::is_alu_operation(instruction) => {
+                return Instruction::ThumbAluInstruction(ThumbALUOperation(instruction))
             }
             _ if thumb_decoders::is_thumb_bx(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::thumb_bx,
             },
-            _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_hi_reg_operations,
-            },
+            _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => {
+                return Instruction::ThumbHiRegisterInstruction(ThumbHiRegInstruction(instruction))
+            }
             _ if thumb_decoders::is_load_pc_relative(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::ldr_pc_relative,
@@ -257,7 +267,15 @@ mod arm_decoders {
         instruction & 0x0C00_0000 == 0x0400_0000
     }
 
-    pub fn is_data_processing_and_psr_transfer(instruction: u32) -> bool {
+    pub fn is_msr(instruction: u32) -> bool {
+        instruction & 0x0DB0_0000 == 0x0120_0000
+    }
+
+    pub fn is_mrs(instruction: u32) -> bool {
+        instruction & 0x0DB0_0000 == 0x0100_0000
+    }
+
+    pub fn is_data_processing(instruction: u32) -> bool {
         instruction & 0x0C00_0000 == 0x0000_0000
     }
 
@@ -459,7 +477,7 @@ mod arm_decoders_tests {
     #[test]
     fn it_recognizes_a_data_processing_instruction() {
         let instructions = vec![0xe2811001, 0xe2411001];
-        test_decoder(is_data_processing_and_psr_transfer, instructions);
+        test_decoder(is_data_processing, instructions);
     }
 
     #[test]

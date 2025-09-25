@@ -1,15 +1,20 @@
 use std::fmt::Display;
 
 use crate::{
-    arm7tdmi::{arm::alu::ALUInstruction, thumb::{self, alu::{ThumbALUInstruction, ThumbFullAdder}}},
+    arm7tdmi::{
+        arm::alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+        thumb::{
+            self,
+            alu::{
+                ThumbALUInstruction, ThumbALUOperation, ThumbArithmeticImmInstruction, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
+            },
+        },
+    },
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER},
 };
 
-use super::{
-    arm::{alu::DataProcessingInstruction, instructions::ARMDecodedInstruction},
-    cpu::CPU,
-};
+use super::{arm::instructions::ARMDecodedInstruction, cpu::CPU};
 
 pub trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
@@ -45,21 +50,31 @@ pub fn condition_code_as_str(condition_code: u32) -> &'static str {
 }
 
 pub enum Instruction {
-    ALUInstruction(ALUInstruction),
-    DataProcessing(DataProcessingInstruction),
     Funcpointer(ARMDecodedInstruction),
+    ALUInstruction(ALUInstruction),
+    MSR(MSRInstruction),
+    MRS(MRSInstruction),
     ThumbFullAdder(ThumbFullAdder),
-    ThumbAluInstruction(ThumbALUInstruction)
+    ThumbAluInstruction(ThumbALUOperation),
+    ThumbMoveShiftedRegister(ThumbMoveShiftedRegister),
+    ThumbArithmeticImmInstruction(ThumbArithmeticImmInstruction),
+    ThumbHiRegisterInstruction(ThumbHiRegInstruction)
 }
 
 impl Execute for Instruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         match self {
             Instruction::ALUInstruction(alu_instruction) => alu_instruction.execute(cpu, memory),
-            Instruction::DataProcessing(instruction) => instruction.execute(cpu, memory),
+            Instruction::MSR(psr_transfer) => psr_transfer.execute(cpu, memory),
+            Instruction::MRS(instruction) => instruction.execute(cpu, memory),
             Instruction::Funcpointer(func) => (func.executable)(cpu, func.instruction, memory),
             Instruction::ThumbFullAdder(thumb_full_adder) => thumb_full_adder.execute(cpu, memory),
-            Instruction::ThumbAluInstruction(thumb_alu_instruction) => thumb_alu_instruction.execute(cpu, memory)
+            Instruction::ThumbAluInstruction(thumb_alu_instruction) => {
+                thumb_alu_instruction.execute(cpu, memory)
+            }
+            Instruction::ThumbMoveShiftedRegister(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbArithmeticImmInstruction(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbHiRegisterInstruction(instruction) => instruction.execute(cpu, memory),
         }
     }
 }
