@@ -1,10 +1,12 @@
+use data_transfer_instructions::SdtInstruction;
 use instructions::ARMDecodedInstruction;
 
 use crate::{
     arm7tdmi::{
         arm::alu::{ALUInstruction, MRSInstruction, MSRInstruction},
         thumb::alu::{
-            ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
+            ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
+            ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister,
         },
     },
     types::*,
@@ -115,10 +117,7 @@ impl CPU {
                 instruction,
             },
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::sdt_instruction_execution,
-                }
+                return Instruction::SdtInstruction(SdtInstruction(instruction))
             }
             _ if arm_decoders::is_software_interrupt(instruction) => ARMDecodedInstruction {
                 instruction,
@@ -187,7 +186,9 @@ impl CPU {
             _ if thumb_decoders::is_get_relative_address(instruction) => {
                 return Instruction::ThumbAdr(ThumbAdr(instruction))
             }
-            _ if thumb_decoders::is_add_offset_to_sp(instruction) => return Instruction::ThumbAddToSp(ThumbAddToSp(instruction)),
+            _ if thumb_decoders::is_add_offset_to_sp(instruction) => {
+                return Instruction::ThumbAddToSp(ThumbAddToSp(instruction))
+            }
             _ if thumb_decoders::is_push_pop(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::thumb_push_pop,

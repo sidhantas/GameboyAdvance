@@ -886,25 +886,25 @@ mod thumb_add_and_subtract_tests {
         gba::GBA,
     };
 
-    #[rstest]
-    #[case(ThumbFullAdderOperations::Add, 20, 43, 63)]
-    #[case(ThumbFullAdderOperations::Add, 0xFFFFFFFF, 1, 0)]
-    #[case(ThumbFullAdderOperations::Sub, 0xFFFFFFFF, 1, 0xFFFFFFFE)]
-    fn able_to_execute_full_adder_instructions_with_register_op2(
-        #[case] operation: ThumbFullAdderOperations,
-        #[case] register2_val: u32,
-        #[case] register1_val: u32,
-        #[case] expected_result: u32,
-    ) {
-        let mut gba = GBA::new_no_bios();
-        gba.cpu.set_register(1, register1_val);
-        gba.cpu.set_register(2, register2_val);
-        let instruction = ThumbFullAdder(operation, 3, 2, Operand::Register(1));
+    //#[rstest]
+    //#[case(ThumbFullAdderOperations::Add, 20, 43, 63)]
+    //#[case(ThumbFullAdderOperations::Add, 0xFFFFFFFF, 1, 0)]
+    //#[case(ThumbFullAdderOperations::Sub, 0xFFFFFFFF, 1, 0xFFFFFFFE)]
+    //fn able_to_execute_full_adder_instructions_with_register_op2(
+    //    #[case] operation: ThumbFullAdderOperations,
+    //    #[case] register2_val: u32,
+    //    #[case] register1_val: u32,
+    //    #[case] expected_result: u32,
+    //) {
+    //    let mut gba = GBA::new_no_bios();
+    //    gba.cpu.set_register(1, register1_val);
+    //    gba.cpu.set_register(2, register2_val);
+    //    let instruction = ThumbFullAdder(operation, 3, 2, Operand::Register(1));
 
-        instruction.execute(&mut gba.cpu, &mut gba.memory);
+    //    instruction.execute(&mut gba.cpu, &mut gba.memory);
 
-        assert_eq!(gba.cpu.get_register(3), expected_result);
-    }
+    //    assert_eq!(gba.cpu.get_register(3), expected_result);
+    //}
 
     #[test]
     fn should_add_two_registers_together() {

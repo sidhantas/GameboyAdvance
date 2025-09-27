@@ -324,19 +324,15 @@ fn draw_cpu(
 
     let executed_instruction_decode =
         cpu.decode_instruction((cpu.executed_instruction_hex & !0xF0000000) | 0b1110 << 28);
+    let condition_code = condition_code_as_str((cpu.executed_instruction_hex & 0xF0000000) >> 28);
     let executed_instruction_print = match executed_instruction_decode {
-        Instruction::ALUInstruction(data_processing_instruction) => &data_processing_instruction
-            .instruction_to_string(condition_code_as_str(
-                (cpu.executed_instruction_hex & 0xF0000000) >> 28,
-            )),
+        Instruction::ALUInstruction(data_processing_instruction) => {
+            &data_processing_instruction.instruction_to_string(condition_code)
+        }
         Instruction::MRS(data_processing_instruction) => &data_processing_instruction
-            .instruction_to_string(condition_code_as_str(
-                (cpu.executed_instruction_hex & 0xF0000000) >> 28,
-            )),
+            .instruction_to_string(condition_code),
         Instruction::MSR(data_processing_instruction) => &data_processing_instruction
-            .instruction_to_string(condition_code_as_str(
-                (cpu.executed_instruction_hex & 0xF0000000) >> 28,
-            )),
+            .instruction_to_string(condition_code),
         Instruction::ThumbFullAdder(full_adder) => &full_adder.instruction_to_string(),
         Instruction::ThumbMoveShiftedRegister(instruction) => &instruction.instruction_to_string(),
         Instruction::ThumbAluInstruction(instruction) => &instruction.instruction_to_string(),
@@ -346,15 +342,10 @@ fn draw_cpu(
         Instruction::ThumbHiRegisterInstruction(instruction) => {
             &instruction.instruction_to_string()
         }
-        Instruction::ThumbBx(instruction) => {
-            &instruction.instruction_to_string()
-        }
-        Instruction::ThumbAdr(instruction) => {
-            &instruction.instruction_to_string()
-        }
-        Instruction::ThumbAddToSp(instruction) => {
-            &instruction.instruction_to_string()
-        }
+        Instruction::ThumbBx(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbAdr(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbAddToSp(instruction) => &instruction.instruction_to_string(),
+        Instruction::SdtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 

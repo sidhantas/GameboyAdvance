@@ -1,15 +1,16 @@
-use std::{intrinsics::offset, mem::size_of};
+use std::mem::size_of;
 
 use crate::{
     arm7tdmi::{
         arm::alu::{Shift, ShiftType},
         cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
-        instruction_table::{Execute, Operand},
+        instruction_table::{DecodeARMInstructionToString, Execute, Operand},
     },
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER, WORD},
     utils::{
         bits::{sign_extend, Bits},
+        instruction_to_string::{print_register, print_shifted_operand},
         utils::print_vec,
     },
 };
@@ -17,8 +18,16 @@ use crate::{
 pub struct SdtInstruction(pub u32);
 
 enum SdtOpcode {
+    Load(LoadOpcodes),
+    Store(StoreOpcodes),
+}
+
+enum LoadOpcodes {
     LDR,
     LDRB,
+}
+
+enum StoreOpcodes {
     STR,
     STRB,
 }
@@ -51,10 +60,10 @@ impl SdtInstruction {
 
     fn opcode(&self) -> SdtOpcode {
         match self.0.get_bit(20) << 1 | self.0.get_bit(22) {
-            0b00 => SdtOpcode::STR,
-            0b01 => SdtOpcode::STRB,
-            0b10 => SdtOpcode::LDR,
-            0b11 => SdtOpcode::LDRB,
+            0b00 => SdtOpcode::Store(StoreOpcodes::STR),
+            0b01 => SdtOpcode::Store(StoreOpcodes::STRB),
+            0b10 => SdtOpcode::Load(LoadOpcodes::LDR),
+            0b11 => SdtOpcode::Load(LoadOpcodes::LDRB),
             _ => unreachable!(),
         }
     }
@@ -65,19 +74,19 @@ impl SdtInstruction {
             if shift_amount == 0 {
                 return match (self.0 >> 5) & 0b11 {
                     0b00 => SdtOffset::ShiftedRegister(
-                        self.0 & 0x7,
+                        self.0 & 0xF,
                         Shift(ShiftType::LSL, Operand::Immediate(0)),
                     ),
                     0b01 => SdtOffset::ShiftedRegister(
-                        self.0 & 0x7,
+                        self.0 & 0xF,
                         Shift(ShiftType::LSR, Operand::Immediate(32)),
                     ),
                     0b10 => SdtOffset::ShiftedRegister(
-                        self.0 & 0x7,
+                        self.0 & 0xF,
                         Shift(ShiftType::ASR, Operand::Immediate(32)),
                     ),
                     0b11 => SdtOffset::ShiftedRegister(
-                        self.0 & 0x7,
+                        self.0 & 0xF,
                         Shift(ShiftType::RRX, Operand::Immediate(1)),
                     ),
                     _ => unreachable!(),
@@ -91,7 +100,7 @@ impl SdtInstruction {
                     _ => unreachable!(),
                 };
                 return SdtOffset::ShiftedRegister(
-                    self.0 & 0x7,
+                    self.0 & 0xF,
                     Shift(shift_type, Operand::Immediate(shift_amount)),
                 );
             }
@@ -105,7 +114,6 @@ impl Execute for SdtInstruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
 
-
         let offset = match self.offset() {
             SdtOffset::Imm(imm) => imm,
             SdtOffset::ShiftedRegister(register, shift) => {
@@ -115,26 +123,86 @@ impl Execute for SdtInstruction {
 
         let base_register_address = cpu.get_register(self.rn());
 
-        let offset_address;
-        if self.add_offset() {
-            offset_address = base_register_address + offset;
+       
+        let offset_address = if self.add_offset() {
+            base_register_address + offset
         } else {
-            offset_address = base_register_address - offset;
-        }
+            base_register_address - offset
+        };
 
-        let access_address = if self.pre_indexed_addressing() {
+        cycles += cpu.advance_pipeline(memory);
+
+        let pre_indexed_addressing = self.pre_indexed_addressing();
+        let access_address = if pre_indexed_addressing {
             offset_address
         } else {
             base_register_address
         } as usize;
 
-        let memory_fetch = match self.opcode() {
-            SdtOpcode::LDR => memory.readu32(access_address),
-            SdtOpcode::LDRB => memory.read(access_address).into(),
-            SdtOpcode::STR => todo!(),
-            SdtOpcode::STRB => todo!(),
+        match self.opcode() {
+            SdtOpcode::Load(load_opcode) => {
+                let data = match load_opcode {
+                    LoadOpcodes::LDR => memory.readu32(access_address),
+                    LoadOpcodes::LDRB => memory.read(access_address).into(),
+                };
+                cpu.set_register(self.rd(), data.data);
+                if self.rd() == PC_REGISTER as u32 {
+                    cycles += cpu.flush_pipeline(memory)
+                }
+                cycles += data.cycles + 1;
+            }
+            SdtOpcode::Store(store) => {
+                let data = cpu.get_register(self.rd());
+                cycles += match store {
+                    StoreOpcodes::STR => memory.writeu32(access_address, data),
+                    StoreOpcodes::STRB => memory.write(access_address, data as u8),
+                };
+            }
         };
+
+        if self.write_back_address(pre_indexed_addressing) {
+            cpu.set_register(self.rn(), offset_address);
+        }
         cycles
+    }
+}
+
+impl DecodeARMInstructionToString for SdtInstruction {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        let opcode = match self.opcode() {
+            SdtOpcode::Load(LoadOpcodes::LDR) => "ldr",
+            SdtOpcode::Load(LoadOpcodes::LDRB) => "ldrb",
+            SdtOpcode::Store(StoreOpcodes::STR) => "str",
+            SdtOpcode::Store(StoreOpcodes::STRB) => "strb",
+        };
+
+        let add_offset = if self.add_offset() { "" } else { "-" };
+
+        let offset_address = match self.offset() {
+            SdtOffset::Imm(0) => "".into(),
+            SdtOffset::Imm(imm) => format!(", {}{}", add_offset, Operand::Immediate(imm)),
+            SdtOffset::ShiftedRegister(reg, shift) => format!(
+                ", {}{}, ",
+                add_offset,
+                print_shifted_operand(&Operand::Register(reg), &shift)
+            ),
+        };
+
+        let access_address = if self.pre_indexed_addressing() {
+            let write_back = if self.write_back_address(true) {
+                "!"
+            } else {
+                ""
+            };
+            format!(
+                "[{}{offset_address}]{write_back}",
+                print_register(&self.rn())
+            )
+        } else {
+            format!("[{}]{offset_address}", print_register(&self.rn()))
+        };
+
+        format!("{opcode}{condition_code} {} {access_address}", print_register(&self.rd()))
     }
 }
 

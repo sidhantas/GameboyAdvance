@@ -14,7 +14,7 @@ use crate::{
     types::{CYCLES, REGISTER},
 };
 
-use super::{arm::instructions::ARMDecodedInstruction, cpu::CPU};
+use super::{arm::{data_transfer_instructions::SdtInstruction, instructions::ARMDecodedInstruction}, cpu::CPU};
 
 pub trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
@@ -61,7 +61,8 @@ pub enum Instruction {
     ThumbHiRegisterInstruction(ThumbHiRegInstruction),
     ThumbBx(ThumbBx),
     ThumbAdr(ThumbAdr),
-    ThumbAddToSp(ThumbAddToSp)
+    ThumbAddToSp(ThumbAddToSp),
+    SdtInstruction(SdtInstruction)
 }
 
 impl Execute for Instruction {
@@ -81,6 +82,7 @@ impl Execute for Instruction {
             Instruction::ThumbBx(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbAdr(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbAddToSp(instruction) => instruction.execute(cpu, memory),
+            Instruction::SdtInstruction(instruction) => instruction.execute(cpu, memory),
         }
     }
 }
