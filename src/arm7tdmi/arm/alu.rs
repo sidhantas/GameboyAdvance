@@ -613,7 +613,7 @@ impl CPU {
     }
 
     #[inline(always)]
-    fn execute_register_shift(
+    pub(crate) fn execute_register_shift(
         &mut self,
         cycles: &mut CYCLES,
         memory: &mut GBAMemory,

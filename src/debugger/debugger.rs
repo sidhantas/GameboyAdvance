@@ -363,7 +363,7 @@ fn draw_cpu(
             .alignment(tui::layout::Alignment::Center)
             .wrap(Wrap { trim: true });
 
-    let inst_mode = Paragraph::new(format!("{:#X}", cpu.executed_instruction_hex))
+    let inst_mode = Paragraph::new(format!("{:#010X}", cpu.executed_instruction_hex))
         .alignment(tui::layout::Alignment::Center)
         .wrap(Wrap { trim: true });
 

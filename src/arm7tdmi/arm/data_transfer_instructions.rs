@@ -1,7 +1,11 @@
-use std::mem::size_of;
+use std::{intrinsics::offset, mem::size_of};
 
 use crate::{
-    arm7tdmi::cpu::{CPUMode, CPU, PC_REGISTER},
+    arm7tdmi::{
+        arm::alu::{Shift, ShiftType},
+        cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
+        instruction_table::{Execute, Operand},
+    },
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER, WORD},
     utils::{
@@ -9,6 +13,130 @@ use crate::{
         utils::print_vec,
     },
 };
+
+pub struct SdtInstruction(pub u32);
+
+enum SdtOpcode {
+    LDR,
+    LDRB,
+    STR,
+    STRB,
+}
+
+enum SdtOffset {
+    Imm(u32),
+    ShiftedRegister(REGISTER, Shift),
+}
+
+impl SdtInstruction {
+    fn rd(&self) -> REGISTER {
+        (self.0 & 0x0000_F000) >> 12
+    }
+
+    fn rn(&self) -> REGISTER {
+        (self.0 & 0x000F_0000) >> 16
+    }
+
+    fn add_offset(&self) -> bool {
+        self.0.bit_is_set(23)
+    }
+
+    fn pre_indexed_addressing(&self) -> bool {
+        self.0.bit_is_set(24)
+    }
+
+    fn write_back_address(&self, pre_indexed_addressing: bool) -> bool {
+        !pre_indexed_addressing || self.0.bit_is_set(21)
+    }
+
+    fn opcode(&self) -> SdtOpcode {
+        match self.0.get_bit(20) << 1 | self.0.get_bit(22) {
+            0b00 => SdtOpcode::STR,
+            0b01 => SdtOpcode::STRB,
+            0b10 => SdtOpcode::LDR,
+            0b11 => SdtOpcode::LDRB,
+            _ => unreachable!(),
+        }
+    }
+
+    fn offset(&self) -> SdtOffset {
+        if self.0.bit_is_set(25) {
+            let shift_amount = (self.0 & 0x0000_0F80) >> 7;
+            if shift_amount == 0 {
+                return match (self.0 >> 5) & 0b11 {
+                    0b00 => SdtOffset::ShiftedRegister(
+                        self.0 & 0x7,
+                        Shift(ShiftType::LSL, Operand::Immediate(0)),
+                    ),
+                    0b01 => SdtOffset::ShiftedRegister(
+                        self.0 & 0x7,
+                        Shift(ShiftType::LSR, Operand::Immediate(32)),
+                    ),
+                    0b10 => SdtOffset::ShiftedRegister(
+                        self.0 & 0x7,
+                        Shift(ShiftType::ASR, Operand::Immediate(32)),
+                    ),
+                    0b11 => SdtOffset::ShiftedRegister(
+                        self.0 & 0x7,
+                        Shift(ShiftType::RRX, Operand::Immediate(1)),
+                    ),
+                    _ => unreachable!(),
+                };
+            } else {
+                let shift_type = match (self.0 >> 5) & 0b11 {
+                    0b00 => ShiftType::LSL,
+                    0b01 => ShiftType::LSR,
+                    0b10 => ShiftType::ASR,
+                    0b11 => ShiftType::ROR,
+                    _ => unreachable!(),
+                };
+                return SdtOffset::ShiftedRegister(
+                    self.0 & 0x7,
+                    Shift(shift_type, Operand::Immediate(shift_amount)),
+                );
+            }
+        } else {
+            SdtOffset::Imm(self.0 & 0x0000_0fff)
+        }
+    }
+}
+
+impl Execute for SdtInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 0;
+
+
+        let offset = match self.offset() {
+            SdtOffset::Imm(imm) => imm,
+            SdtOffset::ShiftedRegister(register, shift) => {
+                cpu.execute_register_shift(&mut cycles, memory, register, shift, false)
+            }
+        };
+
+        let base_register_address = cpu.get_register(self.rn());
+
+        let offset_address;
+        if self.add_offset() {
+            offset_address = base_register_address + offset;
+        } else {
+            offset_address = base_register_address - offset;
+        }
+
+        let access_address = if self.pre_indexed_addressing() {
+            offset_address
+        } else {
+            base_register_address
+        } as usize;
+
+        let memory_fetch = match self.opcode() {
+            SdtOpcode::LDR => memory.readu32(access_address),
+            SdtOpcode::LDRB => memory.read(access_address).into(),
+            SdtOpcode::STR => todo!(),
+            SdtOpcode::STRB => todo!(),
+        };
+        cycles
+    }
+}
 
 impl CPU {
     pub fn sdt_instruction_execution(
