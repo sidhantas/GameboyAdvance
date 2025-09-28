@@ -123,14 +123,11 @@ impl Execute for SdtInstruction {
 
         let base_register_address = cpu.get_register(self.rn());
 
-       
         let offset_address = if self.add_offset() {
             base_register_address + offset
         } else {
             base_register_address - offset
         };
-
-        cycles += cpu.advance_pipeline(memory);
 
         let pre_indexed_addressing = self.pre_indexed_addressing();
         let access_address = if pre_indexed_addressing {
@@ -152,7 +149,10 @@ impl Execute for SdtInstruction {
                 cycles += data.cycles + 1;
             }
             SdtOpcode::Store(store) => {
-                let data = cpu.get_register(self.rd());
+                let mut data = cpu.get_register(self.rd());
+                if self.rd() == PC_REGISTER as u32 {
+                    data += 4;
+                }
                 cycles += match store {
                     StoreOpcodes::STR => memory.writeu32(access_address, data),
                     StoreOpcodes::STRB => memory.write(access_address, data as u8),
@@ -202,80 +202,173 @@ impl DecodeARMInstructionToString for SdtInstruction {
             format!("[{}]{offset_address}", print_register(&self.rn()))
         };
 
-        format!("{opcode}{condition_code} {} {access_address}", print_register(&self.rd()))
+        format!(
+            "{opcode}{condition_code} {} {access_address}",
+            print_register(&self.rd())
+        )
     }
 }
 
-impl CPU {
-    pub fn sdt_instruction_execution(
-        &mut self,
-        instruction: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
+pub struct SignedAndHwDtInstruction(pub u32);
+
+enum SignedAndHwDtOpcodes {
+    Load(SignedAndHwDtLoadOpcodes),
+    STRH,
+}
+
+enum SignedAndHwDtLoadOpcodes {
+    LDRH,
+    LDRSB,
+    LDRSH,
+}
+
+impl SignedAndHwDtInstruction {
+    fn add_offset(&self) -> bool {
+        self.0.bit_is_set(23)
+    }
+
+    fn pre_indexed_addressing(&self) -> bool {
+        self.0.bit_is_set(24)
+    }
+
+    fn rn(&self) -> REGISTER {
+        (self.0 & 0x000F_0000) >> 16
+    }
+
+    fn rd(&self) -> REGISTER {
+        (self.0 & 0x0000_F000) >> 12
+    }
+
+    fn offset(&self) -> Operand {
+        if self.0.bit_is_set(22) {
+            Operand::Immediate((self.0 & 0x0000_000F) | ((self.0 >> 4) & 0x0000_00F0))
+        } else {
+            Operand::Register(self.0 & 0x0000_000F)
+        }
+    }
+
+    fn opcode(&self) -> SignedAndHwDtOpcodes {
+        if self.0.bit_is_set(20) {
+            match (self.0 >> 5) & 0b11 {
+                0b01 => SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRH),
+                0b10 => SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSB),
+                0b11 => SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSH),
+                _ => panic!(),
+            }
+        } else {
+            SignedAndHwDtOpcodes::STRH
+        }
+    }
+
+    fn write_back_address(&self, pre_indexed_addressing: bool) -> bool {
+        !pre_indexed_addressing || self.0.bit_is_set(21)
+    }
+}
+
+impl Execute for SignedAndHwDtInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
-        let offset;
-        let offset_address;
+        let offset = match self.offset() {
+            Operand::Register(reg) => cpu.get_register(reg),
+            Operand::Immediate(imm) => imm,
+        };
 
-        let use_register_offset: bool = instruction.bit_is_set(25);
-        let add_offset: bool = instruction.bit_is_set(23);
-        let pre_indexed_addressing: bool = instruction.bit_is_set(24);
-        let write_back_address: bool = !pre_indexed_addressing || instruction.bit_is_set(21);
-        let rd = (instruction & 0x0000_F000) >> 12;
-        let force_non_privileged_access: bool =
-            pre_indexed_addressing && instruction.bit_is_set(21);
-        let is_byte_transfer: bool = instruction.bit_is_set(22);
+        let base_register = self.rn();
+        let base_register_address = cpu.get_register(base_register);
 
-        if use_register_offset {
-            let offset_register = instruction & 0x0000_000F;
-            let offset_register_value = self.get_register(offset_register);
-            let shift_amount = (instruction & 0x0000_0F80) >> 7;
-            offset = self.decode_shifted_register(
-                instruction,
-                shift_amount,
-                offset_register_value,
-                false,
-            );
+        let offset_address = if self.add_offset() {
+            base_register_address + offset
         } else {
-            offset = instruction & 0x0000_0fff;
-        }
+            base_register_address - offset
+        };
 
-        let base_register = (instruction & 0x000F_0000) >> 16;
-        let base_register_address = self.get_register(base_register);
-
-        if add_offset {
-            offset_address = base_register_address + offset;
-        } else {
-            offset_address = base_register_address - offset;
-        }
-
-        cycles += self.advance_pipeline(memory);
-
-        let access_address = if pre_indexed_addressing {
+        let pre_indexed_addressing = self.pre_indexed_addressing();
+        let address = if pre_indexed_addressing {
             offset_address
         } else {
             base_register_address
+        } as usize;
+
+        match self.opcode() {
+            SignedAndHwDtOpcodes::Load(load_opcode) => {
+                cycles += 1;
+                let data: u32 = match load_opcode {
+                    SignedAndHwDtLoadOpcodes::LDRH => {
+                        let load = memory.readu16(address);
+                        cycles += load.cycles;
+                        load.data.into()
+                    }
+                    SignedAndHwDtLoadOpcodes::LDRSB => {
+                        let load = memory.read(address);
+                        cycles += load.cycles;
+                        sign_extend(load.data.into(), 7)
+                    }
+                    SignedAndHwDtLoadOpcodes::LDRSH => {
+                        let load = memory.readu16(address);
+                        cycles += load.cycles;
+                        sign_extend(load.data.into(), 15)
+                    }
+                };
+
+                cpu.set_register(self.rd(), data)
+            }
+            SignedAndHwDtOpcodes::STRH => {
+                let rd = self.rd();
+                let mut data: WORD = cpu.get_register(rd);
+                if rd == PC_REGISTER as u32 {
+                    data += 4
+                }
+                cycles +=  memory.writeu16(address as usize, data as u16);
+
+            }
         };
 
-        let old_cpu_mode = self.get_cpu_mode();
-        if force_non_privileged_access {
-            self.set_mode(CPUMode::USER);
-        }
-
-        cycles += if instruction.bit_is_set(20) {
-            self.ldr_instruction_execution(rd, access_address, is_byte_transfer, memory)
-        } else {
-            self.str_instruction_execution(rd, access_address, is_byte_transfer, memory)
-        };
-
-        self.set_mode(old_cpu_mode);
-
-        if write_back_address {
-            self.set_register(base_register, offset_address);
+        if self.write_back_address(pre_indexed_addressing) {
+            cpu.set_register(base_register, offset_address);
         }
 
         cycles
     }
+}
 
+impl DecodeARMInstructionToString for SignedAndHwDtInstruction {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        let opcode = match self.opcode() {
+            SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRH) => "ldrh",
+            SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSB) => "ldrsb",
+            SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSH) => "ldrsh",
+            SignedAndHwDtOpcodes::STRH => "strh",
+        };
+
+        let add_offset = if self.add_offset() { "" } else { "-" };
+
+        let offset_address = match self.offset() {
+            Operand::Immediate(0) => "".into(),
+            operand => format!("{add_offset}{operand}"),
+        };
+
+        let access_address = if self.pre_indexed_addressing() {
+            let write_back = if self.write_back_address(true) {
+                "!"
+            } else {
+                ""
+            };
+            format!(
+                "[{}{offset_address}]{write_back}",
+                print_register(&self.rn())
+            )
+        } else {
+            format!("[{}]{offset_address}", print_register(&self.rn()))
+        };
+
+        format!(
+            "{opcode}{condition_code} {} {access_address}",
+            print_register(&self.rd())
+        )
+    }
+}
+
+impl CPU {
     pub fn str_instruction_execution(
         &mut self,
         rd: REGISTER,
@@ -322,68 +415,12 @@ impl CPU {
         cycles
     }
 
-    pub fn hw_or_signed_data_transfer(
-        &mut self,
-        instruction: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let pre_indexed_addressing = instruction.bit_is_set(24);
-        let add_offset = instruction.bit_is_set(23);
-        let use_immediate_offset = instruction.bit_is_set(22);
-        let write_back_address: bool = !pre_indexed_addressing || instruction.bit_is_set(21);
-        let rd = (instruction & 0x0000_F000) >> 12;
-
-        let mut cycles = 0;
-        let offset;
-        let offset_address;
-
-        if use_immediate_offset {
-            offset = instruction & 0x0000_000F;
-        } else {
-            let offset_register = instruction & 0x0000_000F;
-            offset = self.get_register(offset_register);
-        }
-
-        let base_register = (instruction & 0x000F_0000) >> 16;
-        let base_register_address = self.get_register(base_register);
-
-        if add_offset {
-            offset_address = base_register_address + offset;
-        } else {
-            offset_address = base_register_address - offset;
-        }
-
-        cycles += self.advance_pipeline(memory);
-
-        let access_address = if pre_indexed_addressing {
-            offset_address
-        } else {
-            base_register_address
-        };
-
-        cycles += if instruction.bit_is_set(20) {
-            let opcode = (instruction & 0x0000_0060) >> 5;
-            match opcode {
-                0b01 => self.ldrh_execution(rd, access_address, memory),
-                0b10 => self.ldrsb_execution(rd, access_address, memory),
-                0b11 => self.ldrsh_execution(rd, access_address, memory),
-                _ => panic!("Invalid Opcode"),
-            }
-        } else {
-            self.strh_execution(rd, access_address, memory)
-        };
-
-        if write_back_address {
-            self.set_register(base_register, offset_address);
-        }
-
-        cycles
-    }
-
     pub fn strh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
-        let data: WORD = self.get_register(rd);
+        let mut data: WORD = self.get_register(rd);
+        if rd == PC_REGISTER as u32 {
+            data += 4
+        }
         let cycles = { memory.writeu16(address as usize, data as u16) };
-        self.set_executed_instruction(format_args!("STRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -404,7 +441,6 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline(memory);
         }
-        self.set_executed_instruction(format_args!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -425,7 +461,6 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline(memory);
         }
-        self.set_executed_instruction(format_args!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }
@@ -441,7 +476,6 @@ impl CPU {
         if rd as usize == PC_REGISTER {
             cycles += self.flush_pipeline(memory);
         }
-        self.set_executed_instruction(format_args!("LDRH {} [{:#X}]", rd, address));
 
         cycles
     }

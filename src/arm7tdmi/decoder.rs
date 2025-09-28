@@ -1,4 +1,4 @@
-use data_transfer_instructions::SdtInstruction;
+use data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction};
 use instructions::ARMDecodedInstruction;
 
 use crate::{
@@ -81,10 +81,7 @@ impl CPU {
                 instruction,
             },
             _ if arm_decoders::is_hw_or_signed_data_transfer(instruction) => {
-                ARMDecodedInstruction {
-                    executable: CPU::hw_or_signed_data_transfer,
-                    instruction,
-                }
+                return Instruction::SignedAndHwDtInstruction(SignedAndHwDtInstruction(instruction))
             }
             _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
                 executable: CPU::arm_multiply_long,
