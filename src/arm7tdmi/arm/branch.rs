@@ -1,6 +1,6 @@
-use crate::{arm7tdmi::{cpu::LINK_REGISTER, instruction_table::{DecodeARMInstructionToString, Execute}}, utils::bits::{sign_extend, Bits}};
+use crate::{arm7tdmi::{cpu::{InstructionMode, LINK_REGISTER}, instruction_table::{DecodeARMInstructionToString, Execute}}, types::REGISTER, utils::{bits::{sign_extend, Bits}, instruction_to_string::print_register}};
 
-pub(crate) struct BranchInstruction(pub u32);
+pub struct BranchInstruction(pub u32);
 
 impl BranchInstruction {
     fn set_lr(&self) -> bool {
@@ -36,5 +36,38 @@ impl DecodeARMInstructionToString for BranchInstruction {
         };
 
         format!("B{lr}{condition_code} {:#x}", self.offset())
+    }
+}
+
+pub struct BranchAndExchangeInstruction(pub u32);
+
+impl BranchAndExchangeInstruction {
+    fn rn(&self) -> REGISTER {
+        self.0 & 0xF
+    }
+}
+
+impl Execute for BranchAndExchangeInstruction {
+    fn execute(self, cpu: &mut crate::arm7tdmi::cpu::CPU, memory: &mut crate::memory::memory::GBAMemory) -> crate::types::CYCLES {
+        let destination = cpu.get_register(self.rn());
+        let mut cycles = 1; 
+
+        if destination.bit_is_set(0) {
+            cpu.set_instruction_mode(InstructionMode::THUMB);
+            cpu.set_pc(destination & !1);
+        } else {
+            cpu.set_instruction_mode(InstructionMode::ARM);
+            cpu.set_pc(destination & !3);
+        }
+
+        cycles += cpu.flush_pipeline(memory);
+
+        cycles
+    }
+}
+
+impl DecodeARMInstructionToString for BranchAndExchangeInstruction {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        format!("bx{condition_code} {}", print_register(&self.rn()))
     }
 }

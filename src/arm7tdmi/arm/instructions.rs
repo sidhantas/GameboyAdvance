@@ -131,26 +131,6 @@ impl CPU {
         return cycles;
     }
 
-    pub fn arm_branch_and_exchange(
-        &mut self,
-        instruction: ARMByteCode,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut destination = self.get_register(instruction & 0x0000_000F);
-        let mut cycles = 1;
-        if destination.bit_is_set(0) {
-            self.set_instruction_mode(InstructionMode::THUMB);
-        } else {
-            destination &= !2; // arm instructions must be word aligned
-            self.set_instruction_mode(InstructionMode::ARM);
-        }
-        self.set_pc(destination & !1); // bit 0 is forced to 0 before storing
-        cycles += self.flush_pipeline(memory);
-        self.set_executed_instruction(format_args!("BX {:#010x}", destination));
-
-        cycles
-    }
-
     pub fn arm_not_implemented(
         &mut self,
         instruction: ARMByteCode,

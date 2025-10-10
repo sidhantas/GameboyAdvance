@@ -4,7 +4,7 @@ use tui::widgets::Block;
 
 use crate::{
     arm7tdmi::{
-        arm::{alu::{ALUInstruction, MRSInstruction, MSRInstruction}, branch::BranchInstruction, data_transfer_instructions::BlockDTInstruction},
+        arm::{alu::{ALUInstruction, MRSInstruction, MSRInstruction}, branch::{BranchAndExchangeInstruction, BranchInstruction}, data_transfer_instructions::BlockDTInstruction},
         thumb::{
             self,
             alu::{
@@ -67,7 +67,8 @@ pub enum Instruction {
     SdtInstruction(SdtInstruction),
     SignedAndHwDtInstruction(SignedAndHwDtInstruction),
     BlockDT(BlockDTInstruction),
-    Branch(BranchInstruction)
+    Branch(BranchInstruction),
+    BranchAndExchange(BranchAndExchangeInstruction)
 }
 
 impl Execute for Instruction {
@@ -91,6 +92,7 @@ impl Execute for Instruction {
             Instruction::SignedAndHwDtInstruction(instruction) => instruction.execute(cpu, memory),
             Instruction::BlockDT(instruction) => instruction.execute(cpu, memory),
             Instruction::Branch(instruction) => instruction.execute(cpu, memory),
+            Instruction::BranchAndExchange(instruction) => instruction.execute(cpu, memory),
         }
     }
 }

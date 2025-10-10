@@ -4,7 +4,9 @@ use instructions::ARMDecodedInstruction;
 use crate::{
     arm7tdmi::{
         arm::{
-            alu::{ALUInstruction, MRSInstruction, MSRInstruction}, branch::BranchInstruction, data_transfer_instructions::BlockDTInstruction
+            alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+            branch::{BranchAndExchangeInstruction, BranchInstruction},
+            data_transfer_instructions::BlockDTInstruction,
         },
         thumb::alu::{
             ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
@@ -90,10 +92,7 @@ impl CPU {
                 ..Default::default()
             },
             _ if arm_decoders::is_branch_and_exchange_instruction(instruction) => {
-                ARMDecodedInstruction {
-                    executable: CPU::arm_branch_and_exchange,
-                    instruction,
-                }
+                return Instruction::BranchAndExchange(BranchAndExchangeInstruction(instruction))
             }
             _ if arm_decoders::is_mrs(instruction) => {
                 return Instruction::MRS(MRSInstruction(instruction))
@@ -104,7 +103,9 @@ impl CPU {
             _ if arm_decoders::is_data_processing(instruction) => {
                 return Instruction::ALUInstruction(ALUInstruction(instruction))
             }
-            _ if arm_decoders::is_branch_instruction(instruction) => return Instruction::Branch(BranchInstruction(instruction)),
+            _ if arm_decoders::is_branch_instruction(instruction) => {
+                return Instruction::Branch(BranchInstruction(instruction))
+            }
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
                 return Instruction::SdtInstruction(SdtInstruction(instruction))
             }
