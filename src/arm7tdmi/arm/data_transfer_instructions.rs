@@ -318,8 +318,7 @@ impl Execute for SignedAndHwDtInstruction {
                 if rd == PC_REGISTER as u32 {
                     data += 4
                 }
-                cycles +=  memory.writeu16(address as usize, data as u16);
-
+                cycles += memory.writeu16(address as usize, data as u16);
             }
         };
 
@@ -367,6 +366,47 @@ impl DecodeARMInstructionToString for SignedAndHwDtInstruction {
         )
     }
 }
+
+pub struct BlockDTInstruction(pub u32);
+
+enum BlockDTOpcodes {
+    STM,
+    LDM
+}
+
+impl BlockDTInstruction {
+    fn rn(&self) -> REGISTER {
+        (self.0 & 0x01F0_0000) >> 20
+    }
+
+    fn rlist(&self) -> u32 {
+        self.0 & 0xFFFF
+    }
+
+    fn pre_add(&self) -> bool {
+        self.0.bit_is_set(24)
+    }
+
+    fn  add_to_base(&self) -> bool {
+        self.0.bit_is_set(23)
+    }
+
+    fn s_bit(&self) -> bool {
+        self.0.bit_is_set(22)
+    }
+
+    fn write_back(&self) -> bool {
+        self.0.bit_is_set(21)
+    }
+
+    fn opcode(&self) -> BlockDTOpcodes {
+        match self.0.bit_is_set(20) {
+            false => BlockDTOpcodes::STM,
+            true => BlockDTOpcodes::LDM,
+        }
+    }
+}
+
 
 impl CPU {
     pub fn str_instruction_execution(
