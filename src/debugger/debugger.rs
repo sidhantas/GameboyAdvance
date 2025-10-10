@@ -350,6 +350,7 @@ fn draw_cpu(
         Instruction::BlockDT(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Branch(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::BranchAndExchange(instruction) => &instruction.instruction_to_string(condition_code),
+        Instruction::SWI(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 

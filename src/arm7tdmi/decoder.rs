@@ -5,7 +5,7 @@ use crate::{
     arm7tdmi::{
         arm::{
             alu::{ALUInstruction, MRSInstruction, MSRInstruction},
-            branch::{BranchAndExchangeInstruction, BranchInstruction},
+            branch::{BranchAndExchangeInstruction, BranchInstruction, SWI},
             data_transfer_instructions::BlockDTInstruction,
         },
         thumb::alu::{
@@ -109,10 +109,7 @@ impl CPU {
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
                 return Instruction::SdtInstruction(SdtInstruction(instruction))
             }
-            _ if arm_decoders::is_software_interrupt(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::arm_software_interrupt,
-            },
+            _ if arm_decoders::is_software_interrupt(instruction) => return Instruction::SWI(SWI(instruction)),
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
                 instruction,
@@ -157,10 +154,7 @@ impl CPU {
                     executable: CPU::sdt_sign_extend_byte_or_halfword,
                 }
             }
-            _ if thumb_decoders::is_thumb_swi(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::arm_software_interrupt,
-            },
+            _ if thumb_decoders::is_thumb_swi(instruction) => return Instruction::SWI(SWI(instruction)),
             _ if thumb_decoders::is_sdt_imm_offset(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::sdt_imm_offset,

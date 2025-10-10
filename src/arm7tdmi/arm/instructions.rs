@@ -119,18 +119,6 @@ impl CPU {
         todo!();
     }
 
-    pub fn arm_software_interrupt(
-        &mut self,
-        _instruction: ARMByteCode,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut cycles = 1;
-        cycles += self.raise_exception(Exceptions::Software, memory);
-        self.set_executed_instruction(format_args!("SWI"));
-
-        return cycles;
-    }
-
     pub fn arm_not_implemented(
         &mut self,
         instruction: ARMByteCode,

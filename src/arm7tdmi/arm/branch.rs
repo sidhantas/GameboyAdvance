@@ -1,4 +1,4 @@
-use crate::{arm7tdmi::{cpu::{InstructionMode, LINK_REGISTER}, instruction_table::{DecodeARMInstructionToString, Execute}}, types::REGISTER, utils::{bits::{sign_extend, Bits}, instruction_to_string::print_register}};
+use crate::{arm7tdmi::{cpu::{InstructionMode, LINK_REGISTER}, instruction_table::{DecodeARMInstructionToString, Execute}, interrupts::Exceptions}, types::REGISTER, utils::{bits::{sign_extend, Bits}, instruction_to_string::print_register}};
 
 pub struct BranchInstruction(pub u32);
 
@@ -69,5 +69,20 @@ impl Execute for BranchAndExchangeInstruction {
 impl DecodeARMInstructionToString for BranchAndExchangeInstruction {
     fn instruction_to_string(&self, condition_code: &str) -> String {
         format!("bx{condition_code} {}", print_register(&self.rn()))
+    }
+}
+
+#[allow(unused)]
+pub struct SWI(pub u32);
+
+impl Execute for SWI {
+    fn execute(self, cpu: &mut crate::arm7tdmi::cpu::CPU, memory: &mut crate::memory::memory::GBAMemory) -> crate::types::CYCLES {
+         cpu.raise_exception(Exceptions::Software, memory) + 1
+    }
+}
+
+impl DecodeARMInstructionToString for SWI {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        format!("swi{condition_code}")
     }
 }
