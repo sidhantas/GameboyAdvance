@@ -3,7 +3,10 @@ use instructions::ARMDecodedInstruction;
 
 use crate::{
     arm7tdmi::{
-        arm::alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+        arm::{
+            alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+            data_transfer_instructions::BlockDTInstruction,
+        },
         thumb::alu::{
             ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
             ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister,
@@ -72,10 +75,9 @@ impl CPU {
             _ if arm_decoders::is_multiply_instruction(instruction) => {
                 self.decode_multiply(instruction)
             }
-            _ if arm_decoders::is_block_data_transfer(instruction) => ARMDecodedInstruction {
-                executable: CPU::block_dt_execution,
-                instruction,
-            },
+            _ if arm_decoders::is_block_data_transfer(instruction) => {
+                return Instruction::BlockDT(BlockDTInstruction(instruction))
+            }
             _ if arm_decoders::is_single_data_swap(instruction) => ARMDecodedInstruction {
                 executable: CPU::single_data_swap,
                 instruction,

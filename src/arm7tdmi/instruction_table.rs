@@ -1,8 +1,10 @@
 use std::fmt::Display;
 
+use tui::widgets::Block;
+
 use crate::{
     arm7tdmi::{
-        arm::alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+        arm::{alu::{ALUInstruction, MRSInstruction, MSRInstruction}, data_transfer_instructions::BlockDTInstruction},
         thumb::{
             self,
             alu::{
@@ -63,7 +65,8 @@ pub enum Instruction {
     ThumbAdr(ThumbAdr),
     ThumbAddToSp(ThumbAddToSp),
     SdtInstruction(SdtInstruction),
-    SignedAndHwDtInstruction(SignedAndHwDtInstruction)
+    SignedAndHwDtInstruction(SignedAndHwDtInstruction),
+    BlockDT(BlockDTInstruction)
 }
 
 impl Execute for Instruction {
@@ -85,6 +88,7 @@ impl Execute for Instruction {
             Instruction::ThumbAddToSp(instruction) => instruction.execute(cpu, memory),
             Instruction::SdtInstruction(instruction) => instruction.execute(cpu, memory),
             Instruction::SignedAndHwDtInstruction(instruction) => instruction.execute(cpu, memory),
+            Instruction::BlockDT(instruction) => instruction.execute(cpu, memory),
         }
     }
 }

@@ -148,7 +148,7 @@ pub fn start_debugger(
                 .margin(1)
                 .constraints(
                     [
-                        Constraint::Length(20),
+                        Constraint::Length(30),
                         Constraint::Length(20),
                         Constraint::Length(20),
                         Constraint::Length(20),
@@ -347,6 +347,7 @@ fn draw_cpu(
         Instruction::ThumbAddToSp(instruction) => &instruction.instruction_to_string(),
         Instruction::SdtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::SignedAndHwDtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
+        Instruction::BlockDT(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 

@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{iter::Enumerate, mem::size_of};
 
 use crate::{
     arm7tdmi::{
@@ -371,12 +371,12 @@ pub struct BlockDTInstruction(pub u32);
 
 enum BlockDTOpcodes {
     STM,
-    LDM
+    LDM,
 }
 
 impl BlockDTInstruction {
     fn rn(&self) -> REGISTER {
-        (self.0 & 0x01F0_0000) >> 20
+        (self.0 & 0x000F_0000) >> 16
     }
 
     fn rlist(&self) -> u32 {
@@ -387,7 +387,7 @@ impl BlockDTInstruction {
         self.0.bit_is_set(24)
     }
 
-    fn  add_to_base(&self) -> bool {
+    fn add_to_base(&self) -> bool {
         self.0.bit_is_set(23)
     }
 
@@ -405,8 +405,189 @@ impl BlockDTInstruction {
             true => BlockDTOpcodes::LDM,
         }
     }
+
+    fn register_list(&self) -> impl Iterator<Item = REGISTER> {
+        RegisterList {
+            list: self.0 & 0xFFFF,
+            i: 0,
+        }
+    }
 }
 
+struct RegisterList {
+    list: u32,
+    i: u32,
+}
+
+impl Iterator for RegisterList {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.list.bit_is_set(self.i as u8) {
+            if self.i == 16 {
+                return None;
+            }
+            self.i += 1;
+        }
+        let register = self.i;
+        self.i += 1;
+        Some(register)
+    }
+}
+
+impl Execute for BlockDTInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 0;
+
+        let base_address = cpu.get_register(self.rn()) as usize;
+        cycles += cpu.advance_pipeline(memory);
+
+        if self.s_bit() {
+            todo!("Implement S bit");
+        }
+        match (self.opcode(), self.pre_add(), self.add_to_base()) {
+            (BlockDTOpcodes::STM, true, true) => {
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    curr_address += size_of::<WORD>();
+                    let data = cpu.get_register(register);
+                    cycles += memory.writeu32(curr_address, data);
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), curr_address as u32);
+                }
+            }
+            (BlockDTOpcodes::STM, true, false) => {
+                let base_address =
+                    base_address - self.register_list().count() * size_of::<WORD>();
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    let data = cpu.get_register(register);
+                    cycles += memory.writeu32(curr_address, data);
+                    curr_address += size_of::<WORD>();
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), base_address as u32);
+                }
+            }
+            (BlockDTOpcodes::STM, false, true) => {
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    let data = cpu.get_register(register);
+                    cycles += memory.writeu32(curr_address, data);
+                    curr_address += size_of::<WORD>();
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), curr_address as u32);
+                }
+            }
+            (BlockDTOpcodes::STM, false, false) => {
+                let base_address =
+                    base_address - self.register_list().count() * size_of::<WORD>();
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    curr_address += size_of::<WORD>();
+                    let data = cpu.get_register(register);
+                    cycles += memory.writeu32(curr_address, data);
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), base_address as u32);
+                }
+            }
+            (BlockDTOpcodes::LDM, true, true) => {
+                cycles += 1;
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    curr_address += size_of::<WORD>();
+                    let memory_fetch = memory.readu32(curr_address);
+                    cycles += memory_fetch.cycles;
+                    let data = memory_fetch.data;
+                    cpu.set_register(register, data);
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), curr_address as u32);
+                }
+            }
+            (BlockDTOpcodes::LDM, true, false) => {
+                cycles += 1;
+                let base_address =
+                    base_address - self.register_list().count() * size_of::<WORD>();
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    let memory_fetch = memory.readu32(curr_address);
+                    curr_address += size_of::<WORD>();
+                    cycles += memory_fetch.cycles;
+                    let data = memory_fetch.data;
+                    cpu.set_register(register, data);
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), base_address as u32);
+                }
+            }
+            (BlockDTOpcodes::LDM, false, true) => {
+                cycles += 1;
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    let memory_fetch = memory.readu32(curr_address);
+                    cycles += memory_fetch.cycles;
+                    let data = memory_fetch.data;
+                    cpu.set_register(register, data);
+                    curr_address += size_of::<WORD>();
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), curr_address as u32);
+                }
+            }
+            (BlockDTOpcodes::LDM, false, false) => {
+                cycles += 1;
+                let base_address = base_address - self.register_list().count() * size_of::<WORD>();
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    curr_address += size_of::<WORD>();
+                    let memory_fetch = memory.readu32(curr_address);
+                    cycles += memory_fetch.cycles;
+                    let data = memory_fetch.data;
+                    cpu.set_register(register, data);
+                }
+                if self.write_back() {
+                    cpu.set_register(self.rn(), base_address as u32);
+                }
+            }
+        };
+
+        cycles
+    }
+}
+
+impl DecodeARMInstructionToString for BlockDTInstruction {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        let opcode = match (self.opcode(), self.pre_add(), self.add_to_base()) {
+            (BlockDTOpcodes::STM, true, true) => "stmib",
+            (BlockDTOpcodes::STM, true, false) => "push",
+            (BlockDTOpcodes::STM, false, true) => "stmia",
+            (BlockDTOpcodes::STM, false, false) => "stmda",
+            (BlockDTOpcodes::LDM, true, true) => "ldmib",
+            (BlockDTOpcodes::LDM, true, false) => "ldmdb",
+            (BlockDTOpcodes::LDM, false, true) => "pop",
+            (BlockDTOpcodes::LDM, false, false) => "ldmda",
+        };
+
+        let mut rlist = Vec::new();
+
+        for register in self.register_list() {
+            rlist.push(print_register(&register));
+        }
+
+        let rlist = format!("{{{}}}", rlist.join(","));
+
+        let write_back = if self.write_back() { "!" } else { "" };
+        format!(
+            "{opcode}{condition_code}{} {}, {rlist}",
+            write_back,
+            print_register(&self.rn())
+        )
+    }
+}
 
 impl CPU {
     pub fn str_instruction_execution(
