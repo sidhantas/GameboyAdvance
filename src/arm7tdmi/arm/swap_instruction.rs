@@ -1,37 +1,67 @@
 use crate::{
-    arm7tdmi::cpu::CPU,
+    arm7tdmi::{
+        cpu::CPU,
+        instruction_table::{DecodeARMInstructionToString, Execute},
+    },
     memory::memory::GBAMemory,
-    types::{CYCLES, WORD},
-    utils::bits::Bits,
+    types::{CYCLES, REGISTER, WORD},
+    utils::{bits::Bits, instruction_to_string::print_register},
 };
 
-impl CPU {
-    pub fn single_data_swap(&mut self, instruction: WORD, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 1; // 1 I cycle
-        let is_byte_swap = instruction.bit_is_set(22);
-        let rn = (instruction & 0x000F_0000) >> 16;
-        let rd = (instruction & 0x0000_F000) >> 12;
-        let rm = instruction & 0x0000_000F;
-        let address = self.get_register(rn) as usize;
+pub struct SwapInstruction(pub u32);
 
-        let memory_data = if is_byte_swap {
+impl SwapInstruction {
+    fn swap_byte(&self) -> bool {
+        self.0.bit_is_set(22)
+    }
+
+    fn rn(&self) -> REGISTER {
+        (self.0 & 0x000F_0000) >> 16
+    }
+
+    fn rd(&self) -> REGISTER {
+        (self.0 & 0x0000_F000) >> 12
+    }
+
+    fn rm(&self) -> REGISTER {
+        self.0 & 0x0000_000F
+    }
+}
+
+impl Execute for SwapInstruction {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 1; // 1 I cycle
+        let address = cpu.get_register(self.rn()) as usize;
+
+        let memory_data = if self.swap_byte() {
             let memory_fetch = memory.read(address);
             cycles += memory_fetch.cycles;
-            cycles += memory.write(address, self.get_register(rm) as u8);
+            cycles += memory.write(address, cpu.get_register(self.rm()) as u8);
 
             memory_fetch.data as u32
         } else {
             let memory_fetch = memory.readu32(address);
             cycles += memory_fetch.cycles;
-            cycles += memory.writeu32(address, self.get_register(rm));
+            cycles += memory.writeu32(address, cpu.get_register(self.rm()));
 
             memory_fetch.data
         };
 
-        self.set_executed_instruction(format_args!("SWP {} {} [{:#X}]", rd, rm, address));
-        self.set_register(rd, memory_data);
+        cpu.set_register(self.rd(), memory_data);
 
         cycles
+    }
+}
+
+impl DecodeARMInstructionToString for SwapInstruction {
+    fn instruction_to_string(&self, condition_code: &str) -> String {
+        let byte_swap = if self.swap_byte() { "b" } else { "" };
+        format!(
+            "swp{byte_swap}{condition_code} {}, {}, [{}]",
+            print_register(&self.rd()),
+            print_register(&self.rm()),
+            print_register(&self.rn())
+        )
     }
 }
 

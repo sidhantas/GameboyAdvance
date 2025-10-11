@@ -7,6 +7,7 @@ use crate::{
             alu::{ALUInstruction, MRSInstruction, MSRInstruction},
             branch::{BranchAndExchangeInstruction, BranchInstruction, SWI},
             data_transfer_instructions::BlockDTInstruction,
+            swap_instruction::SwapInstruction,
         },
         thumb::alu::{
             ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
@@ -79,10 +80,6 @@ impl CPU {
             _ if arm_decoders::is_block_data_transfer(instruction) => {
                 return Instruction::BlockDT(BlockDTInstruction(instruction))
             }
-            _ if arm_decoders::is_single_data_swap(instruction) => ARMDecodedInstruction {
-                executable: CPU::single_data_swap,
-                instruction,
-            },
             _ if arm_decoders::is_hw_or_signed_data_transfer(instruction) => {
                 return Instruction::SignedAndHwDtInstruction(SignedAndHwDtInstruction(instruction))
             }
@@ -100,6 +97,9 @@ impl CPU {
             _ if arm_decoders::is_msr(instruction) => {
                 return Instruction::MSR(MSRInstruction(instruction))
             }
+            _ if arm_decoders::is_single_data_swap(instruction) => {
+                return Instruction::Swap(SwapInstruction(instruction))
+            }
             _ if arm_decoders::is_data_processing(instruction) => {
                 return Instruction::ALUInstruction(ALUInstruction(instruction))
             }
@@ -109,7 +109,9 @@ impl CPU {
             _ if arm_decoders::is_load_or_store_register_unsigned(instruction) => {
                 return Instruction::SdtInstruction(SdtInstruction(instruction))
             }
-            _ if arm_decoders::is_software_interrupt(instruction) => return Instruction::SWI(SWI(instruction)),
+            _ if arm_decoders::is_software_interrupt(instruction) => {
+                return Instruction::SWI(SWI(instruction))
+            }
             _ => ARMDecodedInstruction {
                 executable: CPU::arm_not_implemented,
                 instruction,
@@ -154,7 +156,9 @@ impl CPU {
                     executable: CPU::sdt_sign_extend_byte_or_halfword,
                 }
             }
-            _ if thumb_decoders::is_thumb_swi(instruction) => return Instruction::SWI(SWI(instruction)),
+            _ if thumb_decoders::is_thumb_swi(instruction) => {
+                return Instruction::SWI(SWI(instruction))
+            }
             _ if thumb_decoders::is_sdt_imm_offset(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::sdt_imm_offset,
