@@ -16,7 +16,7 @@ use crate::{
     types::{CYCLES, REGISTER},
 };
 
-use super::{arm::{data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction}, instructions::ARMDecodedInstruction}, cpu::CPU};
+use super::{arm::{data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction}, instructions::ARMDecodedInstruction, multiply::MultiplyInstruction}, cpu::CPU};
 
 pub trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
@@ -70,7 +70,8 @@ pub enum Instruction {
     Branch(BranchInstruction),
     BranchAndExchange(BranchAndExchangeInstruction),
     Swap(SwapInstruction),
-    SWI(SWI)
+    SWI(SWI),
+    Multiply(MultiplyInstruction)
 }
 
 impl Execute for Instruction {
@@ -97,6 +98,7 @@ impl Execute for Instruction {
             Instruction::BranchAndExchange(instruction) => instruction.execute(cpu, memory),
             Instruction::SWI(instruction) => instruction.execute(cpu, memory),
             Instruction::Swap(instruction) => instruction.execute(cpu, memory),
+            Instruction::Multiply(instruction) => instruction.execute(cpu, memory),
         }
     }
 }

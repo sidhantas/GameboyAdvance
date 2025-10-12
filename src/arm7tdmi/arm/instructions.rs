@@ -11,8 +11,6 @@ use crate::{
 };
 
 pub type ARMExecutable = fn(&mut CPU, ARMByteCode, memory: &mut GBAMemory) -> CYCLES;
-pub type ALUOperation =
-    fn(&mut CPU, rd: REGISTER, operand1: u32, operand2: u32, set_flags: bool) -> ();
 
 #[derive(Clone, Copy)]
 pub struct ARMDecodedInstruction {
@@ -35,12 +33,12 @@ impl CPU {
        //write!(self.executed_instruction, "{}", name).unwrap();
     }
 
-    pub fn arm_nop(&mut self, _instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
+    pub fn arm_nop(&mut self, _instruction: ARMByteCode, _memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!("NOP"));
         return 0;
     }
 
-    pub fn arm_multiply(&mut self, instruction: ARMByteCode, memory: &mut GBAMemory) -> CYCLES {
+    pub fn arm_multiply(&mut self, instruction: ARMByteCode, _memory: &mut GBAMemory) -> CYCLES {
         let rd = (instruction & 0x000F_0000) >> 16;
         let rs = (instruction & 0x0000_0F00) >> 8;
         let rm = instruction & 0x0000_000F;

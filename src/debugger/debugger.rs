@@ -352,6 +352,7 @@ fn draw_cpu(
         Instruction::BranchAndExchange(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::SWI(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Swap(instruction) => &instruction.instruction_to_string(condition_code),
+        Instruction::Multiply(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 
