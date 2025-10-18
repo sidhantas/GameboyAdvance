@@ -1,75 +1,125 @@
 use crate::{
-    arm7tdmi::cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
+    arm7tdmi::{
+        arm::data_transfer_instructions::{
+            LoadOpcodes, SdtOpcode, SignedAndHwDtInstruction, SignedAndHwDtLoadOpcodes, SignedAndHwDtOpcodes, StoreOpcodes
+        },
+        cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
+        instruction_table::{DecodeThumbInstructionToString, Execute, Operand},
+    },
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER},
-    utils::bits::Bits,
+    utils::{bits::Bits, instruction_to_string::print_register},
 };
 
-impl CPU {
-    pub fn ldr_pc_relative(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
+pub struct LdrPCRelative(pub u32);
+
+impl LdrPCRelative {
+    fn rd(&self) -> REGISTER {
+        (self.0 & 0x0700) >> 8
+    }
+
+    fn offset(&self) -> u32 {
+        (self.0 & 0x00FF) * 4
+    }
+}
+
+impl Execute for LdrPCRelative {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 1;
-        let rd = (instruction & 0x0700) >> 8;
-        let offset = (instruction & 0x00FF) * 4;
-        let address = (self.get_pc() & !2) + offset;
+        let address = (cpu.get_pc() & !2) + self.offset();
         let memory_fetch = memory.readu32(address as usize);
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
-        cycles += self.advance_pipeline(memory);
+        cycles += cpu.advance_pipeline(memory);
 
-        self.set_register(rd, data);
-        self.set_executed_instruction(format_args!("LDR r{} [pc, {:#X}]", rd, offset));
-
+        cpu.set_register(self.rd(), data);
         cycles
     }
+}
 
-    pub fn sdt_register_offset(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 0;
-        let ro = (instruction & 0x01C0) >> 6;
-        let rb = (instruction & 0x0038) >> 3;
-        let rd = instruction & 0x0007;
-        let opcode = (instruction & 0x0C00) >> 10;
+impl DecodeThumbInstructionToString for LdrPCRelative {
+    fn instruction_to_string(&self) -> String {
+        format!(
+            "ldr {}, [pc, {}]",
+            print_register(&self.rd()),
+            Operand::Immediate(self.offset())
+        )
+    }
+}
 
-        let operation = match opcode {
-            0b00 => CPU::str_instruction_execution,
-            0b01 => CPU::str_instruction_execution,
-            0b10 => CPU::ldr_instruction_execution,
-            0b11 => CPU::ldr_instruction_execution,
-            _ => panic!(),
+pub struct ThumbSdtRegisterOffset(pub u32);
+
+enum ThumbSdtRegisterOffsetOpcodes {
+    SdtOpcode(SdtOpcode),
+    SignedHwOpcode(SignedAndHwDtOpcodes),
+}
+
+impl ThumbSdtRegisterOffset {
+    fn opcode(&self) -> ThumbSdtRegisterOffsetOpcodes {
+        use LoadOpcodes::*;
+        use SdtOpcode::*;
+        use StoreOpcodes::*;
+
+        match (self.0 >> 9) & 0b111 {
+            0b000 => ThumbSdtRegisterOffsetOpcodes::SdtOpcode(Store(STR)),
+            0b010 => ThumbSdtRegisterOffsetOpcodes::SdtOpcode(Store(STRB)),
+            0b100 => ThumbSdtRegisterOffsetOpcodes::SdtOpcode(Load(LDR)),
+            0b110 => ThumbSdtRegisterOffsetOpcodes::SdtOpcode(Load(LDRB)),
+            0b001 => ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::STRH),
+            0b011 => ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSB)),
+            0b101 => ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRH)),
+            0b111 => ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSH)),
+            _ => unreachable!(),
+        }
+    }
+
+    fn ro(&self) -> REGISTER {
+        (self.0 & 0x01C0) >> 6
+    }
+
+    fn rb(&self) -> REGISTER {
+        (self.0 & 0x0038) >> 3
+    }
+
+    fn rd(&self) -> REGISTER {
+        self.0 & 0x0007
+    }
+}
+
+impl Execute for ThumbSdtRegisterOffset {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let access_address = cpu.get_register(self.rb()) + cpu.get_register(self.ro());
+        match self.opcode() {
+            ThumbSdtRegisterOffsetOpcodes::SdtOpcode(opcode) => opcode.execute(cpu, memory, self.rd(), access_address as usize),
+            ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(opcode) => opcode.execute(cpu, memory, self.rd(), access_address as usize)
+        }
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbSdtRegisterOffset {
+    fn instruction_to_string(&self) -> String {
+        let opcode = match self.opcode() {
+            ThumbSdtRegisterOffsetOpcodes::SdtOpcode(SdtOpcode::Load(LoadOpcodes::LDR)) => "ldr",
+            ThumbSdtRegisterOffsetOpcodes::SdtOpcode(SdtOpcode::Load(LoadOpcodes::LDRB)) => "ldrb",
+            ThumbSdtRegisterOffsetOpcodes::SdtOpcode(SdtOpcode::Store(StoreOpcodes::STR)) => "str",
+            ThumbSdtRegisterOffsetOpcodes::SdtOpcode(SdtOpcode::Store(StoreOpcodes::STRB)) => "strb",
+            ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::STRH) => "strh",
+            ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSH)) => "ldrsh",
+            ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRH)) => "ldrh",
+            ThumbSdtRegisterOffsetOpcodes::SignedHwOpcode(SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSB)) => "ldrsb",
         };
 
-        let address = self.get_register(rb) + self.get_register(ro);
-        let is_byte_transfer = opcode.bit_is_set(0);
-
-        cycles += operation(self, rd, address, is_byte_transfer, memory);
-
-        cycles
+        format!(
+            "{opcode} {}, [{}, {}]",
+            print_register(&self.rd()),
+            print_register(&self.rb()),
+            print_register(&self.ro())
+        )
     }
+}
 
-    pub fn sdt_sign_extend_byte_or_halfword(
-        &mut self,
-        instruction: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let opcode = (instruction & 0x0C00) >> 10;
-        let ro = (instruction & 0x01C0) >> 6;
-        let rb = (instruction & 0x0038) >> 3;
-        let rd = instruction & 0x0007;
-
-        let operation = match opcode {
-            0b00 => CPU::strh_execution,
-            0b01 => CPU::ldrsb_execution,
-            0b10 => CPU::ldrh_execution,
-            0b11 => CPU::ldrsh_execution,
-            _ => panic!(),
-        };
-        let address = self.get_register(rb) + self.get_register(ro);
-
-        let cycles = operation(self, rd, address, memory);
-
-        cycles
-    }
-
+impl CPU {
     pub fn sdt_imm_offset(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
         let opcode = (instruction & 0x1800) >> 11;

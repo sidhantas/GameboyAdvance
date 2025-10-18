@@ -353,6 +353,10 @@ fn draw_cpu(
         Instruction::SWI(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Swap(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::Multiply(instruction) => &instruction.instruction_to_string(condition_code),
+        Instruction::LdrPcRelative(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbSdtOffset(instruction) => &instruction.instruction_to_string(),
+        Instruction::Nop => "nop",
+        Instruction::NotImplemented(_) => "not implemented",
         Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 

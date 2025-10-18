@@ -16,7 +16,7 @@ use crate::{
     types::{CYCLES, REGISTER},
 };
 
-use super::{arm::{data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction}, instructions::ARMDecodedInstruction, multiply::MultiplyInstruction}, cpu::CPU};
+use super::{arm::{data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction}, instructions::ARMDecodedInstruction, multiply::MultiplyInstruction}, cpu::CPU, thumb::data_transfer_instructions::{LdrPCRelative, ThumbSdtRegisterOffset}};
 
 pub trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
@@ -71,8 +71,14 @@ pub enum Instruction {
     BranchAndExchange(BranchAndExchangeInstruction),
     Swap(SwapInstruction),
     SWI(SWI),
-    Multiply(MultiplyInstruction)
+    Multiply(MultiplyInstruction),
+    LdrPcRelative(LdrPCRelative),
+    ThumbSdtOffset(ThumbSdtRegisterOffset),
+    NotImplemented(u32),
+    Nop
 }
+
+
 
 impl Execute for Instruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
@@ -99,6 +105,10 @@ impl Execute for Instruction {
             Instruction::SWI(instruction) => instruction.execute(cpu, memory),
             Instruction::Swap(instruction) => instruction.execute(cpu, memory),
             Instruction::Multiply(instruction) => instruction.execute(cpu, memory),
+            Instruction::LdrPcRelative(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbSdtOffset(instruction) => instruction.execute(cpu, memory),
+            Instruction::NotImplemented(instruction) => panic!("Not implemented: {:#x}", instruction),
+            Instruction::Nop => return 0
         }
     }
 }

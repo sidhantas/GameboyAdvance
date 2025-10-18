@@ -30,12 +30,12 @@ impl Execute for BranchInstruction {
 impl DecodeARMInstructionToString for BranchInstruction {
     fn instruction_to_string(&self, condition_code: &str) -> String {
         let lr = if self.set_lr() {
-            "L"
+            "l"
         } else {
             ""
         };
 
-        format!("B{lr}{condition_code} {:#x}", self.offset())
+        format!("b{lr}{condition_code} {:#x}", self.offset())
     }
 }
 

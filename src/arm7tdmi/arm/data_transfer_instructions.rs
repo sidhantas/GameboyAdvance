@@ -3,7 +3,7 @@ use std::{iter::Enumerate, mem::size_of};
 use crate::{
     arm7tdmi::{
         arm::alu::{Shift, ShiftType},
-        cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
+        cpu::{CPU, PC_REGISTER},
         instruction_table::{DecodeARMInstructionToString, Execute, Operand},
     },
     memory::memory::GBAMemory,
@@ -17,17 +17,17 @@ use crate::{
 
 pub struct SdtInstruction(pub u32);
 
-enum SdtOpcode {
+pub enum SdtOpcode {
     Load(LoadOpcodes),
     Store(StoreOpcodes),
 }
 
-enum LoadOpcodes {
+pub enum LoadOpcodes {
     LDR,
     LDRB,
 }
 
-enum StoreOpcodes {
+pub enum StoreOpcodes {
     STR,
     STRB,
 }
@@ -110,6 +110,37 @@ impl SdtInstruction {
     }
 }
 
+impl SdtOpcode {
+    #[inline]
+    pub fn execute(&self, cpu: &mut CPU, memory: &mut GBAMemory, rd: REGISTER, access_address: usize) -> CYCLES {
+        let mut cycles = 0;
+        match self {
+            SdtOpcode::Load(load_opcode) => {
+                let data = match load_opcode {
+                    LoadOpcodes::LDR => memory.readu32(access_address),
+                    LoadOpcodes::LDRB => memory.read(access_address).into(),
+                };
+                cpu.set_register(rd, data.data);
+                if rd == PC_REGISTER as u32 {
+                    cycles += cpu.flush_pipeline(memory)
+                }
+                cycles += data.cycles + 1;
+            }
+            SdtOpcode::Store(store) => {
+                let mut data = cpu.get_register(rd);
+                if rd == PC_REGISTER as u32 {
+                    data += 4;
+                }
+                cycles += match store {
+                    StoreOpcodes::STR => memory.writeu32(access_address, data),
+                    StoreOpcodes::STRB => memory.write(access_address, data as u8),
+                };
+            }
+        };
+        cycles
+    }
+}
+
 impl Execute for SdtInstruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
@@ -136,29 +167,7 @@ impl Execute for SdtInstruction {
             base_register_address
         } as usize;
 
-        match self.opcode() {
-            SdtOpcode::Load(load_opcode) => {
-                let data = match load_opcode {
-                    LoadOpcodes::LDR => memory.readu32(access_address),
-                    LoadOpcodes::LDRB => memory.read(access_address).into(),
-                };
-                cpu.set_register(self.rd(), data.data);
-                if self.rd() == PC_REGISTER as u32 {
-                    cycles += cpu.flush_pipeline(memory)
-                }
-                cycles += data.cycles + 1;
-            }
-            SdtOpcode::Store(store) => {
-                let mut data = cpu.get_register(self.rd());
-                if self.rd() == PC_REGISTER as u32 {
-                    data += 4;
-                }
-                cycles += match store {
-                    StoreOpcodes::STR => memory.writeu32(access_address, data),
-                    StoreOpcodes::STRB => memory.write(access_address, data as u8),
-                };
-            }
-        };
+        cycles += self.opcode().execute(cpu, memory, self.rd(), access_address);
 
         if self.write_back_address(pre_indexed_addressing) {
             cpu.set_register(self.rn(), offset_address);
@@ -211,12 +220,12 @@ impl DecodeARMInstructionToString for SdtInstruction {
 
 pub struct SignedAndHwDtInstruction(pub u32);
 
-enum SignedAndHwDtOpcodes {
+pub enum SignedAndHwDtOpcodes {
     Load(SignedAndHwDtLoadOpcodes),
     STRH,
 }
 
-enum SignedAndHwDtLoadOpcodes {
+pub enum SignedAndHwDtLoadOpcodes {
     LDRH,
     LDRSB,
     LDRSH,
@@ -265,6 +274,45 @@ impl SignedAndHwDtInstruction {
     }
 }
 
+impl SignedAndHwDtOpcodes {
+    pub fn execute(&self, cpu: &mut CPU, memory: &mut GBAMemory, rd: REGISTER, access_address: usize) -> CYCLES {
+        let mut cycles = 0;
+        match self {
+            SignedAndHwDtOpcodes::Load(load_opcode) => {
+                cycles += 1;
+                let data: u32 = match load_opcode {
+                    SignedAndHwDtLoadOpcodes::LDRH => {
+                        let load = memory.readu16(access_address);
+                        cycles += load.cycles;
+                        load.data.into()
+                    }
+                    SignedAndHwDtLoadOpcodes::LDRSB => {
+                        let load = memory.read(access_address);
+                        cycles += load.cycles;
+                        sign_extend(load.data.into(), 7)
+                    }
+                    SignedAndHwDtLoadOpcodes::LDRSH => {
+                        let load = memory.readu16(access_address);
+                        cycles += load.cycles;
+                        sign_extend(load.data.into(), 15)
+                    }
+                };
+
+                cpu.set_register(rd, data)
+            }
+            SignedAndHwDtOpcodes::STRH => {
+                let mut data: WORD = cpu.get_register(rd);
+                if rd == PC_REGISTER as u32 {
+                    data += 4
+                }
+                cycles += memory.writeu16(access_address as usize, data as u16);
+            }
+        };
+
+        cycles
+    }
+}
+
 impl Execute for SignedAndHwDtInstruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
@@ -289,38 +337,7 @@ impl Execute for SignedAndHwDtInstruction {
             base_register_address
         } as usize;
 
-        match self.opcode() {
-            SignedAndHwDtOpcodes::Load(load_opcode) => {
-                cycles += 1;
-                let data: u32 = match load_opcode {
-                    SignedAndHwDtLoadOpcodes::LDRH => {
-                        let load = memory.readu16(address);
-                        cycles += load.cycles;
-                        load.data.into()
-                    }
-                    SignedAndHwDtLoadOpcodes::LDRSB => {
-                        let load = memory.read(address);
-                        cycles += load.cycles;
-                        sign_extend(load.data.into(), 7)
-                    }
-                    SignedAndHwDtLoadOpcodes::LDRSH => {
-                        let load = memory.readu16(address);
-                        cycles += load.cycles;
-                        sign_extend(load.data.into(), 15)
-                    }
-                };
-
-                cpu.set_register(self.rd(), data)
-            }
-            SignedAndHwDtOpcodes::STRH => {
-                let rd = self.rd();
-                let mut data: WORD = cpu.get_register(rd);
-                if rd == PC_REGISTER as u32 {
-                    data += 4
-                }
-                cycles += memory.writeu16(address as usize, data as u16);
-            }
-        };
+        cycles += self.opcode().execute(cpu, memory, self.rd(), address);
 
         if self.write_back_address(pre_indexed_addressing) {
             cpu.set_register(base_register, offset_address);
@@ -454,8 +471,7 @@ impl Execute for BlockDTInstruction {
                 }
             }
             (BlockDTOpcodes::STM, true, false) => {
-                let base_address =
-                    base_address - self.register_list().count() * size_of::<WORD>();
+                let base_address = base_address - self.register_list().count() * size_of::<WORD>();
                 let mut curr_address = base_address;
                 for register in self.register_list() {
                     let data = cpu.get_register(register);
@@ -478,8 +494,7 @@ impl Execute for BlockDTInstruction {
                 }
             }
             (BlockDTOpcodes::STM, false, false) => {
-                let base_address =
-                    base_address - self.register_list().count() * size_of::<WORD>();
+                let base_address = base_address - self.register_list().count() * size_of::<WORD>();
                 let mut curr_address = base_address;
                 for register in self.register_list() {
                     curr_address += size_of::<WORD>();
@@ -506,8 +521,7 @@ impl Execute for BlockDTInstruction {
             }
             (BlockDTOpcodes::LDM, true, false) => {
                 cycles += 1;
-                let base_address =
-                    base_address - self.register_list().count() * size_of::<WORD>();
+                let base_address = base_address - self.register_list().count() * size_of::<WORD>();
                 let mut curr_address = base_address;
                 for register in self.register_list() {
                     let memory_fetch = memory.readu32(curr_address);
@@ -578,11 +592,7 @@ impl DecodeARMInstructionToString for BlockDTInstruction {
 
         let write_back = if self.write_back() { "!" } else { "" };
 
-        let s_bit = if self.s_bit() {
-            "^"
-        } else {
-            ""
-        };
+        let s_bit = if self.s_bit() { "^" } else { "" };
 
         format!(
             "{opcode}{condition_code}{} {}, {rlist}{}",
@@ -777,7 +787,6 @@ impl CPU {
 
         cycles
     }
-
 }
 
 #[cfg(test)]

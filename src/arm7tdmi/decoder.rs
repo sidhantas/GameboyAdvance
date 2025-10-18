@@ -1,5 +1,6 @@
 use data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction};
 use instructions::ARMDecodedInstruction;
+use multiply::MultiplyInstruction;
 
 use crate::{
     arm7tdmi::{
@@ -21,6 +22,7 @@ use super::{
     arm::*,
     cpu::{FlagsRegister, InstructionMode, CPU},
     instruction_table::Instruction,
+    thumb::data_transfer_instructions::{LdrPCRelative, ThumbSdtRegisterOffset},
 };
 
 impl CPU {
@@ -68,14 +70,10 @@ impl CPU {
             });
         }
 
-        Instruction::Funcpointer(match instruction {
-            _ if instruction == 0x00 => ARMDecodedInstruction {
-                executable: CPU::arm_nop,
-                instruction,
-                ..Default::default()
-            },
+        match instruction {
+            _ if instruction == 0x00 => return Instruction::Nop,
             _ if arm_decoders::is_multiply_instruction(instruction) => {
-                self.decode_multiply(instruction)
+                return Instruction::Multiply(MultiplyInstruction(instruction))
             }
             _ if arm_decoders::is_block_data_transfer(instruction) => {
                 return Instruction::BlockDT(BlockDTInstruction(instruction))
@@ -83,11 +81,6 @@ impl CPU {
             _ if arm_decoders::is_hw_or_signed_data_transfer(instruction) => {
                 return Instruction::SignedAndHwDtInstruction(SignedAndHwDtInstruction(instruction))
             }
-            _ if arm_decoders::is_multiply_long_instruction(instruction) => ARMDecodedInstruction {
-                executable: CPU::arm_multiply_long,
-                instruction,
-                ..Default::default()
-            },
             _ if arm_decoders::is_branch_and_exchange_instruction(instruction) => {
                 return Instruction::BranchAndExchange(BranchAndExchangeInstruction(instruction))
             }
@@ -112,12 +105,8 @@ impl CPU {
             _ if arm_decoders::is_software_interrupt(instruction) => {
                 return Instruction::SWI(SWI(instruction))
             }
-            _ => ARMDecodedInstruction {
-                executable: CPU::arm_not_implemented,
-                instruction,
-                ..Default::default()
-            },
-        })
+            _ => return Instruction::NotImplemented(instruction),
+        }
     }
 
     fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
@@ -142,20 +131,12 @@ impl CPU {
             _ if thumb_decoders::is_thumb_hi_reg_operation(instruction) => {
                 return Instruction::ThumbHiRegisterInstruction(ThumbHiRegInstruction(instruction))
             }
-            _ if thumb_decoders::is_load_pc_relative(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::ldr_pc_relative,
-            },
-            _ if thumb_decoders::is_sdt_register_offset(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::sdt_register_offset,
-            },
-            _ if thumb_decoders::is_sdt_sign_extend_byte_or_halfword(instruction) => {
-                ARMDecodedInstruction {
-                    instruction,
-                    executable: CPU::sdt_sign_extend_byte_or_halfword,
-                }
+            _ if thumb_decoders::is_load_pc_relative(instruction) => {
+                return Instruction::LdrPcRelative(LdrPCRelative(instruction))
             }
+            _ if thumb_decoders::is_sdt_register_offset(instruction) => {
+                return Instruction::ThumbSdtOffset(ThumbSdtRegisterOffset(instruction))
+            },
             _ if thumb_decoders::is_thumb_swi(instruction) => {
                 return Instruction::SWI(SWI(instruction))
             }
@@ -201,10 +182,7 @@ impl CPU {
                 instruction,
                 executable: CPU::thumb_long_branch_with_link,
             },
-            _ => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::arm_not_implemented,
-            },
+            _ => return Instruction::NotImplemented(instruction),
         })
     }
 }
@@ -301,11 +279,7 @@ mod thumb_decoders {
     }
 
     pub fn is_sdt_register_offset(instruction: u32) -> bool {
-        instruction & 0xF200 == 0x5000
-    }
-
-    pub fn is_sdt_sign_extend_byte_or_halfword(instruction: u32) -> bool {
-        instruction & 0xF200 == 0x5200
+        instruction & 0xF000 == 0x5000
     }
 
     pub fn is_sdt_imm_offset(instruction: u32) -> bool {
