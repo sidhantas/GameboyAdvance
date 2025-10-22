@@ -10,9 +10,12 @@ use crate::{
             data_transfer_instructions::BlockDTInstruction,
             swap_instruction::SwapInstruction,
         },
-        thumb::alu::{
-            ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
-            ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister,
+        thumb::{
+            alu::{
+                ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
+                ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister,
+            },
+            data_transfer_instructions::{ThumbSdtHwImmOffset, ThumbSdtImmOffset},
         },
     },
     types::*,
@@ -136,18 +139,14 @@ impl CPU {
             }
             _ if thumb_decoders::is_sdt_register_offset(instruction) => {
                 return Instruction::ThumbSdtOffset(ThumbSdtRegisterOffset(instruction))
-            },
+            }
             _ if thumb_decoders::is_thumb_swi(instruction) => {
                 return Instruction::SWI(SWI(instruction))
             }
-            _ if thumb_decoders::is_sdt_imm_offset(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::sdt_imm_offset,
-            },
-            _ if thumb_decoders::is_sdt_halfword(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::sdt_halfword_imm_offset,
-            },
+            _ if thumb_decoders::is_sdt_imm_offset(instruction) => {
+                return Instruction::ThumbSdtImmOffset(ThumbSdtImmOffset(instruction))
+            }
+            _ if thumb_decoders::is_sdt_halfword(instruction) => return Instruction::ThumbSdtHwImmOffset(ThumbSdtHwImmOffset(instruction)),
             _ if thumb_decoders::is_sdt_sp_imm(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::thumb_sdt_sp_imm,

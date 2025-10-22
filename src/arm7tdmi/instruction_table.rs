@@ -9,7 +9,7 @@ use crate::{
             self,
             alu::{
                 ThumbALUInstruction, ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
-            },
+            }, data_transfer_instructions::{ThumbSdtHwImmOffset, ThumbSdtImmOffset},
         },
     },
     memory::memory::GBAMemory,
@@ -74,6 +74,8 @@ pub enum Instruction {
     Multiply(MultiplyInstruction),
     LdrPcRelative(LdrPCRelative),
     ThumbSdtOffset(ThumbSdtRegisterOffset),
+    ThumbSdtImmOffset(ThumbSdtImmOffset),
+    ThumbSdtHwImmOffset(ThumbSdtHwImmOffset),
     NotImplemented(u32),
     Nop
 }
@@ -107,6 +109,8 @@ impl Execute for Instruction {
             Instruction::Multiply(instruction) => instruction.execute(cpu, memory),
             Instruction::LdrPcRelative(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbSdtOffset(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbSdtImmOffset(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbSdtHwImmOffset(instruction) => instruction.execute(cpu, memory),
             Instruction::NotImplemented(instruction) => panic!("Not implemented: {:#x}", instruction),
             Instruction::Nop => return 0
         }

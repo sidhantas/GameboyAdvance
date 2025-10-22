@@ -1,4 +1,4 @@
-use std::{iter::Enumerate, mem::size_of};
+use std::{fmt::Display, iter::Enumerate, mem::size_of};
 
 use crate::{
     arm7tdmi::{
@@ -30,6 +30,19 @@ pub enum LoadOpcodes {
 pub enum StoreOpcodes {
     STR,
     STRB,
+}
+
+impl Display for SdtOpcode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let opcode = match self {
+            SdtOpcode::Load(LoadOpcodes::LDR) => "ldr",
+            SdtOpcode::Load(LoadOpcodes::LDRB) => "ldrb",
+            SdtOpcode::Store(StoreOpcodes::STR) => "str",
+            SdtOpcode::Store(StoreOpcodes::STRB) => "strb",
+        };
+
+        write!(f, "{}", opcode)
+    }
 }
 
 enum SdtOffset {
@@ -229,6 +242,19 @@ pub enum SignedAndHwDtLoadOpcodes {
     LDRH,
     LDRSB,
     LDRSH,
+}
+
+impl Display for SignedAndHwDtOpcodes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let opcode = match self {
+            SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRH) => "ldrh",
+            SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSH) => "ldrsh",
+            SignedAndHwDtOpcodes::Load(SignedAndHwDtLoadOpcodes::LDRSB) => "ldrsb",
+            SignedAndHwDtOpcodes::STRH => "strh",
+        };
+
+        write!(f, "{opcode}")
+    }
 }
 
 impl SignedAndHwDtInstruction {

@@ -345,6 +345,8 @@ fn draw_cpu(
         Instruction::ThumbBx(instruction) => &instruction.instruction_to_string(),
         Instruction::ThumbAdr(instruction) => &instruction.instruction_to_string(),
         Instruction::ThumbAddToSp(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbSdtImmOffset(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbSdtHwImmOffset(instruction) => &instruction.instruction_to_string(),
         Instruction::SdtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::SignedAndHwDtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
         Instruction::BlockDT(instruction) => &instruction.instruction_to_string(condition_code),
