@@ -9,7 +9,7 @@ use crate::{
             self,
             alu::{
                 ThumbALUInstruction, ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
-            }, data_transfer_instructions::{ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm},
+            }, data_transfer_instructions::{ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm}, jumps_and_calls::{ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSetLinkRegister, ThumbUnconditionalBranch},
         },
     },
     memory::memory::GBAMemory,
@@ -52,7 +52,6 @@ pub fn condition_code_as_str(condition_code: u32) -> &'static str {
 }
 
 pub enum Instruction {
-    Funcpointer(ARMDecodedInstruction),
     ALUInstruction(ALUInstruction),
     MSR(MSRInstruction),
     MRS(MRSInstruction),
@@ -79,6 +78,10 @@ pub enum Instruction {
     ThumbSdtSpImm(ThumbSdtSpImm),
     ThumbPushPop(ThumbPushPop),
     ThumbBlockDT(ThumbBlockDT),
+    ThumbConditionalBranch(ThumbConditionalBranch),
+    ThumbUnconditionalBranch(ThumbUnconditionalBranch),
+    ThumbSetLinkRegister(ThumbSetLinkRegister),
+    ThumbLongBranchWithLink(ThumbLongBranchWithLink),
     NotImplemented(u32),
     Nop
 }
@@ -91,7 +94,6 @@ impl Execute for Instruction {
             Instruction::ALUInstruction(alu_instruction) => alu_instruction.execute(cpu, memory),
             Instruction::MSR(psr_transfer) => psr_transfer.execute(cpu, memory),
             Instruction::MRS(instruction) => instruction.execute(cpu, memory),
-            Instruction::Funcpointer(func) => (func.executable)(cpu, func.instruction, memory),
             Instruction::ThumbFullAdder(thumb_full_adder) => thumb_full_adder.execute(cpu, memory),
             Instruction::ThumbAluInstruction(thumb_alu_instruction) => {
                 thumb_alu_instruction.execute(cpu, memory)
@@ -117,6 +119,10 @@ impl Execute for Instruction {
             Instruction::ThumbSdtSpImm(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbPushPop(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbBlockDT(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbConditionalBranch(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbUnconditionalBranch(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbSetLinkRegister(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbLongBranchWithLink(instruction) => instruction.execute(cpu, memory),
             Instruction::NotImplemented(instruction) => panic!("Not implemented: {:#x}", instruction),
             Instruction::Nop => return 0
         }

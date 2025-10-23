@@ -15,7 +15,13 @@ use crate::{
                 ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
                 ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister,
             },
-            data_transfer_instructions::{ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm},
+            data_transfer_instructions::{
+                ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm,
+            },
+            jumps_and_calls::{
+                ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSetLinkRegister,
+                ThumbUnconditionalBranch,
+            },
         },
     },
     types::*,
@@ -66,11 +72,7 @@ impl CPU {
 
     fn decode_arm_instruction(&self, instruction: ARMByteCode) -> Instruction {
         if !(self.condition_passed(instruction)) {
-            return Instruction::Funcpointer(ARMDecodedInstruction {
-                executable: CPU::arm_nop,
-                instruction,
-                ..Default::default()
-            });
+            return Instruction::Nop;
         }
 
         match instruction {
@@ -113,7 +115,7 @@ impl CPU {
     }
 
     fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
-        Instruction::Funcpointer(match instruction {
+        match instruction {
             _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
                 return Instruction::ThumbFullAdder(ThumbFullAdder(instruction))
             }
@@ -158,26 +160,26 @@ impl CPU {
             _ if thumb_decoders::is_add_offset_to_sp(instruction) => {
                 return Instruction::ThumbAddToSp(ThumbAddToSp(instruction))
             }
-            _ if thumb_decoders::is_push_pop(instruction) => return Instruction::ThumbPushPop(ThumbPushPop(instruction)),
-            _ if thumb_decoders::is_thumb_block_dt(instruction) => return Instruction::ThumbBlockDT(ThumbBlockDT(instruction)),
-            _ if thumb_decoders::is_conditional_branch(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_conditional_branch,
-            },
-            _ if thumb_decoders::is_unconditional_branch(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_unconditional_branch,
-            },
-            _ if thumb_decoders::is_set_link_register(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_set_link_register,
-            },
-            _ if thumb_decoders::is_long_branch_with_link(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_long_branch_with_link,
-            },
+            _ if thumb_decoders::is_push_pop(instruction) => {
+                return Instruction::ThumbPushPop(ThumbPushPop(instruction))
+            }
+            _ if thumb_decoders::is_thumb_block_dt(instruction) => {
+                return Instruction::ThumbBlockDT(ThumbBlockDT(instruction))
+            }
+            _ if thumb_decoders::is_conditional_branch(instruction) => {
+                return Instruction::ThumbConditionalBranch(ThumbConditionalBranch(instruction))
+            }
+            _ if thumb_decoders::is_unconditional_branch(instruction) => {
+                return Instruction::ThumbUnconditionalBranch(ThumbUnconditionalBranch(instruction))
+            }
+            _ if thumb_decoders::is_set_link_register(instruction) => {
+                return Instruction::ThumbSetLinkRegister(ThumbSetLinkRegister(instruction))
+            }
+            _ if thumb_decoders::is_long_branch_with_link(instruction) => {
+                return Instruction::ThumbLongBranchWithLink(ThumbLongBranchWithLink(instruction))
+            }
             _ => return Instruction::NotImplemented(instruction),
-        })
+        }
     }
 }
 

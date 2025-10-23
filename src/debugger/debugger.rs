@@ -360,9 +360,12 @@ fn draw_cpu(
         Instruction::ThumbSdtSpImm(instruction) => &instruction.instruction_to_string(),
         Instruction::ThumbPushPop(instruction) => &instruction.instruction_to_string(),
         Instruction::ThumbBlockDT(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbConditionalBranch(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbUnconditionalBranch(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbSetLinkRegister(instruction) => &instruction.instruction_to_string(),
+        Instruction::ThumbLongBranchWithLink(instruction) => &instruction.instruction_to_string(),
         Instruction::Nop => "nop",
         Instruction::NotImplemented(_) => "not implemented",
-        Instruction::Funcpointer(_) => &cpu.executed_instruction,
     };
 
     let executed_instruction =
