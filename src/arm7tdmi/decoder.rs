@@ -15,7 +15,7 @@ use crate::{
                 ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx,
                 ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister,
             },
-            data_transfer_instructions::{ThumbSdtHwImmOffset, ThumbSdtImmOffset},
+            data_transfer_instructions::{ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm},
         },
     },
     types::*,
@@ -146,25 +146,20 @@ impl CPU {
             _ if thumb_decoders::is_sdt_imm_offset(instruction) => {
                 return Instruction::ThumbSdtImmOffset(ThumbSdtImmOffset(instruction))
             }
-            _ if thumb_decoders::is_sdt_halfword(instruction) => return Instruction::ThumbSdtHwImmOffset(ThumbSdtHwImmOffset(instruction)),
-            _ if thumb_decoders::is_sdt_sp_imm(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_sdt_sp_imm,
-            },
+            _ if thumb_decoders::is_sdt_halfword(instruction) => {
+                return Instruction::ThumbSdtHwImmOffset(ThumbSdtHwImmOffset(instruction))
+            }
+            _ if thumb_decoders::is_sdt_sp_imm(instruction) => {
+                return Instruction::ThumbSdtSpImm(ThumbSdtSpImm(instruction))
+            }
             _ if thumb_decoders::is_get_relative_address(instruction) => {
                 return Instruction::ThumbAdr(ThumbAdr(instruction))
             }
             _ if thumb_decoders::is_add_offset_to_sp(instruction) => {
                 return Instruction::ThumbAddToSp(ThumbAddToSp(instruction))
             }
-            _ if thumb_decoders::is_push_pop(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_push_pop,
-            },
-            _ if thumb_decoders::is_thumb_block_dt(instruction) => ARMDecodedInstruction {
-                instruction,
-                executable: CPU::thumb_multiple_load_or_store,
-            },
+            _ if thumb_decoders::is_push_pop(instruction) => return Instruction::ThumbPushPop(ThumbPushPop(instruction)),
+            _ if thumb_decoders::is_thumb_block_dt(instruction) => return Instruction::ThumbBlockDT(ThumbBlockDT(instruction)),
             _ if thumb_decoders::is_conditional_branch(instruction) => ARMDecodedInstruction {
                 instruction,
                 executable: CPU::thumb_conditional_branch,

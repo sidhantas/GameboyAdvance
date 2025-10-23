@@ -1,16 +1,17 @@
+use std::fmt::Display;
+
 use num_traits::Signed;
 
 use crate::{
     arm7tdmi::{
         arm::data_transfer_instructions::{
-            LoadOpcodes, SdtOpcode, SignedAndHwDtInstruction, SignedAndHwDtLoadOpcodes,
-            SignedAndHwDtOpcodes, StoreOpcodes,
+            BlockDTOpcodes, LoadOpcodes, RegisterList, SdtOpcode, SignedAndHwDtInstruction, SignedAndHwDtLoadOpcodes, SignedAndHwDtOpcodes, StoreOpcodes
         },
         cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
         instruction_table::{DecodeThumbInstructionToString, Execute, Operand},
     },
     memory::memory::GBAMemory,
-    types::{CYCLES, REGISTER},
+    types::{CYCLES, REGISTER, WORD},
     utils::{bits::Bits, instruction_to_string::print_register},
 };
 
@@ -196,11 +197,6 @@ impl DecodeThumbInstructionToString for ThumbSdtImmOffset {
 
 pub struct ThumbSdtHwImmOffset(pub u32);
 
-enum ThumbSdtHwImmOffsetOpcodes {
-    STRH,
-    LDRH,
-}
-
 impl ThumbSdtHwImmOffset {
     fn opcode(&self) -> SignedAndHwDtOpcodes {
         match self.0.get_bit(11) {
@@ -224,7 +220,12 @@ impl ThumbSdtHwImmOffset {
 
 impl Execute for ThumbSdtHwImmOffset {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
-        self.opcode().execute(cpu, memory, self.rd(), (cpu.get_register(self.rb()) + self.imm()) as usize)
+        self.opcode().execute(
+            cpu,
+            memory,
+            self.rd(),
+            (cpu.get_register(self.rb()) + self.imm()) as usize,
+        )
     }
 }
 
@@ -240,91 +241,209 @@ impl DecodeThumbInstructionToString for ThumbSdtHwImmOffset {
     }
 }
 
-impl CPU {
-    pub fn thumb_sdt_sp_imm(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
-        let opcode = instruction.get_bit(11);
-        let rd = (instruction & 0x0700) >> 8;
-        let imm = instruction & 0x00FF;
-        let operation = match opcode {
-            0b0 => CPU::str_instruction_execution,
-            0b1 => CPU::ldr_instruction_execution,
-            _ => panic!(),
-        };
+pub struct ThumbSdtSpImm(pub u32);
 
-        let address = self.get_sp() + imm * 4;
-
-        operation(self, rd, address, false, memory)
+impl ThumbSdtSpImm {
+    fn rd(&self) -> REGISTER {
+        (self.0 & 0x0700) >> 8
     }
 
-    pub fn thumb_push_pop(&mut self, instruction: u32, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 0;
-        let opcode = instruction.get_bit(11);
+    fn imm(&self) -> u32 {
+        self.0 & 0x00FF
+    }
 
-        let mut register_list: Vec<REGISTER> = Vec::new();
+    fn opcode(&self) -> SdtOpcode {
+        match self.0.get_bit(11) {
+            0b0 => SdtOpcode::Store(StoreOpcodes::STR),
+            0b1 => SdtOpcode::Load(LoadOpcodes::LDR),
+            _ => unreachable!(),
+        }
+    }
+}
 
-        for i in 0..8 {
-            if instruction.bit_is_set(i) {
-                register_list.push(i as REGISTER);
+impl Execute for ThumbSdtSpImm {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        self.opcode().execute(
+            cpu,
+            memory,
+            self.rd(),
+            (cpu.get_sp() + self.imm() * 4) as usize,
+        )
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbSdtSpImm {
+    fn instruction_to_string(&self) -> String {
+        format!(
+            "{} {}, [sp, {}]",
+            self.opcode(),
+            self.rd(),
+            Operand::Immediate(self.imm())
+        )
+    }
+}
+
+pub struct ThumbPushPop(pub u32);
+
+impl ThumbPushPop {
+    fn opcode(&self) -> ThumbPushPopOpcodes {
+        use ThumbPushPopOpcodes::*;
+        match self.0.get_bit(11) {
+            0b0 => PUSH,
+            0b1 => POP,
+            _ => unreachable!()
+        }
+    }
+
+    fn register_list(&self) -> impl Iterator<Item = REGISTER> {
+        let mut rlist = RegisterList {
+            list: self.0 & 0xFF,
+            i: 0
+        };
+
+        if self.0.bit_is_set(8) {
+            match self.opcode() {
+                ThumbPushPopOpcodes::PUSH => rlist.list.set_bit(14),
+                ThumbPushPopOpcodes::POP => rlist.list.set_bit(15),
             }
         }
-        cycles += self.advance_pipeline(memory);
 
-        match opcode {
-            0b0 => {
-                // STMDB (PUSH)
-                if instruction.bit_is_set(8) {
-                    register_list.push(LINK_REGISTER);
+        rlist
+    }
+}
+
+enum ThumbPushPopOpcodes {
+    PUSH,
+    POP
+}
+
+impl Display for ThumbPushPopOpcodes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            ThumbPushPopOpcodes::PUSH => "push",
+            ThumbPushPopOpcodes::POP => "pop",
+        })
+    }
+}
+
+impl Execute for ThumbPushPop {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 0;
+        cycles += cpu.advance_pipeline(memory);
+        match self.opcode() {
+            ThumbPushPopOpcodes::PUSH => {
+                let base_address = cpu.get_sp() as usize - self.register_list().count() * size_of::<WORD>();
+                let mut curr_address = base_address;
+                for register in self.register_list() {
+                    let data = cpu.get_register(register);
+                    cycles += memory.writeu32(curr_address, data);
+                    curr_address += size_of::<WORD>();
                 }
-                cycles += self.stmdb_execution(
-                    self.get_sp() as usize,
-                    &register_list,
-                    Some(STACK_POINTER),
-                    memory,
-                )
-            }
-            0b1 => {
-                // LDMIA (POP)
-                if instruction.bit_is_set(8) {
-                    register_list.push(PC_REGISTER as u32);
+                cpu.set_register(STACK_POINTER, base_address as u32);
+            },
+            ThumbPushPopOpcodes::POP => {
+                cycles += 1;
+                let mut curr_address = cpu.get_sp() as usize;
+                for register in self.register_list() {
+                    let memory_fetch = memory.readu32(curr_address);
+                    cycles += memory_fetch.cycles;
+                    let data = memory_fetch.data;
+                    cpu.set_register(register, data);
+                    curr_address += size_of::<WORD>();
+                    if register == PC_REGISTER as u32 {
+                        cpu.flush_pipeline(memory);
+                    }
                 }
-                cycles += self.ldmia_execution(
-                    self.get_sp() as usize,
-                    &register_list,
-                    Some(STACK_POINTER),
-                    memory,
-                );
-                if instruction.bit_is_set(8) {
-                    cycles += self.flush_pipeline(memory);
-                }
-            }
-            _ => panic!(),
+                cpu.set_register(STACK_POINTER, curr_address as u32);
+            },
         };
+
         cycles
     }
+}
 
-    pub fn thumb_multiple_load_or_store(
-        &mut self,
-        instruction: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let opcode = instruction.get_bit(11);
-        let rb = (instruction & 0x0700) >> 8;
+impl DecodeThumbInstructionToString for ThumbPushPop {
+    fn instruction_to_string(&self) -> String {
+        let mut rlist = Vec::new();
 
-        let mut register_list: Vec<REGISTER> = Vec::new();
-
-        for i in 0..8 {
-            if instruction.bit_is_set(i) {
-                register_list.push(i as REGISTER);
-            }
+        for register in self.register_list() {
+            rlist.push(print_register(&register));
         }
 
-        let base_address = self.get_register(rb) as usize;
+        let rlist = format!("{{{}}}", rlist.join(","));
 
-        match opcode {
-            0b0 => self.stmia_execution(base_address, &register_list, Some(rb), memory),
-            0b1 => self.ldmia_execution(base_address, &register_list, Some(rb), memory),
-            _ => panic!(),
+        format!("{} {rlist}", self.opcode())
+    }
+}
+
+pub struct ThumbBlockDT(pub u32);
+
+impl ThumbBlockDT {
+    fn opcode(&self) -> BlockDTOpcodes {
+        use BlockDTOpcodes::*;
+        match self.0.get_bit(11) {
+            0b0 => STM,
+            0b1 => LDM,
+            _ => unreachable!()
         }
+    }
+
+    fn register_list(&self) -> impl Iterator<Item = REGISTER> {
+        RegisterList {
+            list: self.0 & 0xFF,
+            i: 0
+        }
+    }
+
+    fn rb(&self) -> REGISTER {
+        (self.0 & 0x0700) >> 8
+    }
+}
+
+impl Execute for ThumbBlockDT {
+    fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
+        let mut cycles = 0;
+        match self.opcode() {
+            BlockDTOpcodes::STM => {
+                let mut curr_address = cpu.get_register(self.rb()) as usize;
+                for register in self.register_list() {
+                    let data = cpu.get_register(register);
+                    cycles += memory.writeu32(curr_address, data);
+                    curr_address += size_of::<WORD>();
+                }
+                cpu.set_register(self.rb(), curr_address as u32);
+            },
+            BlockDTOpcodes::LDM => {
+                cycles += 1;
+                let mut curr_address = cpu.get_register(self.rb()) as usize;
+                for register in self.register_list() {
+                    let memory_fetch = memory.readu32(curr_address);
+                    cycles += memory_fetch.cycles;
+                    let data = memory_fetch.data;
+                    cpu.set_register(register, data);
+                    curr_address += size_of::<WORD>();
+                }
+                cpu.set_register(self.rb(), curr_address as u32);
+            },
+        }
+        cycles
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbBlockDT {
+    fn instruction_to_string(&self) -> String {
+        let mut rlist = Vec::new();
+
+        for register in self.register_list() {
+            rlist.push(print_register(&register));
+        }
+
+        let rlist = format!("{{{}}}", rlist.join(","));
+
+        format!("{}, {}!, {}", match self.opcode() {
+            BlockDTOpcodes::STM => "stmia",
+            BlockDTOpcodes::LDM => "ldmia",
+        }, print_register(&self.rb()), rlist)
     }
 }
 

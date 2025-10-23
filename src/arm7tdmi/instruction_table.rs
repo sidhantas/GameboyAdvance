@@ -9,7 +9,7 @@ use crate::{
             self,
             alu::{
                 ThumbALUInstruction, ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
-            }, data_transfer_instructions::{ThumbSdtHwImmOffset, ThumbSdtImmOffset},
+            }, data_transfer_instructions::{ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm},
         },
     },
     memory::memory::GBAMemory,
@@ -76,6 +76,9 @@ pub enum Instruction {
     ThumbSdtOffset(ThumbSdtRegisterOffset),
     ThumbSdtImmOffset(ThumbSdtImmOffset),
     ThumbSdtHwImmOffset(ThumbSdtHwImmOffset),
+    ThumbSdtSpImm(ThumbSdtSpImm),
+    ThumbPushPop(ThumbPushPop),
+    ThumbBlockDT(ThumbBlockDT),
     NotImplemented(u32),
     Nop
 }
@@ -111,6 +114,9 @@ impl Execute for Instruction {
             Instruction::ThumbSdtOffset(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbSdtImmOffset(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbSdtHwImmOffset(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbSdtSpImm(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbPushPop(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbBlockDT(instruction) => instruction.execute(cpu, memory),
             Instruction::NotImplemented(instruction) => panic!("Not implemented: {:#x}", instruction),
             Instruction::Nop => return 0
         }

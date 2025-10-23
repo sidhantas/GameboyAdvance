@@ -412,7 +412,7 @@ impl DecodeARMInstructionToString for SignedAndHwDtInstruction {
 
 pub struct BlockDTInstruction(pub u32);
 
-enum BlockDTOpcodes {
+pub enum BlockDTOpcodes {
     STM,
     LDM,
 }
@@ -453,9 +453,9 @@ impl BlockDTInstruction {
     }
 }
 
-struct RegisterList {
-    list: u32,
-    i: u32,
+pub struct RegisterList {
+    pub(crate) list: u32,
+    pub(crate) i: u32,
 }
 
 impl Iterator for RegisterList {
@@ -630,117 +630,6 @@ impl DecodeARMInstructionToString for BlockDTInstruction {
 }
 
 impl CPU {
-    pub fn str_instruction_execution(
-        &mut self,
-        rd: REGISTER,
-        address: u32,
-        byte_transfer: bool,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let data: WORD = self.get_register(rd);
-        if byte_transfer {
-            self.set_executed_instruction(format_args!("STRB {} [{:#X}]", rd, address));
-            memory.write(address as usize, data as u8)
-        } else {
-            self.set_executed_instruction(format_args!("STR {} [{:#X}]", rd, address));
-            memory.writeu32(address as usize, data)
-        }
-    }
-
-    pub fn ldr_instruction_execution(
-        &mut self,
-        rd: REGISTER,
-        address: u32,
-        byte_transfer: bool,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut cycles = 1;
-        let data = {
-            let memory_fetch = if byte_transfer {
-                self.set_executed_instruction(format_args!("LDRB {} [{:#X}]", rd, address));
-                memory.read(address as usize).into()
-            } else {
-                self.set_executed_instruction(format_args!("LDR {} [{:#X}]", rd, address));
-                memory.readu32(address as usize)
-            };
-            cycles += memory_fetch.cycles;
-
-            memory_fetch.data
-        };
-
-        self.set_register(rd, data);
-        if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline(memory);
-        }
-
-        cycles
-    }
-
-    pub fn strh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
-        let mut data: WORD = self.get_register(rd);
-        if rd == PC_REGISTER as u32 {
-            data += 4
-        }
-        let cycles = { memory.writeu16(address as usize, data as u16) };
-
-        cycles
-    }
-
-    pub fn ldrsh_execution(
-        &mut self,
-        rd: REGISTER,
-        address: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut cycles = 1;
-        let memory_fetch = { memory.readu16(address as usize) };
-
-        cycles += memory_fetch.cycles;
-        let data = memory_fetch.data;
-
-        self.set_register(rd, sign_extend(data.into(), 15));
-        if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline(memory);
-        }
-
-        cycles
-    }
-
-    pub fn ldrsb_execution(
-        &mut self,
-        rd: REGISTER,
-        address: u32,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut cycles = 1;
-        let memory_fetch = { memory.read(address as usize) };
-
-        cycles += memory_fetch.cycles;
-        let data = memory_fetch.data;
-
-        self.set_register(rd, sign_extend(data.into(), 7));
-        if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline(memory);
-        }
-
-        cycles
-    }
-
-    pub fn ldrh_execution(&mut self, rd: REGISTER, address: u32, memory: &mut GBAMemory) -> CYCLES {
-        let mut cycles = 1;
-        let memory_fetch = { memory.readu16(address as usize) };
-
-        cycles += memory_fetch.cycles;
-        let data = memory_fetch.data;
-
-        self.set_register(rd, data.into());
-        if rd as usize == PC_REGISTER {
-            cycles += self.flush_pipeline(memory);
-        }
-
-        cycles
-    }
-
     pub fn stmia_execution(
         &mut self,
         base_address: usize,
