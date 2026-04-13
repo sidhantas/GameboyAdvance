@@ -6,22 +6,22 @@ use std::{
     io::Write,
 };
 
-use crate::{memory::memory::GBAMemory, types::*, utils::bits::Bits};
+use crate::{arm7tdmi::{cpsr::NewPSR, instruction_table::Instruction}, memory::memory::GBAMemory, types::*, utils::bits::Bits};
 
 use super::{cpsr::PSR, instruction_table::Execute, registers::Registers};
 
-pub const PC_REGISTER: usize = 15;
-pub const LINK_REGISTER: u32 = 14;
-pub const STACK_POINTER: u32 = 13;
+pub(crate) const PC_REGISTER: usize = 15;
+pub(crate) const LINK_REGISTER: u32 = 14;
+pub(crate) const STACK_POINTER: u32 = 13;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum InstructionMode {
+pub(crate) enum InstructionMode {
     ARM,
     THUMB,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum CPUMode {
+pub(crate) enum CPUMode {
     USER,
     FIQ, // Fast Interrupt
     IRQ, // IRQ
@@ -33,7 +33,7 @@ pub enum CPUMode {
 }
 
 #[repr(u8)]
-pub enum FlagsRegister {
+pub(crate) enum FlagsRegister {
     N = 31,
     Z = 30,
     C = 29,
@@ -42,44 +42,43 @@ pub enum FlagsRegister {
 
 #[derive(Default, Debug)]
 struct Status {
-    pub instruction_count: usize,
-    pub registers: [WORD; 16],
-    pub cpsr: PSR,
-    pub cycles: u64,
+    pub(crate) instruction_count: usize,
+    pub(crate) registers: [WORD; 16],
+    pub(crate) cpsr: NewPSR,
+    pub(crate) cycles: u64,
 }
 
 #[derive(Debug)]
-pub struct CPU {
+pub(crate) struct CPU {
     registers: Registers,
-    pub is_halted: bool,
-    pub prefetch: [Option<WORD>; 2],
-    pub executed_instruction_hex: ARMByteCode,
-    pub executed_instruction: String,
-    cpsr: PSR,
+    pub(crate) is_halted: bool,
+    pub(crate) prefetch: [WORD; 2],
+    pub(crate) executed_instruction_hex: ARMByteCode,
+    cpsr: NewPSR,
+    decoder: fn(&CPU, u32) -> Instruction,
     pub(super) shifter_output: u32,
-    pub spsr: [PSR; 5],
-    pub output_file: File,
-    pub cycles: u64,
+    pub(crate) spsr: [NewPSR; 5],
+    pub(crate) output_file: File,
+    pub(crate) cycles: u64,
     status_history: VecDeque<Status>,
-    pub interrupt_triggered: bool,
+    pub(crate) interrupt_triggered: bool,
     instruction_count: usize,
     pub(crate) show_executed_instructions: bool,
 }
 
 const OUTPUT_FILE: &str = "cycle_timings.txt";
 const HISTORY_SIZE: usize = 100_000;
-pub static mut INSTRUCTION_COUNT: usize = 0;
+pub(crate) static mut INSTRUCTION_COUNT: usize = 0;
 
 impl CPU {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let _ = remove_file(OUTPUT_FILE);
         let cpu = Self {
             registers: Registers::new(),
             executed_instruction_hex: 0,
-            executed_instruction: String::with_capacity(50),
-            prefetch: [None; 2],
-            cpsr: PSR::new_cpsr(),
-            spsr: [PSR::new_spsr(); 5],
+            prefetch: [0; 2],
+            cpsr: NewPSR::new_cpsr(),
+            spsr: [NewPSR::new_spsr(); 5],
             shifter_output: 0,
             output_file: OpenOptions::new()
                 .create(true)
@@ -87,6 +86,7 @@ impl CPU {
                 .open(OUTPUT_FILE)
                 .unwrap(),
             cycles: 0,
+            decoder: Self::decode_arm_instruction,
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
             is_halted: false,
             interrupt_triggered: false,
@@ -96,12 +96,12 @@ impl CPU {
         cpu
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         let new_cpu = CPU::new();
         *self = new_cpu;
     }
 
-    pub fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
+    pub(crate) fn execute_cpu_cycle(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!(""));
 
         //self.status_history.push_back(Status {
@@ -115,6 +115,7 @@ impl CPU {
         //    self.status_history.pop_front();
         //}
         //self.instruction_count += 1;
+
         if self.interrupt_triggered {
             self.raise_irq(memory);
             self.interrupt_triggered = false;
@@ -124,111 +125,113 @@ impl CPU {
             return 1;
         }
         let mut execution_cycles = 0;
-        if let Some(value) = self.prefetch[1] {
+        if self.prefetch[1] != 0 {
+            let value = self.prefetch[1];
             let decoded_instruction = self.decode_instruction(value);
+            self.prefetch[1] = 0;
             self.executed_instruction_hex = value;
-            self.prefetch[1] = None;
             execution_cycles += decoded_instruction.execute(self, memory) as u64;
         }
 
-        if let None = self.prefetch[1] {
-            // refill pipeline if decoded instruction doesn't advance the pipeline
+
+        if self.prefetch[1] == 0 {
             execution_cycles += self.advance_pipeline(memory) as u64;
+            self.cycles += execution_cycles;
         }
-        self.cycles += execution_cycles;
         execution_cycles as u8
     }
 
-    pub fn flush_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
-        let pc = self.get_pc() as usize;
-        let (prefetch_1, prefetch_0) = {
-            match self.get_instruction_mode() {
-                InstructionMode::ARM => {
-                    self.set_pc(pc as u32 + 8);
-                    memory.readu32_double(pc)
-                }
-                InstructionMode::THUMB => {
-                    self.set_pc(pc as u32 + 4);
-                    (memory.readu16(pc).into(), memory.readu16(pc + 2).into())
-                }
-            }
-        };
+    pub(crate) fn flush_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
+        self.advance_pipeline(memory) + self.advance_pipeline(memory)
+        //let pc = self.get_pc() as usize;
+        //let (prefetch_1, prefetch_0) = {
+        //    match self.get_instruction_mode() {
+        //        InstructionMode::ARM => {
+        //            self.set_pc(pc as u32 + 8);
+        //            memory.readu32_double(pc)
+        //        }
+        //        InstructionMode::THUMB => {
+        //            self.set_pc(pc as u32 + 4);
+        //            (memory.readu16(pc).into(), memory.readu16(pc + 2).into())
+        //        }
+        //    }
+        //};
 
-        self.prefetch[1] = Some(prefetch_1.data);
-        self.prefetch[0] = Some(prefetch_0.data);
+        //self.prefetch[1] = prefetch_1.data;
+        //self.prefetch[0] = prefetch_0.data;
 
-        prefetch_1.cycles + prefetch_0.cycles
+        //prefetch_1.cycles + prefetch_0.cycles
     }
 
-    pub fn advance_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
+    pub(crate) fn advance_pipeline(&mut self, memory: &mut GBAMemory) -> CYCLES {
         self.prefetch[1] = self.prefetch[0];
         self.fetch_instruction(memory)
     }
 
-    pub fn get_pc(&self) -> u32 {
+    pub(crate) fn get_pc(&self) -> u32 {
         self.registers.active_registers[PC_REGISTER] & 0xFFFF_FFFE
     }
 
-    pub fn set_pc(&mut self, address: WORD) {
+    pub(crate) fn set_pc(&mut self, address: WORD) {
         self.registers.active_registers[PC_REGISTER] = address & !1;
     }
 
-    pub fn set_sp(&mut self, address: WORD) {
+    pub(crate) fn set_sp(&mut self, address: WORD) {
         self.set_register(13, address);
     }
 
-    pub fn get_sp(&self) -> u32 {
+    pub(crate) fn get_sp(&self) -> u32 {
         self.get_register(13)
     }
 
-    pub fn get_cpsr(&self) -> PSR {
+    pub(crate) fn get_cpsr(&self) -> NewPSR {
         self.cpsr
     }
 
-    pub fn set_cpsr(&mut self, cpsr: PSR) {
+    pub(crate) fn set_cpsr(&mut self, cpsr: NewPSR) {
         self.cpsr = cpsr;
-        self.registers.update_registers(self.cpsr.mode);
+        self.registers.update_registers(self.cpsr.mode());
     }
 
-    pub fn disable_irq(&mut self) {
-        self.cpsr.irq_disabled = true;
+    pub(crate) fn disable_irq(&mut self) {
+        self.cpsr.set_irq(false);
     }
 
-    pub fn disable_fiq(&mut self) {
-        self.cpsr.fiq_disabled = true;
+    pub(crate) fn disable_fiq(&mut self) {
+        self.cpsr.set_fiq(false);
     }
 
-    pub fn pop_spsr(&mut self) {
+    pub(crate) fn pop_spsr(&mut self) {
         if let Some(spsr) = self.get_current_spsr() {
             self.cpsr = *spsr;
-            self.registers.update_registers(self.cpsr.mode);
+            self.registers.update_registers(self.cpsr.mode());
         }
     }
 
-    pub fn increment_pc(&mut self) {
+    pub(crate) fn increment_pc(&mut self) {
         match self.get_instruction_mode() {
             InstructionMode::ARM => self.registers.active_registers[PC_REGISTER] += 4,
             InstructionMode::THUMB => self.registers.active_registers[PC_REGISTER] += 2,
         }
     }
 
-    pub fn get_register(&self, register_num: REGISTER) -> WORD {
+    pub(crate) fn get_register(&self, register_num: REGISTER) -> WORD {
         self.registers.get_register(register_num as usize)
     }
 
-    pub fn set_register(&mut self, register_num: REGISTER, value: WORD) {
+    pub(crate) fn set_register(&mut self, register_num: REGISTER, value: WORD) {
         self.registers.set_register(register_num as usize, value);
     }
 
-    pub fn set_flag(&mut self, flag: FlagsRegister) {
+    pub(crate) fn set_flag(&mut self, flag: FlagsRegister) {
         self.cpsr.set_flag(flag);
     }
 
-    pub fn reset_flag(&mut self, flag: FlagsRegister) {
+    pub(crate) fn reset_flag(&mut self, flag: FlagsRegister) {
         self.cpsr.reset_flag(flag);
     }
 
-    pub fn get_flag(&self, flag: FlagsRegister) -> WORD {
+    pub(crate) fn get_flag(&self, flag: FlagsRegister) -> WORD {
         if self.cpsr.get_flag(flag) {
             1
         } else {
@@ -236,24 +239,28 @@ impl CPU {
         }
     }
 
-    pub fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
-        self.cpsr.instruction_mode = instruction_mode;
+    pub(crate) fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
+        self.cpsr.set_instruction_mode(instruction_mode);
+        self.decoder = match instruction_mode {
+            InstructionMode::ARM => Self::decode_arm_instruction,
+            InstructionMode::THUMB => Self::decode_thumb_instruction
+        }
     }
 
-    pub fn get_instruction_mode(&self) -> InstructionMode {
-        self.cpsr.instruction_mode
+    pub(crate) fn get_instruction_mode(&self) -> InstructionMode {
+        self.cpsr.instruction_mode()
     }
 
-    pub fn set_mode(&mut self, mode: CPUMode) {
-        self.cpsr.mode = mode;
+    pub(crate) fn set_mode(&mut self, mode: CPUMode) {
+        self.cpsr.set_mode(mode);
         self.registers.update_registers(mode);
     }
 
-    pub fn get_cpu_mode(&self) -> CPUMode {
-        self.cpsr.mode
+    pub(crate) fn get_cpu_mode(&self) -> CPUMode {
+        self.cpsr.mode()
     }
 
-    pub fn get_current_spsr(&mut self) -> Option<&mut PSR> {
+    pub(crate) fn get_current_spsr(&mut self) -> Option<&mut NewPSR> {
         match self.get_cpu_mode() {
             CPUMode::FIQ => Some(&mut self.spsr[0]),
             CPUMode::SVC => Some(&mut self.spsr[1]),
@@ -264,7 +271,7 @@ impl CPU {
         }
     }
 
-    pub fn set_flag_from_bit(&mut self, flag: FlagsRegister, bit: u8) {
+    pub(crate) fn set_flag_from_bit(&mut self, flag: FlagsRegister, bit: u8) {
         if bit == 0 {
             self.reset_flag(flag);
             return;
@@ -279,100 +286,10 @@ impl CPU {
                 InstructionMode::THUMB => memory.readu16(self.get_pc() as usize).into(),
             }
         };
-        self.prefetch[0] = Some(memory_fetch.data);
+        self.prefetch[0] = memory_fetch.data;
         self.increment_pc();
 
         memory_fetch.cycles
-    }
-
-    pub fn decode_shifted_register(
-        &mut self,
-        instruction: ARMByteCode,
-        shift_amount: u32,
-        operand_register_value: u32,
-        set_flags: bool,
-    ) -> u32 {
-        let shift_type = (instruction & 0x0000_0060) >> 5;
-
-        if !instruction.bit_is_set(4) && shift_amount == 0 {
-            // special case for shifting
-            return match shift_type {
-                // no change
-                0x00 => operand_register_value,
-                // LSR#32
-                0x01 => {
-                    if set_flags {
-                        self.set_flag_from_bit(
-                            FlagsRegister::C,
-                            operand_register_value.get_bit(31) as u8,
-                        );
-                    }
-                    0
-                }
-                // ASR#32
-                0x02 => {
-                    if operand_register_value.bit_is_set(31) {
-                        if set_flags {
-                            self.set_flag(FlagsRegister::C);
-                        }
-                        return u32::MAX;
-                    }
-                    if set_flags {
-                        self.reset_flag(FlagsRegister::C);
-                    }
-                    0
-                }
-                // RRX#1
-                0x03 => operand_register_value >> 1 | self.get_flag(FlagsRegister::C) << 31,
-                _ => panic!("Invalid Shift Type"),
-            };
-        }
-
-        match shift_type {
-            // Logical shift left
-            0x00 => {
-                if set_flags {
-                    if operand_register_value.bit_is_set((32 - shift_amount) as u8) {
-                        self.set_flag(FlagsRegister::C);
-                    } else {
-                        self.reset_flag(FlagsRegister::C);
-                    }
-                }
-                operand_register_value << shift_amount
-            }
-            // Logical shift right
-            0x01 => {
-                if set_flags && shift_amount > 0 {
-                    self.set_flag_from_bit(
-                        FlagsRegister::C,
-                        operand_register_value.get_bit(shift_amount as u8 - 1) as u8,
-                    );
-                }
-                operand_register_value >> shift_amount
-            }
-            // Arithmetic shift right
-            0x02 => {
-                if set_flags && shift_amount > 0 {
-                    self.set_flag_from_bit(
-                        FlagsRegister::C,
-                        operand_register_value.get_bit(shift_amount as u8 - 1) as u8,
-                    );
-                }
-                (operand_register_value as i32 >> shift_amount) as u32
-            }
-            // Rotate Right
-            0x03 => {
-                if set_flags && shift_amount > 0 {
-                    if operand_register_value.bit_is_set((shift_amount - 1) as u8) {
-                        self.set_flag(FlagsRegister::C);
-                    } else {
-                        self.reset_flag(FlagsRegister::C);
-                    }
-                }
-                operand_register_value.rotate_right(shift_amount)
-            }
-            _ => panic!("Invalid Shift Type"),
-        }
     }
 
     fn get_status(&self) -> Status {

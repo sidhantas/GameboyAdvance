@@ -44,6 +44,10 @@ impl CPU {
 
     fn condition_passed(&self, instruction: ARMByteCode) -> bool {
         let condition = (instruction & 0xF0000000) >> 28;
+        if condition == 0b1110 {
+            return true;
+        }
+
         match condition {
             0b0000 => self.get_flag(FlagsRegister::Z) == 1, //EQ
             0b0001 => self.get_flag(FlagsRegister::Z) == 0, //NE
@@ -70,7 +74,7 @@ impl CPU {
         }
     }
 
-    fn decode_arm_instruction(&self, instruction: ARMByteCode) -> Instruction {
+    pub(crate) fn decode_arm_instruction(&self, instruction: ARMByteCode) -> Instruction {
         if !(self.condition_passed(instruction)) {
             return Instruction::Nop;
         }
@@ -114,7 +118,7 @@ impl CPU {
         }
     }
 
-    fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
+    pub(crate) fn decode_thumb_instruction(&self, instruction: ARMByteCode) -> Instruction {
         match instruction {
             _ if thumb_decoders::is_add_or_subtract_instruction(instruction) => {
                 return Instruction::ThumbFullAdder(ThumbFullAdder(instruction))

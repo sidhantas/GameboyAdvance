@@ -170,7 +170,7 @@ impl GBAMemory {
             wait_cycles_u32,
             breakpoint_checker: None,
             triggered_breakpoints: Rc::new(RefCell::new(Vec::new())),
-            breakpoints: None,
+            breakpoints: Some(Vec::new()),
         };
 
         memory.ioram.io_store(0x088, 0x200);
@@ -179,33 +179,20 @@ impl GBAMemory {
     }
 
     pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
-        let mut index = 0;
         let mut bios_file = File::options().read(true).open(filename)?;
-        let mut buffer = [0; 1];
+        let mut buffer = Vec::new();
         bios_file.rewind()?;
-        while let Ok(read_bytes) = bios_file.read(&mut buffer[..]) {
-            if read_bytes == 0 {
-                break;
-            }
-            self.bios.memory[index] = buffer.clone()[0];
-            index += 1;
-        }
+         bios_file.read_to_end(&mut buffer)?;
+        self.bios.memory[..buffer.len()].copy_from_slice(&buffer[..]);
         Ok(())
     }
 
     pub fn initialize_rom(&mut self, filename: String) -> Result<(), std::io::Error> {
-        let mut index = 0;
-        let mut rom_file = File::options().read(true).open(filename).unwrap();
-        let mut buffer = [0; 1];
-        rom_file.rewind()?;
-        while let Ok(read_bytes) = rom_file.read(&mut buffer[..]) {
-            if read_bytes == 0 {
-                break;
-            }
-            self.rom.memory[index] = buffer.clone()[0];
-            index += 1;
-        }
-
+        let mut bios_file = File::options().read(true).open(filename)?;
+        let mut buffer = Vec::new();
+        bios_file.rewind()?;
+         bios_file.read_to_end(&mut buffer)?;
+        self.rom.memory[..buffer.len()].copy_from_slice(&buffer[..]);
         Ok(())
     }
 
@@ -338,7 +325,7 @@ impl GBAMemory {
             OAM_REGION => self.oam.readu32(address),
             ROM0A_REGION..=ROM2B_REGION => self.rom.readu32(address),
             SRAM_REGION => self.sram.readu32(address),
-            _ => unreachable!(/* "{}", region */), // Commented out because it's faster if we don't
+            _ => unreachable!("{:#x}", address), // Commented out because it's faster if we don't
         };
         //if let Some(breakpoint_checker) = &self.breakpoint_checker {
         //    breakpoint_checker(self, address);

@@ -139,7 +139,7 @@ mod instruction_tests {
     fn branch_ends_up_at_correct_address() {
         let mut gba = GBA::new_no_bios();
 
-        gba.cpu.prefetch[0] = Some(0xea000002); // b 0x10
+        gba.cpu.prefetch[0] = 0xea000002; // b 0x10
         gba.cpu.set_pc(4);
 
         let expected_destination = 0x10 + 0x8;
@@ -153,8 +153,8 @@ mod instruction_tests {
     fn branch_can_go_backwards() {
         let mut gba = GBA::new_no_bios();
 
-        gba.cpu.prefetch[0] = Some(0xeafffffa); // b 0x0
-        gba.cpu.prefetch[1] = Some(0xe1a00000);
+        gba.cpu.prefetch[0] = 0xeafffffa; // b 0x0
+        gba.cpu.prefetch[1] = 0xe1a00000;
 
         gba.cpu.set_pc(0x14);
 
@@ -170,7 +170,7 @@ mod instruction_tests {
     fn branch_with_link_stores_the_instruction_correctly() {
         let mut gba = GBA::new_no_bios();
 
-        gba.cpu.prefetch[0] = Some(0xebfffffa); // b 0
+        gba.cpu.prefetch[0] = 0xebfffffa; // b 0
         gba.cpu.set_pc(0x14);
 
         let expected_destination = 0x8;
@@ -188,7 +188,7 @@ mod instruction_tests {
         gba.cpu.set_mode(CPUMode::USER);
         gba.cpu.set_pc(0xF8);
 
-        gba.cpu.prefetch[1] = Some(0xef000000); // SWI
+        gba.cpu.prefetch[1] = 0xef000000; // SWI
         gba.step();
         assert_eq!(gba.cpu.get_pc(), 0x10);
         assert!(gba.cpu.get_cpu_mode() == CPUMode::SVC);

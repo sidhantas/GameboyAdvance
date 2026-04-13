@@ -77,7 +77,7 @@ mod single_data_swap_test {
         gba.cpu.set_register(3, 10);
         gba.memory.writeu32(0x3000200, 5);
 
-        gba.cpu.prefetch[0] = Some(0xe1014093); // swp r4, r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1014093; // swp r4, r3, [r1]
 
         gba.step();
         gba.step();
@@ -95,7 +95,7 @@ mod single_data_swap_test {
         gba.cpu.set_register(1, address);
         gba.memory.writeu32(address as usize, 5);
 
-        gba.cpu.prefetch[0] = Some(0xe1014091); // swp r4, r1, [r1]
+        gba.cpu.prefetch[0] = 0xe1014091; // swp r4, r1, [r1]
 
         gba.step();
         gba.step();
@@ -115,7 +115,7 @@ mod single_data_swap_test {
         gba.cpu.set_register(1, address);
         gba.memory.writeu32(address as usize, 5);
 
-        gba.cpu.prefetch[0] = Some(0xe1014094); // swp r4, r4, [r1]
+        gba.cpu.prefetch[0] = 0xe1014094; // swp r4, r4, [r1]
 
         gba.step();
         gba.step();
@@ -136,7 +136,7 @@ mod single_data_swap_test {
         gba.cpu.set_register(1, address);
         gba.memory.writeu32(address as usize, 0x7890_DD12);
 
-        gba.cpu.prefetch[0] = Some(0xe1414093); // swpb r4, r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1414093; // swpb r4, r3, [r1]
 
         gba.step();
         gba.step();

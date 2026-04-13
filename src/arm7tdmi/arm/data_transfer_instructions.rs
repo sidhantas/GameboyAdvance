@@ -479,11 +479,13 @@ impl Execute for BlockDTInstruction {
         let mut cycles = 0;
 
         let base_address = cpu.get_register(self.rn()) as usize;
+        // try and get rid of this line in the future
         cycles += cpu.advance_pipeline(memory);
 
         if self.s_bit() {
-            todo!("Implement S bit");
+            todo!();
         }
+
         match (self.opcode(), self.pre_add(), self.add_to_base()) {
             (BlockDTOpcodes::STM, true, true) => {
                 let mut curr_address = base_address;
@@ -629,81 +631,6 @@ impl DecodeARMInstructionToString for BlockDTInstruction {
     }
 }
 
-impl CPU {
-    pub fn stmia_execution(
-        &mut self,
-        base_address: usize,
-        register_list: &Vec<REGISTER>,
-        writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut cycles = 0;
-        let mut curr_address = base_address;
-        for register in register_list {
-            let data = self.get_register(*register);
-            cycles += memory.writeu32(curr_address, data);
-            curr_address += size_of::<WORD>();
-        }
-        if let Some(reg) = writeback_register {
-            self.set_register(reg, curr_address as u32);
-        }
-        self.set_executed_instruction(format_args!(
-            "STMIA [{:#X}], {}",
-            base_address,
-            print_vec(register_list)
-        ));
-        cycles
-    }
-
-    pub fn ldmia_execution(
-        &mut self,
-        base_address: usize,
-        register_list: &Vec<REGISTER>,
-        writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let mut cycles = 1;
-        let mut curr_address = base_address;
-        for register in register_list {
-            let memory_fetch = memory.readu32(curr_address);
-            cycles += memory_fetch.cycles;
-            let data = memory_fetch.data;
-            self.set_register(*register, data);
-            curr_address += size_of::<WORD>();
-        }
-        if let Some(reg) = writeback_register {
-            self.set_register(reg, curr_address as u32);
-        }
-        self.set_executed_instruction(format_args!(
-            "LDMIA [{:#X}], {}",
-            base_address,
-            print_vec(register_list)
-        ));
-        cycles
-    }
-
-    pub fn stmdb_execution(
-        &mut self,
-        base_address: usize,
-        register_list: &Vec<REGISTER>,
-        writeback_register: Option<REGISTER>,
-        memory: &mut GBAMemory,
-    ) -> CYCLES {
-        let base_address = base_address - register_list.len() * size_of::<WORD>();
-        let cycles = self.stmia_execution(base_address, register_list, None, memory);
-        self.set_executed_instruction(format_args!(
-            "STMDB [{:#X}], {}",
-            base_address,
-            print_vec(register_list)
-        ));
-        if let Some(reg) = writeback_register {
-            self.set_register(reg, base_address as u32);
-        }
-
-        cycles
-    }
-}
-
 #[cfg(test)]
 mod sdt_tests {
     use crate::gba::GBA;
@@ -719,7 +646,7 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, address);
 
-        gba.cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
+        gba.cpu.prefetch[0] = 0xe5912000; // ldr r2, [r1]
 
         gba.step();
         gba.step();
@@ -738,7 +665,7 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, address);
 
-        gba.cpu.prefetch[0] = Some(0xe5912008); // ldr r2, [r1, 8]
+        gba.cpu.prefetch[0] = 0xe5912008; // ldr r2, [r1, 8]
 
         gba.step();
         gba.step();
@@ -757,7 +684,7 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, address);
 
-        gba.cpu.prefetch[0] = Some(0xe5112008); // ldr r2, [r1, -8]
+        gba.cpu.prefetch[0] = 0xe5112008; // ldr r2, [r1, -8]
 
         gba.step();
         gba.step();
@@ -777,7 +704,7 @@ mod sdt_tests {
         gba.cpu.set_register(1, address);
         gba.cpu.set_register(3, 4);
 
-        gba.cpu.prefetch[0] = Some(0xe7912083); //  ldr r2, [r1, r3, lsl 1]
+        gba.cpu.prefetch[0] = 0xe7912083; //  ldr r2, [r1, r3, lsl 1]
 
         gba.step();
         gba.step();
@@ -796,14 +723,14 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, address);
 
-        gba.cpu.prefetch[0] = Some(0xe5d12000); //  ldrb r2, [r1]
+        gba.cpu.prefetch[0] = 0xe5d12000; //  ldrb r2, [r1]
 
         gba.step();
         gba.step();
 
         assert_eq!(gba.cpu.get_register(2), value & 0xFF);
 
-        gba.cpu.prefetch[0] = Some(0xe5d12001); //  ldrb r2, [r1, 1]
+        gba.cpu.prefetch[0] = 0xe5d12001; //  ldrb r2, [r1, 1]
 
         gba.step();
         gba.step();
@@ -822,7 +749,7 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, address);
 
-        gba.cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
+        gba.cpu.prefetch[0] = 0xe5912000; // ldr r2, [r1]
 
         gba.step();
         gba.step();
@@ -831,7 +758,7 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, 0x3000203);
 
-        gba.cpu.prefetch[0] = Some(0xe5912000); // ldr r2, [r1]
+        gba.cpu.prefetch[0] = 0xe5912000; // ldr r2, [r1]
 
         gba.step();
         gba.step();
@@ -849,7 +776,7 @@ mod sdt_tests {
 
         gba.cpu.set_register(1, address);
 
-        gba.cpu.prefetch[0] = Some(0xe4912004); // ldr r2, [r1], 4
+        gba.cpu.prefetch[0] = 0xe4912004; // ldr r2, [r1], 4
 
         gba.step();
         gba.step();
@@ -868,7 +795,7 @@ mod sdt_tests {
         gba.cpu.set_register(1, address);
         gba.cpu.set_register(2, value);
 
-        gba.cpu.prefetch[0] = Some(0xe5812000); // str r2, [r1]
+        gba.cpu.prefetch[0] = 0xe5812000; // str r2, [r1]
 
         gba.step();
         gba.step();
@@ -888,7 +815,7 @@ mod sdt_tests {
         gba.cpu.set_register(1, address);
         gba.cpu.set_register(2, value.into());
 
-        gba.cpu.prefetch[0] = Some(0xe5c12000); // strb r2, [r1]
+        gba.cpu.prefetch[0] = 0xe5c12000; // strb r2, [r1]
 
         gba.step();
         gba.step();
@@ -908,7 +835,7 @@ mod sdt_tests {
         gba.cpu.set_register(1, address);
         gba.cpu.set_register(3, value.into());
 
-        gba.cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1c130b0; // strh r3, [r1]
 
         gba.step();
         gba.step();
@@ -928,7 +855,7 @@ mod sdt_tests {
         gba.cpu.set_register(1, address);
         gba.cpu.set_register(3, value);
 
-        gba.cpu.prefetch[0] = Some(0xe1c130b0); // strh r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1c130b0; // strh r3, [r1]
 
         gba.step();
         gba.step();
@@ -948,7 +875,7 @@ mod sdt_tests {
         let _res = gba.memory.writeu32(address as usize, value);
 
         gba.cpu.set_register(1, address);
-        gba.cpu.prefetch[0] = Some(0xe1d130b0); // ldrh r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1d130b0; // ldrh r3, [r1]
 
         gba.step();
         gba.step();
@@ -966,7 +893,7 @@ mod sdt_tests {
         let _res = gba.memory.writeu32(address as usize, value);
 
         gba.cpu.set_register(1, address);
-        gba.cpu.prefetch[0] = Some(0xe1d130f0); // ldrsh r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1d130f0; // ldrsh r3, [r1]
 
         gba.step();
         gba.step();
@@ -984,7 +911,7 @@ mod sdt_tests {
         let _res = gba.memory.writeu32(address as usize, value);
 
         gba.cpu.set_register(1, address);
-        gba.cpu.prefetch[0] = Some(0xe1d130d0); // ldrsb r3, [r1]
+        gba.cpu.prefetch[0] = 0xe1d130d0; // ldrsb r3, [r1]
 
         gba.step();
         gba.step();
@@ -1005,7 +932,7 @@ mod sdt_tests {
 
         gba.memory.writeu32(address as usize + 4, 0x55);
 
-        gba.cpu.prefetch[0] = Some(0xe8950003); // ldmia r5, {r0, r1}
+        gba.cpu.prefetch[0] = 0xe8950003; // ldmia r5, {r0, r1}
 
         gba.step();
         gba.step();
@@ -1027,7 +954,7 @@ mod sdt_tests {
 
         gba.memory.writeu32(address as usize + 8, 0x55);
 
-        gba.cpu.prefetch[0] = Some(0xe9b500c0); // ldmib r5!, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe9b500c0; // ldmib r5!, {r6, r7}
 
         gba.step();
         gba.step();
@@ -1050,7 +977,7 @@ mod sdt_tests {
 
         gba.memory.writeu32(address as usize - 4, 0x55);
 
-        gba.cpu.prefetch[0] = Some(0xe83500c0); // ldmda r5!, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe83500c0; // ldmda r5!, {r6, r7}
 
         gba.step();
         gba.step();
@@ -1073,7 +1000,7 @@ mod sdt_tests {
 
         gba.memory.writeu32(address as usize - 8, 0x55);
 
-        gba.cpu.prefetch[0] = Some(0xe93500c0); // ldmdb r5!, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe93500c0; // ldmdb r5!, {r6, r7}
 
         gba.step();
         gba.step();
@@ -1093,7 +1020,7 @@ mod sdt_tests {
         gba.cpu.set_register(6, 123);
         gba.cpu.set_register(7, 456);
 
-        gba.cpu.prefetch[0] = Some(0xe88500c0); // stm r5, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe88500c0; // stm r5, {r6, r7}
 
         gba.step();
         gba.step();
@@ -1112,7 +1039,7 @@ mod sdt_tests {
         gba.cpu.set_register(6, 123);
         gba.cpu.set_register(7, 456);
 
-        gba.cpu.prefetch[0] = Some(0xe9a500c0); // stmib r5!, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe9a500c0; // stmib r5!, {r6, r7}
 
         gba.step();
         gba.step();
@@ -1132,7 +1059,7 @@ mod sdt_tests {
         gba.cpu.set_register(6, 123);
         gba.cpu.set_register(7, 456);
 
-        gba.cpu.prefetch[0] = Some(0xe92500c0); // stmdb r5!, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe92500c0; // stmdb r5!, {r6, r7}
 
         gba.step();
         gba.step();
@@ -1152,7 +1079,7 @@ mod sdt_tests {
         gba.cpu.set_register(6, 123);
         gba.cpu.set_register(7, 456);
 
-        gba.cpu.prefetch[0] = Some(0xe82500c0); // stmda r5!, {r6, r7}
+        gba.cpu.prefetch[0] = 0xe82500c0; // stmda r5!, {r6, r7}
 
         gba.step();
         gba.step();

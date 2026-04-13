@@ -71,7 +71,7 @@ impl CPU {
     }
 
     pub fn raise_irq(&mut self, memory: &mut GBAMemory) {
-        if !self.get_cpsr().irq_disabled {
+        if self.get_cpsr().irq_enabled() {
             self.raise_exception(Exceptions::IRQ, memory);
         }
     }

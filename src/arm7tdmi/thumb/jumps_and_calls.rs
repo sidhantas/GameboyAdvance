@@ -155,7 +155,7 @@ mod branch_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xd006); // beq 12
+        gba.cpu.prefetch[0] = 0xd006; // beq 12
         gba.cpu.set_pc(0x1a);
         gba.cpu.set_flag(FlagsRegister::Z);
         gba.step();
@@ -169,7 +169,7 @@ mod branch_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xd0f9); // beq 12
+        gba.cpu.prefetch[0] = 0xd0f9; // beq 12
         gba.cpu.set_pc(0x24);
         gba.cpu.set_flag(FlagsRegister::Z);
         gba.step();
@@ -183,10 +183,10 @@ mod branch_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xf000); // set link_register
+        gba.cpu.prefetch[0] = 0xf000; // set link_register
         gba.cpu.set_pc(0x1a);
         gba.step();
-        gba.cpu.prefetch[0] = Some(0xf802); // bl 0x20
+        gba.cpu.prefetch[0] = 0xf802; // bl 0x20
         gba.step();
         gba.step();
 

@@ -548,13 +548,18 @@ impl Execute for ThumbHiRegInstruction {
 
         match self.opcode() {
             ThumbHiRegOperations::Add => {
-                cpu.arm_add(rd, cpu.get_register(rd), cpu.get_register(rs), false)
+                let result = cpu.get_register(rd) + cpu.get_register(rs);
+                cpu.set_register(rd, result);
             }
             ThumbHiRegOperations::Cmp => {
-                cpu.arm_cmp(rd, cpu.get_register(rd), cpu.get_register(rs), true)
+                let rn_val = cpu.get_register(rd);
+                let rs_val = cpu.get_register(rs);
+                let result =  rn_val - rs_val;
+                cpu.set_arithmetic_flags(result, rn_val, !rs_val, 1, true);
+
             }
             ThumbHiRegOperations::Mov => {
-                cpu.arm_mov(rd, cpu.get_register(rd), cpu.get_register(rs), false)
+                cpu.set_register(rd, cpu.get_register(rs));
             }
         };
 
@@ -913,7 +918,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 20);
         gba.cpu.set_register(2, 43);
-        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1888; // adds r0, r1, r2
         gba.step();
         gba.step();
 
@@ -931,7 +936,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 20);
         gba.cpu.set_register(2, (-43 as i32) as u32);
-        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1888; // adds r0, r1, r2
         gba.step();
         gba.step();
 
@@ -949,7 +954,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 20);
         gba.cpu.set_register(2, (-20 as i32) as u32);
-        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1888; // adds r0, r1, r2
         gba.step();
         gba.step();
 
@@ -967,7 +972,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 0);
         gba.cpu.set_register(2, 0);
-        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1888; // adds r0, r1, r2
         gba.step();
         gba.step();
 
@@ -985,7 +990,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 0x1);
         gba.cpu.set_register(2, 0x7FFF_FFFF);
-        gba.cpu.prefetch[0] = Some(0x1888); // adds r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1888; // adds r0, r1, r2
         gba.step();
         gba.step();
 
@@ -1002,7 +1007,7 @@ mod thumb_add_and_subtract_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, -10 as i32 as u32);
-        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.cpu.prefetch[0] = 0x1d48; // adds r0, r1, 5
         gba.step();
         gba.step();
 
@@ -1019,7 +1024,7 @@ mod thumb_add_and_subtract_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, -5 as i32 as u32);
-        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.cpu.prefetch[0] = 0x1d48; // adds r0, r1, 5
         gba.step();
         gba.step();
 
@@ -1036,7 +1041,7 @@ mod thumb_add_and_subtract_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x7FFF_FFFF);
-        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.cpu.prefetch[0] = 0x1d48; // adds r0, r1, 5
         gba.step();
         gba.step();
 
@@ -1053,7 +1058,7 @@ mod thumb_add_and_subtract_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0xFFFF_FFFF);
-        gba.cpu.prefetch[0] = Some(0x1d48); // adds r0, r1, 5
+        gba.cpu.prefetch[0] = 0x1d48; // adds r0, r1, 5
         gba.step();
         gba.step();
 
@@ -1071,7 +1076,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 50);
         gba.cpu.set_register(2, 20);
-        gba.cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1a88; // subs r0, r1, r2
         gba.step();
         gba.step();
 
@@ -1089,7 +1094,7 @@ mod thumb_add_and_subtract_tests {
 
         gba.cpu.set_register(1, 25);
         gba.cpu.set_register(2, 50);
-        gba.cpu.prefetch[0] = Some(0x1a88); // subs r0, r1, r2
+        gba.cpu.prefetch[0] = 0x1a88; // subs r0, r1, r2
         gba.step();
         gba.step();
 
@@ -1116,7 +1121,7 @@ mod thumb_move_shifted_register_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x0F00_0000);
-        gba.cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
+        gba.cpu.prefetch[0] = 0x0148; // lsls r0, r1, 5
         gba.step();
         gba.step();
 
@@ -1133,7 +1138,7 @@ mod thumb_move_shifted_register_tests {
 
         gba.cpu.set_register(1, 0x0F00_0000);
         gba.cpu.set_flag(FlagsRegister::C);
-        gba.cpu.prefetch[0] = Some(0x0008); // lsls r0, r1, 0
+        gba.cpu.prefetch[0] = 0x0008; // lsls r0, r1, 0
         gba.step();
         gba.step();
 
@@ -1150,7 +1155,7 @@ mod thumb_move_shifted_register_tests {
 
         gba.cpu.set_register(1, 0xF000_0000);
         gba.cpu.set_flag(FlagsRegister::V);
-        gba.cpu.prefetch[0] = Some(0x0148); // lsls r0, r1, 5
+        gba.cpu.prefetch[0] = 0x0148; // lsls r0, r1, 5
         gba.step();
         gba.step();
 
@@ -1167,7 +1172,7 @@ mod thumb_move_shifted_register_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x0000_008F);
-        gba.cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
+        gba.cpu.prefetch[0] = 0x1108; // asrs r0, r1, 4
         gba.step();
         gba.step();
 
@@ -1183,7 +1188,7 @@ mod thumb_move_shifted_register_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x8000_008F);
-        gba.cpu.prefetch[0] = Some(0x1108); // asrs r0, r1, 4
+        gba.cpu.prefetch[0] = 0x1108; // asrs r0, r1, 4
         gba.step();
         gba.step();
 
@@ -1199,7 +1204,7 @@ mod thumb_move_shifted_register_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x8000_0000);
-        gba.cpu.prefetch[0] = Some(0x1008); // asrs r0, r1, 32
+        gba.cpu.prefetch[0] = 0x1008; // asrs r0, r1, 32
         gba.step();
         gba.step();
 
@@ -1215,7 +1220,7 @@ mod thumb_move_shifted_register_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x8000_008F);
-        gba.cpu.prefetch[0] = Some(0x0a88); // lsrs r0, r1, 10
+        gba.cpu.prefetch[0] = 0x0a88; // lsrs r0, r1, 10
         gba.step();
         gba.step();
 
@@ -1231,7 +1236,7 @@ mod thumb_move_shifted_register_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(1, 0x8000_008F);
-        gba.cpu.prefetch[0] = Some(0x0808); // lsrs r0, r1, 32
+        gba.cpu.prefetch[0] = 0x0808; // lsrs r0, r1, 32
         gba.step();
         gba.step();
 
@@ -1256,7 +1261,7 @@ mod thumb_move_compare_add_subtract_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0x200f); // movs r0, 15
+        gba.cpu.prefetch[0] = 0x200f; // movs r0, 15
         gba.step();
         gba.step();
 
@@ -1271,7 +1276,7 @@ mod thumb_move_compare_add_subtract_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0x2096); // movs r0, 150
+        gba.cpu.prefetch[0] = 0x2096; // movs r0, 150
         gba.step();
         gba.step();
 
@@ -1286,7 +1291,7 @@ mod thumb_move_compare_add_subtract_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0x2000); // movs r0, 0
+        gba.cpu.prefetch[0] = 0x2000; // movs r0, 0
         gba.step();
         gba.step();
 
@@ -1302,7 +1307,7 @@ mod thumb_move_compare_add_subtract_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(0, 15);
-        gba.cpu.prefetch[0] = Some(0x380f); // subs r0, 15
+        gba.cpu.prefetch[0] = 0x380f; // subs r0, 15
         gba.step();
         gba.step();
 
@@ -1318,7 +1323,7 @@ mod thumb_move_compare_add_subtract_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(0, 0x7FFF_FFFF);
-        gba.cpu.prefetch[0] = Some(0x300f); // adds r0, 15
+        gba.cpu.prefetch[0] = 0x300f; // adds r0, 15
         gba.step();
         gba.step();
 
@@ -1345,7 +1350,7 @@ mod thumb_alu_operations_tests {
 
         gba.cpu.set_register(0, 0x8123_2344);
         gba.cpu.set_register(1, 0x8000_2344);
-        gba.cpu.prefetch[0] = Some(0x4008); // ands r0, r1
+        gba.cpu.prefetch[0] = 0x4008; // ands r0, r1
         gba.step();
         gba.step();
 
@@ -1361,7 +1366,7 @@ mod thumb_alu_operations_tests {
 
         gba.cpu.set_register(0, 0x1010_1010);
         gba.cpu.set_register(1, 0x0101_0101);
-        gba.cpu.prefetch[0] = Some(0x4048); // eors r0, r1
+        gba.cpu.prefetch[0] = 0x4048; // eors r0, r1
         gba.step();
         gba.step();
 
@@ -1377,7 +1382,7 @@ mod thumb_alu_operations_tests {
 
         gba.cpu.set_register(0, 0x0F11_1230);
         gba.cpu.set_register(1, 5);
-        gba.cpu.prefetch[0] = Some(0x4088); // lsl r0, r1
+        gba.cpu.prefetch[0] = 0x4088; // lsl r0, r1
         gba.step();
         gba.step();
 
@@ -1394,7 +1399,7 @@ mod thumb_alu_operations_tests {
 
         gba.cpu.set_register(0, 0x0F11_1230);
         gba.cpu.set_register(1, 0);
-        gba.cpu.prefetch[0] = Some(0x40c8); // lsr r0, r1
+        gba.cpu.prefetch[0] = 0x40c8; // lsr r0, r1
         gba.step();
         gba.step();
 
@@ -1422,7 +1427,7 @@ mod thumb_hi_reg_operations {
         gba.cpu.set_register(0, 20);
         gba.cpu.set_register(11, 15);
         gba.cpu.set_flag(FlagsRegister::N);
-        gba.cpu.prefetch[1] = Some(0x4458); // add r0, r11
+        gba.cpu.prefetch[1] = 0x4458; // add r0, r11
         gba.step();
 
         assert_eq!(gba.cpu.get_register(0), 35);
@@ -1439,7 +1444,7 @@ mod thumb_hi_reg_operations {
         gba.cpu.set_register(0, 20);
         gba.cpu.set_register(11, 20);
         gba.cpu.set_flag(FlagsRegister::N);
-        gba.cpu.prefetch[0] = Some(0x4558); // cmp r0, r11
+        gba.cpu.prefetch[0] = 0x4558; // cmp r0, r11
         gba.step();
         gba.step();
 
@@ -1457,7 +1462,7 @@ mod thumb_hi_reg_operations {
         gba.cpu.set_register(0, 20);
         gba.cpu.set_register(11, 55);
         gba.cpu.set_flag(FlagsRegister::N);
-        gba.cpu.prefetch[0] = Some(0x4658); // cmp r0, r11
+        gba.cpu.prefetch[0] = 0x4658; // cmp r0, r11
         gba.step();
         gba.step();
 
@@ -1480,7 +1485,7 @@ mod thumb_bx_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_register(5, 0x16);
-        gba.cpu.prefetch[0] = Some(0x4728); // bx r5
+        gba.cpu.prefetch[0] = 0x4728; // bx r5
         gba.step();
         gba.step();
 
@@ -1497,7 +1502,7 @@ mod thumb_bx_tests {
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
         gba.cpu.set_pc(0x16);
-        gba.cpu.prefetch[0] = Some(0x4778); // bx r15
+        gba.cpu.prefetch[0] = 0x4778; // bx r15
         gba.step();
         gba.step();
 
@@ -1523,7 +1528,7 @@ mod get_relative_address_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xa503); // add r5, pc, 12
+        gba.cpu.prefetch[0] = 0xa503; // add r5, pc, 12
         gba.cpu.set_pc(2);
         gba.step();
         gba.step();
@@ -1537,7 +1542,7 @@ mod get_relative_address_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xad04); // add r5, sp, 16
+        gba.cpu.prefetch[0] = 0xad04; // add r5, sp, 16
         gba.cpu.set_sp(2);
         gba.step();
         gba.step();
@@ -1550,7 +1555,7 @@ mod get_relative_address_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xb07d); // add sp, 500
+        gba.cpu.prefetch[0] = 0xb07d; // add sp, 500
         gba.cpu.set_sp(2);
         gba.step();
         gba.step();
@@ -1563,7 +1568,7 @@ mod get_relative_address_tests {
         let mut gba = GBA::new_no_bios();
         gba.cpu.set_instruction_mode(InstructionMode::THUMB);
 
-        gba.cpu.prefetch[0] = Some(0xb0fd); // add sp, 500
+        gba.cpu.prefetch[0] = 0xb0fd; // add sp, 500
         gba.cpu.set_sp(2);
         gba.step();
         gba.step();

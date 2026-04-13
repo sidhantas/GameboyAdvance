@@ -38,7 +38,7 @@ fn main() -> Result<(), std::io::Error> {
     let (ppu_to_display_send, ppu_to_display_recv) = channel();
     thread::scope(move |scope| {
         scope.spawn(move || start_debugger(bios, rom, gba_pixel_buff, ppu_to_display_send));
-        //start_display(pixel_buffer.clone(), ppu_to_display_recv);
+        start_display(pixel_buffer.clone(), ppu_to_display_recv);
     });
 
     Ok(())

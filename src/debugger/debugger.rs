@@ -310,14 +310,14 @@ fn draw_cpu(
 
     let instruction = Paragraph::new(format!(
         "fetched inst:\n{:#010x}",
-        cpu.prefetch[0].unwrap_or(0)
+        cpu.prefetch[0]
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });
 
     let decoded_instruction = Paragraph::new(format!(
         "decoded inst:\n{:#010x}",
-        cpu.prefetch[1].unwrap_or(0)
+        cpu.prefetch[1]
     ))
     .alignment(tui::layout::Alignment::Center)
     .wrap(Wrap { trim: true });

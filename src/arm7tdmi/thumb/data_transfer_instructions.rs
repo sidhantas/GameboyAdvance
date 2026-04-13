@@ -35,7 +35,6 @@ impl Execute for LdrPCRelative {
 
         cycles += memory_fetch.cycles;
         let data = memory_fetch.data;
-        cycles += cpu.advance_pipeline(memory);
 
         cpu.set_register(self.rd(), data);
         cycles
@@ -329,13 +328,15 @@ impl Display for ThumbPushPopOpcodes {
 impl Execute for ThumbPushPop {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
-        cycles += cpu.advance_pipeline(memory);
         match self.opcode() {
             ThumbPushPopOpcodes::PUSH => {
                 let base_address = cpu.get_sp() as usize - self.register_list().count() * size_of::<WORD>();
                 let mut curr_address = base_address;
                 for register in self.register_list() {
-                    let data = cpu.get_register(register);
+                    let mut data = cpu.get_register(register);
+                    if register == PC_REGISTER as u32 {
+                        data += 2;
+                    }
                     cycles += memory.writeu32(curr_address, data);
                     curr_address += size_of::<WORD>();
                 }
@@ -459,7 +460,7 @@ mod thumb_ldr_str_tests {
         gba.memory.writeu32(0x3000024, 0x55);
 
         gba.cpu.set_pc(0x3000016);
-        gba.cpu.prefetch[0] = Some(0x4d03); // ldr r5, [pc, 12]
+        gba.cpu.prefetch[0] = 0x4d03; // ldr r5, [pc, 12]
         gba.step();
         gba.step();
 
