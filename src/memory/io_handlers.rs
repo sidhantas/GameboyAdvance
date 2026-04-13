@@ -625,14 +625,7 @@ impl IOBlock {
                         self.timers.reload_timer(timer_num);
                     }
                     let tmcnth = TMCntH(value);
-                    self.timers
-                        .set_timer_enabled(timer_num, tmcnth.timer_enabled());
-                    self.timers
-                        .set_count_up_timing(timer_num, tmcnth.count_up_timing());
-                    self.timers
-                        .set_prescalar_value(timer_num, tmcnth.prescaler_value() * u16::MAX as u32);
-                    self.timers
-                        .set_timer_irq_enable(timer_num, tmcnth.timer_irq_enable());
+                    self.timers.update_tmcnth(timer_num, tmcnth);
                 }
                 _ => return,
             }

@@ -63,7 +63,7 @@ impl GBA {
         self.ppu
             .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);
         let triggered_irqs = self.memory.ioram.timers.tick(cpu_cycles.into());
-        if triggered_irqs.iter().any(|x| identity(*x)) {
+        if triggered_irqs.into_iter().any(identity) {
             let mut if_flag = self.memory.io_load(IF);
             for i in 0..triggered_irqs.len() {
                 if triggered_irqs[i] == true {

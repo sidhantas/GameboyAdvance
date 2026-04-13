@@ -1,5 +1,6 @@
 use crate::utils::bits::Bits;
 
+#[derive(Debug, Clone, Copy, Default)]
 pub struct TMCntH(pub u16);
 
 impl TMCntH {
