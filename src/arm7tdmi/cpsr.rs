@@ -1,23 +1,26 @@
-use crate::utils::bits::{self, Bits};
+use std::fmt::Display;
+
+use crate::{arm7tdmi::{cpu::CPU, instruction_table::Instruction}, utils::bits::Bits};
 
 use super::cpu::{CPUMode, FlagsRegister, InstructionMode};
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct NewPSR(u32);
+pub(crate) struct PSR(u32);
 
-impl From<NewPSR> for u32 {
-    fn from(value: NewPSR) -> Self {
+
+impl From<PSR> for u32 {
+    fn from(value: PSR) -> Self {
         value.0
     }
 }
 
-impl From<u32> for NewPSR {
+impl From<u32> for PSR {
     fn from(value: u32) -> Self {
         Self(value)
     }
 }
 
-impl Default for NewPSR {
+impl Default for PSR {
     fn default() -> Self {
         Self(0b0000_0000_0000_0000_0000_0000_1101_0011)
     }
@@ -31,7 +34,7 @@ const ABT_BITS: u32 = 0b10111;
 const UND_BITS: u32 = 0b11011;
 const SYS_BITS: u32 = 0b11111;
 
-impl NewPSR {
+impl PSR {
     pub(crate) fn new_cpsr() -> Self {
         Self(0b0000_0000_0000_0000_0000_0000_1101_0011)
     }
@@ -102,14 +105,13 @@ impl NewPSR {
         self.0.set_bit(7);
     }
 
-    pub(crate) fn irq_enabled(&mut self) -> bool{
+    pub(crate) fn irq_enabled(&self) -> bool {
         !self.0.bit_is_set(7)
     }
 
-    pub(crate) fn fiq_enabled(&mut self) -> bool{
+    pub(crate) fn fiq_enabled(&self) -> bool {
         !self.0.bit_is_set(6)
     }
-
 
     pub(crate) fn set_fiq(&mut self, enabled: bool) {
         if enabled {
@@ -122,16 +124,102 @@ impl NewPSR {
 
     pub(crate) fn set_mode(&mut self, mode: CPUMode) {
         self.0 &= !SYS_BITS;
-        self.0
-            |= match mode {
-                CPUMode::USER => USER_BITS,
-                CPUMode::FIQ => FIQ_BITS,
-                CPUMode::IRQ => IRQ_BITS,
-                CPUMode::SVC => SVC_BITS,
-                CPUMode::ABT => ABT_BITS,
-                CPUMode::UND => UND_BITS,
-                CPUMode::SYS => SYS_BITS,
-                CPUMode::INVALID(_) => unreachable!(),
+        self.0 |= match mode {
+            CPUMode::USER => USER_BITS,
+            CPUMode::FIQ => FIQ_BITS,
+            CPUMode::IRQ => IRQ_BITS,
+            CPUMode::SVC => SVC_BITS,
+            CPUMode::ABT => ABT_BITS,
+            CPUMode::UND => UND_BITS,
+            CPUMode::SYS => SYS_BITS,
+            CPUMode::INVALID(_) => unreachable!(),
+        }
+    }
+}
+
+impl Display for PSR {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            if self.get_flag(FlagsRegister::N) {
+                "N"
+            } else {
+                "-"
             }
+        )?;
+        write!(
+            f,
+            "{}",
+            if self.get_flag(FlagsRegister::Z) {
+                "Z"
+            } else {
+                "-"
+            }
+        )?;
+        write!(
+            f,
+            "{}",
+            if self.get_flag(FlagsRegister::C) {
+                "C"
+            } else {
+                "-"
+            }
+        )?;
+        write!(
+            f,
+            "{}",
+            if self.get_flag(FlagsRegister::V) {
+                "V"
+            } else {
+                "-"
+            }
+        )?;
+
+
+        write!(
+            f,
+            "{}",
+            if self.irq_enabled() {
+                "I"
+            } else {
+                "-"
+            }
+        )?;
+
+        write!(
+            f,
+            "{}",
+            if self.fiq_enabled() {
+                "F"
+            } else {
+                "-"
+            }
+        )?;
+        write!(
+            f,
+            "{}",
+            match self.instruction_mode() {
+                InstructionMode::ARM => "A",
+                InstructionMode::THUMB => "T",
+            }
+        )?;
+
+        write!(
+            f,
+            "{}",
+            match self.mode() {
+                CPUMode::USER => "USER",
+                CPUMode::FIQ => "FIQ",
+                CPUMode::IRQ => "IRQ",
+                CPUMode::SVC => "SVC",
+                CPUMode::ABT => "ABT",
+                CPUMode::UND => "UND",
+                CPUMode::SYS => "SYS",
+                CPUMode::INVALID(_) => panic!(),
+            }
+        )?;
+
+        Ok(())
     }
 }

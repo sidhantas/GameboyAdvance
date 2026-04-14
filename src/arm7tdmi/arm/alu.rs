@@ -5,7 +5,7 @@ use num_traits::PrimInt;
 
 use crate::{
     arm7tdmi::{
-        cpsr::{NewPSR, PSR},
+        cpsr::{PSR},
         cpu::{CPU, CPUMode, FlagsRegister, PC_REGISTER},
         instruction_table::{DecodeARMInstructionToString, Execute, Operand},
     },
@@ -422,9 +422,11 @@ impl Execute for MSRInstruction {
                 let Some(spsr) = cpu.get_current_spsr() else {
                     return 0;
                 };
-                *spsr = NewPSR::from(destination_psr);
+                *spsr = PSR::from(destination_psr);
             }
-            PSRRegister::CPSR => cpu.set_cpsr(destination_psr.into()),
+            PSRRegister::CPSR => {
+                cpu.set_cpsr(destination_psr.into())
+            },
         }
 
         return 0;

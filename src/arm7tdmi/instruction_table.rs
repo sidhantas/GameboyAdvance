@@ -18,7 +18,7 @@ use crate::{
 
 use super::{arm::{data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction}, instructions::ARMDecodedInstruction, multiply::MultiplyInstruction}, cpu::CPU, thumb::data_transfer_instructions::{LdrPCRelative, ThumbSdtRegisterOffset}};
 
-pub trait Execute {
+pub(crate) trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
 }
 
@@ -127,6 +127,55 @@ impl Execute for Instruction {
             Instruction::Nop => return 0
         }
     }
+}
+
+pub(crate) fn instruction_to_string(condition_code: u32, instruction: Instruction) -> String {
+    let condition_code = condition_code_as_str(condition_code);
+
+    let executed_instruction_print = match instruction {
+        Instruction::ALUInstruction(data_processing_instruction) => {
+            data_processing_instruction.instruction_to_string(condition_code)
+        }
+        Instruction::MRS(data_processing_instruction) => data_processing_instruction
+            .instruction_to_string(condition_code),
+        Instruction::MSR(data_processing_instruction) => data_processing_instruction
+            .instruction_to_string(condition_code),
+        Instruction::ThumbFullAdder(full_adder) => full_adder.instruction_to_string(),
+        Instruction::ThumbMoveShiftedRegister(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbAluInstruction(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbArithmeticImmInstruction(instruction) => {
+            instruction.instruction_to_string()
+        }
+        Instruction::ThumbHiRegisterInstruction(instruction) => {
+            instruction.instruction_to_string()
+        }
+        Instruction::ThumbBx(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbAdr(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbAddToSp(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbSdtImmOffset(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbSdtHwImmOffset(instruction) => instruction.instruction_to_string(),
+        Instruction::SdtInstruction(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::SignedAndHwDtInstruction(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::BlockDT(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::Branch(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::BranchAndExchange(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::SWI(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::Swap(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::Multiply(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::LdrPcRelative(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbSdtOffset(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbSdtSpImm(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbPushPop(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbBlockDT(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbConditionalBranch(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbUnconditionalBranch(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbSetLinkRegister(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbLongBranchWithLink(instruction) => instruction.instruction_to_string(),
+        Instruction::Nop => "nop".into(),
+        Instruction::NotImplemented(_) => "not implemented".into(),
+    };
+
+    executed_instruction_print
 }
 
 #[derive(Debug)]

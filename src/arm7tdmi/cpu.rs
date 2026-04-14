@@ -6,9 +6,14 @@ use std::{
     io::Write,
 };
 
-use crate::{arm7tdmi::{cpsr::NewPSR, instruction_table::Instruction}, memory::memory::GBAMemory, types::*, utils::bits::Bits};
+use crate::{
+    arm7tdmi::{cpsr::PSR, instruction_table::Instruction},
+    memory::memory::GBAMemory,
+    types::*,
+    utils::bits::Bits,
+};
 
-use super::{cpsr::PSR, instruction_table::Execute, registers::Registers};
+use super::{instruction_table::Execute, registers::Registers};
 
 pub(crate) const PC_REGISTER: usize = 15;
 pub(crate) const LINK_REGISTER: u32 = 14;
@@ -44,7 +49,7 @@ pub(crate) enum FlagsRegister {
 struct Status {
     pub(crate) instruction_count: usize,
     pub(crate) registers: [WORD; 16],
-    pub(crate) cpsr: NewPSR,
+    pub(crate) cpsr: PSR,
     pub(crate) cycles: u64,
 }
 
@@ -54,10 +59,9 @@ pub(crate) struct CPU {
     pub(crate) is_halted: bool,
     pub(crate) prefetch: [WORD; 2],
     pub(crate) executed_instruction_hex: ARMByteCode,
-    cpsr: NewPSR,
-    decoder: fn(&CPU, u32) -> Instruction,
+    cpsr: PSR,
     pub(super) shifter_output: u32,
-    pub(crate) spsr: [NewPSR; 5],
+    pub(crate) spsr: [PSR; 5],
     pub(crate) output_file: File,
     pub(crate) cycles: u64,
     status_history: VecDeque<Status>,
@@ -77,8 +81,8 @@ impl CPU {
             registers: Registers::new(),
             executed_instruction_hex: 0,
             prefetch: [0; 2],
-            cpsr: NewPSR::new_cpsr(),
-            spsr: [NewPSR::new_spsr(); 5],
+            cpsr: PSR::new_cpsr(),
+            spsr: [PSR::new_spsr(); 5],
             shifter_output: 0,
             output_file: OpenOptions::new()
                 .create(true)
@@ -86,7 +90,6 @@ impl CPU {
                 .open(OUTPUT_FILE)
                 .unwrap(),
             cycles: 0,
-            decoder: Self::decode_arm_instruction,
             status_history: VecDeque::with_capacity(HISTORY_SIZE),
             is_halted: false,
             interrupt_triggered: false,
@@ -132,7 +135,6 @@ impl CPU {
             self.executed_instruction_hex = value;
             execution_cycles += decoded_instruction.execute(self, memory) as u64;
         }
-
 
         if self.prefetch[1] == 0 {
             execution_cycles += self.advance_pipeline(memory) as u64;
@@ -184,11 +186,11 @@ impl CPU {
         self.get_register(13)
     }
 
-    pub(crate) fn get_cpsr(&self) -> NewPSR {
+    pub(crate) fn get_cpsr(&self) -> PSR {
         self.cpsr
     }
 
-    pub(crate) fn set_cpsr(&mut self, cpsr: NewPSR) {
+    pub(crate) fn set_cpsr(&mut self, cpsr: PSR) {
         self.cpsr = cpsr;
         self.registers.update_registers(self.cpsr.mode());
     }
@@ -204,6 +206,7 @@ impl CPU {
     pub(crate) fn pop_spsr(&mut self) {
         if let Some(spsr) = self.get_current_spsr() {
             self.cpsr = *spsr;
+            self.set_instruction_mode(self.cpsr.instruction_mode());
             self.registers.update_registers(self.cpsr.mode());
         }
     }
@@ -241,10 +244,6 @@ impl CPU {
 
     pub(crate) fn set_instruction_mode(&mut self, instruction_mode: InstructionMode) {
         self.cpsr.set_instruction_mode(instruction_mode);
-        self.decoder = match instruction_mode {
-            InstructionMode::ARM => Self::decode_arm_instruction,
-            InstructionMode::THUMB => Self::decode_thumb_instruction
-        }
     }
 
     pub(crate) fn get_instruction_mode(&self) -> InstructionMode {
@@ -260,7 +259,7 @@ impl CPU {
         self.cpsr.mode()
     }
 
-    pub(crate) fn get_current_spsr(&mut self) -> Option<&mut NewPSR> {
+    pub(crate) fn get_current_spsr(&mut self) -> Option<&mut PSR> {
         match self.get_cpu_mode() {
             CPUMode::FIQ => Some(&mut self.spsr[0]),
             CPUMode::SVC => Some(&mut self.spsr[1]),

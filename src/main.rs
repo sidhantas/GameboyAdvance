@@ -2,10 +2,12 @@ use std::sync::Arc;
 use std::thread;
 use std::{panic, sync::mpsc::channel};
 
-use debugger::debugger::start_debugger;
 use getopts::Options;
 use graphics::display::{start_display, DisplayBuffer};
 use std::env;
+
+use crate::debugger::terminal_debugger::start_debugger;
+
 mod arm7tdmi;
 mod debugger;
 mod gba;

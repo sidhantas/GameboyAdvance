@@ -28,8 +28,8 @@ use crate::{
     arm7tdmi::{
         cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
         instruction_table::{
-            condition_code_as_str, DecodeARMInstructionToString, DecodeThumbInstructionToString,
-            Instruction,
+            condition_code_as_str, instruction_to_string, DecodeARMInstructionToString,
+            DecodeThumbInstructionToString, Instruction,
         },
         thumb::alu::ThumbFullAdder,
     },
@@ -308,70 +308,26 @@ fn draw_cpu(
         .alignment(tui::layout::Alignment::Center)
         .wrap(Wrap { trim: true });
 
-    let instruction = Paragraph::new(format!(
-        "fetched inst:\n{:#010x}",
-        cpu.prefetch[0]
-    ))
-    .alignment(tui::layout::Alignment::Center)
-    .wrap(Wrap { trim: true });
+    let instruction = Paragraph::new(format!("fetched inst:\n{:#010x}", cpu.prefetch[0]))
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
 
-    let decoded_instruction = Paragraph::new(format!(
-        "decoded inst:\n{:#010x}",
-        cpu.prefetch[1]
-    ))
-    .alignment(tui::layout::Alignment::Center)
-    .wrap(Wrap { trim: true });
+    let decoded_instruction = Paragraph::new(format!("decoded inst:\n{:#010x}", cpu.prefetch[1]))
+        .alignment(tui::layout::Alignment::Center)
+        .wrap(Wrap { trim: true });
 
     let executed_instruction_decode =
         cpu.decode_instruction((cpu.executed_instruction_hex & !0xF0000000) | 0b1110 << 28);
-    let condition_code = condition_code_as_str((cpu.executed_instruction_hex & 0xF0000000) >> 28);
-    let executed_instruction_print = match executed_instruction_decode {
-        Instruction::ALUInstruction(data_processing_instruction) => {
-            &data_processing_instruction.instruction_to_string(condition_code)
-        }
-        Instruction::MRS(data_processing_instruction) => &data_processing_instruction
-            .instruction_to_string(condition_code),
-        Instruction::MSR(data_processing_instruction) => &data_processing_instruction
-            .instruction_to_string(condition_code),
-        Instruction::ThumbFullAdder(full_adder) => &full_adder.instruction_to_string(),
-        Instruction::ThumbMoveShiftedRegister(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbAluInstruction(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbArithmeticImmInstruction(instruction) => {
-            &instruction.instruction_to_string()
-        }
-        Instruction::ThumbHiRegisterInstruction(instruction) => {
-            &instruction.instruction_to_string()
-        }
-        Instruction::ThumbBx(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbAdr(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbAddToSp(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbSdtImmOffset(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbSdtHwImmOffset(instruction) => &instruction.instruction_to_string(),
-        Instruction::SdtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::SignedAndHwDtInstruction(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::BlockDT(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::Branch(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::BranchAndExchange(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::SWI(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::Swap(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::Multiply(instruction) => &instruction.instruction_to_string(condition_code),
-        Instruction::LdrPcRelative(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbSdtOffset(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbSdtSpImm(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbPushPop(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbBlockDT(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbConditionalBranch(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbUnconditionalBranch(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbSetLinkRegister(instruction) => &instruction.instruction_to_string(),
-        Instruction::ThumbLongBranchWithLink(instruction) => &instruction.instruction_to_string(),
-        Instruction::Nop => "nop",
-        Instruction::NotImplemented(_) => "not implemented",
-    };
 
-    let executed_instruction =
-        Paragraph::new(format!("executed inst:\n{}", executed_instruction_print))
-            .alignment(tui::layout::Alignment::Center)
-            .wrap(Wrap { trim: true });
+    let executed_instruction = Paragraph::new(format!(
+        "executed inst:\n{}",
+        instruction_to_string(
+            cpu.executed_instruction_hex >> 28,
+            executed_instruction_decode
+        )
+    ))
+    .alignment(tui::layout::Alignment::Center)
+    .wrap(Wrap { trim: true });
 
     let inst_mode = Paragraph::new(format!("{:#010X}", cpu.executed_instruction_hex))
         .alignment(tui::layout::Alignment::Center)

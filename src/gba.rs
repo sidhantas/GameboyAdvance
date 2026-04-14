@@ -2,12 +2,14 @@ use std::convert::identity;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
+use crate::arm7tdmi::instruction_table::instruction_to_string;
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::PPU;
 use crate::memory::io_handlers::IF;
 use crate::memory::memory::CPUCallbacks;
 use crate::utils::bits::Bits;
+use crate::utils::instruction_to_string::print_register;
 use crate::utils::utils::KillSignal;
 use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
@@ -58,6 +60,39 @@ impl GBA {
         self.ppu.reset();
     }
 
+    pub fn get_status(&self) {
+        for i in 0..4 {
+            for j in 0..4 {
+                let register = i * 4 + j;
+                print!(
+                    "{}: 0x{:<8x} ",
+                    print_register(&register),
+                    self.cpu.get_register(register)
+                );
+            }
+            println!();
+        }
+
+        println!("CPSR: {}", self.cpu.get_cpsr());
+
+        println!(
+            "Last Instruction: {}",
+            instruction_to_string(
+                self.cpu.executed_instruction_hex >> 28,
+                self.cpu
+                    .decode_instruction(self.cpu.executed_instruction_hex)
+            )
+        );
+
+        println!(
+            "Next Instruction: {}",
+            instruction_to_string(
+                self.cpu.prefetch[1] >> 28,
+                self.cpu.decode_instruction(self.cpu.prefetch[1])
+            )
+        );
+    }
+
     pub fn step(&mut self) {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
         self.ppu
@@ -79,9 +114,7 @@ impl GBA {
                 CPUCallbacks::RaiseIrq => {
                     self.cpu.interrupt_triggered = true;
                 }
-                CPUCallbacks::DMA(dma_num) => {
-
-                }
+                CPUCallbacks::DMA(dma_num) => {}
                 _ => panic!("{:#?}", command),
             }
         }
