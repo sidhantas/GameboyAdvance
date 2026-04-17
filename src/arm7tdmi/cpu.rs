@@ -53,6 +53,7 @@ struct Status {
     pub(crate) cycles: u64,
 }
 
+
 #[derive(Debug)]
 pub(crate) struct CPU {
     registers: Registers,

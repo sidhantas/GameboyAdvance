@@ -5,8 +5,8 @@ use num_traits::PrimInt;
 
 use crate::{
     arm7tdmi::{
-        cpsr::{PSR},
-        cpu::{CPU, CPUMode, FlagsRegister, PC_REGISTER},
+        cpsr::PSR,
+        cpu::{CPUMode, FlagsRegister, CPU, PC_REGISTER},
         instruction_table::{DecodeARMInstructionToString, Execute, Operand},
     },
     memory::memory::GBAMemory,
@@ -16,7 +16,6 @@ use crate::{
         instruction_to_string::{print_register, print_shifted_operand},
     },
 };
-
 
 #[derive(Debug)]
 pub enum PSRRegister {
@@ -69,12 +68,13 @@ pub enum ShiftType {
     RRX,
 }
 
+#[derive(Debug)]
 enum ALUOpcode {
     Arithmetic(ArithmeticInstruction),
     Logical(LogicalInstruction),
 }
 
-pub struct ALUInstruction(pub u32);
+pub(crate) struct ALUInstruction(pub(crate) u32);
 
 impl ALUInstruction {
     fn rd(&self) -> u32 {
@@ -83,6 +83,14 @@ impl ALUInstruction {
 
     fn rn(&self) -> u32 {
         (0x000F_0000 & self.0) >> 16
+    }
+
+    fn rm(&self) -> u32 {
+        (self.0 & 0x0000_000F)
+    }
+
+    fn rs(&self) -> u32 {
+        (self.0 & 0x0000_0F00) >> 8
     }
 
     fn opcode(&self) -> ALUOpcode {
@@ -103,6 +111,123 @@ impl ALUInstruction {
             0xd => ALUOpcode::Logical(LogicalInstruction::Mov),
             0xe => ALUOpcode::Logical(LogicalInstruction::Bic),
             0xf => ALUOpcode::Logical(LogicalInstruction::Mvn),
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_operand2(
+        &self,
+        cycles: &mut CYCLES,
+        cpu: &mut CPU,
+        memory: &mut GBAMemory,
+    ) -> (u32, u32) {
+        let mut rn = cpu.get_register(self.rn());
+        if self.0.bit_is_set(25) {
+            let rotate_amount = (self.0 & 0x0000_0F00) >> 7;
+            let immediate = (self.0 & 0x0000_00FF);
+            if rotate_amount == 0 {
+                cpu.shifter_output = cpu.get_flag(FlagsRegister::C);
+                return (rn, immediate);
+            } else {
+                cpu.shifter_output = immediate.get_bit((rotate_amount as u8) - 1);
+                return (rn, immediate.rotate_right(rotate_amount));
+            }
+        }
+
+        let mut operand2 = cpu.get_register(self.rm());
+        let mut shift_type = (self.0 & 0x0000_0060) >> 5;
+        let shift_amount = if self.0.bit_is_set(4) {
+            *cycles += 1;
+            if self.rm() == PC_REGISTER as u32 {
+                operand2 += 4;
+            }
+            if self.rn() == PC_REGISTER as u32 {
+                rn += 4;
+            }
+            let shift_register = self.rs();
+            cpu.get_register(shift_register)
+        } else {
+            let immediate = (self.0 & 0x0000_0F80) >> 7;
+            if immediate == 0 {
+                match shift_type {
+                    0x0 => 0,
+                    0x1 => 32,
+                    0x2 => 32,
+                    0x3 => {
+                        shift_type = 0x4;
+                        1
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
+                immediate
+            }
+
+        } & 0xFF;
+
+        match (shift_type, shift_amount) {
+            (0x0, shift_amount) => {
+                if shift_amount == 0 {
+                    cpu.shifter_output = cpu.get_flag(FlagsRegister::C);
+                    return (rn, operand2);
+                } else if shift_amount < 32 {
+                    cpu.shifter_output = operand2.get_bit(32 - shift_amount as u8);
+                    return (rn, operand2 << shift_amount);
+                } else if shift_amount == 32 {
+                    cpu.shifter_output = operand2 & 0x1;
+                    return (rn, 0);
+                } else {
+                    cpu.shifter_output = 0;
+                    return (rn, 0);
+                }
+            }
+            (0x1, shift_amount) => {
+                if shift_amount == 0 {
+                    cpu.shifter_output = cpu.get_flag(FlagsRegister::C);
+                    return (rn, operand2);
+                } else if shift_amount < 32 {
+                    cpu.shifter_output = operand2.get_bit((shift_amount as u8) - 1);
+                    return (rn, operand2 >> shift_amount);
+                } else if shift_amount == 32 {
+                    cpu.shifter_output = operand2 >> 31;
+                    return (rn, 0);
+                } else {
+                    cpu.shifter_output = 0;
+                    return (rn, 0);
+                }
+            }
+            (0x2, shift_amount) => {
+                if shift_amount == 0 {
+                    cpu.shifter_output = cpu.get_flag(FlagsRegister::C);
+                    return (rn, operand2);
+                } else if shift_amount < 32 {
+                    cpu.shifter_output = operand2.get_bit((shift_amount as u8) - 1);
+                    return (rn, ((operand2 as i32) >> shift_amount) as u32);
+                } else if (operand2 >> 31) > 0 {
+                    cpu.shifter_output = 1;
+                    return (rn, u32::MAX);
+                } else {
+                    cpu.shifter_output = 0;
+                    return (rn, 0);
+                }
+            }
+            (0x3, shift_amount) => {
+                let rotate_amount = shift_amount & 0x1F;
+                if shift_amount == 0 {
+                    cpu.shifter_output = cpu.get_flag(FlagsRegister::C);
+                    return (rn, operand2);
+                } else if rotate_amount > 0 {
+                    cpu.shifter_output = operand2.get_bit((rotate_amount as u8) - 1);
+                    return (rn, operand2.rotate_right(rotate_amount));
+                } else {
+                    cpu.shifter_output = operand2 >> 31;
+                    return (rn, operand2);
+                }
+            }
+            (0x4, _) => {
+                cpu.shifter_output = operand2.get_bit(0);
+                return (rn, operand2 >> 1 | cpu.get_flag(FlagsRegister::C) << 31);
+            }
             _ => unreachable!(),
         }
     }
@@ -152,21 +277,23 @@ impl ALUInstruction {
     }
 }
 
+
 impl Execute for ALUInstruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
         let mut cycles = 0;
-        let (operand2, shift) = self.get_operand2_and_shift();
+        //let (operand2, shift) = self.get_operand2_and_shift();
         let destination = self.rd();
         let set_flags = self.set_flags() && destination != PC_REGISTER as u32;
+        let (rn, shifted_operand2) = self.get_operand2(&mut cycles, cpu, memory);
+
         let result = match self.opcode() {
             ALUOpcode::Arithmetic(instruction) => cpu.execute_arithmetic_instruction(
                 &mut cycles,
                 memory,
                 instruction,
                 destination,
-                self.rn(),
-                operand2,
-                shift,
+                rn,
+                shifted_operand2,
                 set_flags,
             ),
             ALUOpcode::Logical(instruction) => cpu.execute_logical_instruction(
@@ -174,9 +301,8 @@ impl Execute for ALUInstruction {
                 memory,
                 instruction,
                 destination,
-                self.rn(),
-                operand2,
-                shift,
+                rn,
+                shifted_operand2,
                 set_flags,
             ),
         };
@@ -424,9 +550,7 @@ impl Execute for MSRInstruction {
                 };
                 *spsr = PSR::from(destination_psr);
             }
-            PSRRegister::CPSR => {
-                cpu.set_cpsr(destination_psr.into())
-            },
+            PSRRegister::CPSR => cpu.set_cpsr(destination_psr.into()),
         }
 
         return 0;
@@ -461,21 +585,10 @@ impl CPU {
         memory: &mut GBAMemory,
         instruction: ArithmeticInstruction,
         rd: REGISTER,
-        rn: REGISTER,
-        operand2: Operand,
-        shift: Shift,
+        rn_val: u32,
+        shifted_operand2: u32,
         set_flags: bool,
     ) -> u32 {
-        let mut rn_val = self.get_register(rn);
-        if matches!(shift, Shift(_, Operand::Register(_))) {
-            rn_val += 4;
-        }
-        let shifted_operand2 = match operand2 {
-            Operand::Immediate(imm) => self.execute_immediate_shift(imm, shift),
-            Operand::Register(reg) => {
-                self.execute_register_shift(cycles, memory, reg, shift, set_flags)
-            }
-        };
         match instruction {
             ArithmeticInstruction::Sub => {
                 let result = rn_val - shifted_operand2;
@@ -535,25 +648,10 @@ impl CPU {
         memory: &mut GBAMemory,
         instruction: LogicalInstruction,
         rd: REGISTER,
-        rn: REGISTER,
-        operand2: Operand,
-        shift: Shift,
+        rn_val: u32,
+        shifted_operand2: u32,
         set_flags: bool,
     ) -> u32 {
-        let rn_val = {
-            let mut rn_val = self.get_register(rn);
-            if rn == 15 && matches!(shift, Shift(_, Operand::Register(_))) {
-                rn_val += 4;
-            }
-            rn_val
-        };
-        let shifted_operand2 = match operand2 {
-            Operand::Immediate(imm) => self.execute_immediate_shift(imm, shift),
-            Operand::Register(reg) => {
-                self.execute_register_shift(cycles, memory, reg, shift, set_flags)
-            }
-        };
-
         let result = match instruction {
             LogicalInstruction::And => {
                 let result = rn_val & shifted_operand2;
@@ -700,8 +798,6 @@ impl CPU {
         }
     }
 
-
-
     pub fn set_arm_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags {
             self.set_logical_flags(result, set_flags);
@@ -807,574 +903,593 @@ fn get_operand2_and_shift(instruction: u32) -> (Operand, Shift) {
     };
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use rstest::rstest;
-//
-//    use crate::arm7tdmi::cpsr::PSR;
-//    use crate::gba::GBA;
-//    use crate::{
-//        arm7tdmi::cpu::{CPUMode, FlagsRegister},
-//        types::REGISTER,
-//    };
-//
-//    #[test]
-//    fn add_instruction_should_set_carry_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, u32::MAX);
-//        gba.cpu.set_register(3, 2);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0931002); // adds r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_register(1) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn add_instruction_should_set_overflow_and_carry_flags() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8000_0000);
-//        gba.cpu.set_register(3, 0x8000_0000);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0931002); // adds r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_register(1) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 1);
-//    }
-//
-//    #[test]
-//    fn add_instruction_should_set_n_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8000_0000);
-//        gba.cpu.set_register(3, 0x0000_0001);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0931002); // adds r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_register(1) == 0x8000_0001);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn and_instruction_should_set_c_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x0000_FFFF);
-//        gba.cpu.set_register(3, 0x0000_0001);
-//
-//        gba.cpu.prefetch[0] = Some(0xe01312a2); // ands r1, r3, r2 LSR 5;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x0000_0001);
-//    }
-//
-//    #[test]
-//    fn and_instruction_should_set_n_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8000_FFFF);
-//        gba.cpu.set_register(3, 0x8000_0001);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0131002); // ands r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x8000_0001);
-//    }
-//
-//    #[test]
-//    fn and_instruction_should_set_z_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8000_FFFF);
-//        gba.cpu.set_register(3, 0x0000_0000);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0131002); // ands r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x0000_0000);
-//    }
-//
-//    #[test]
-//    fn orr_instruction_should_set_z_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x0000_0000);
-//        gba.cpu.set_register(3, 0x0000_0000);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1931002); // orrs r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x0000_0000);
-//    }
-//
-//    #[test]
-//    fn orr_instruction_should_not_set_any_flags() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x0000_0000);
-//        gba.cpu.set_register(3, 0x0000_0000);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1831002); // orr r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x0000_0000);
-//    }
-//
-//    #[test]
-//    fn eor_instruction_should_set_n_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8001_0002);
-//        gba.cpu.set_register(3, 0x1000_0010);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0331002); // eors r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x9001_0012);
-//    }
-//
-//    #[test]
-//    fn teq_instruction_should_set_n_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8001_0002);
-//        gba.cpu.set_register(3, 0x1000_0010);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1330002); // teq r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn teq_instruction_should_set_z_flag_when_equal() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8001_0002);
-//        gba.cpu.set_register(3, 0x8001_0002);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1330002); // teq r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn tst_instruction_should_set_z_flag_when_no_bits_match() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(2, 0x8001_0002);
-//        gba.cpu.set_register(3, 0x0110_2224);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1130002); // tst r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn bic_instruction_should_reset_all_bits() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(3, 0x8001_0002);
-//        gba.cpu.set_register(2, 0x80F1_0102);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1d31002); // bics r1, r3, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(1) == 0x00);
-//    }
-//
-//    #[test]
-//    fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.prefetch[0] = Some(0xe094131f); // adds r1, r3, r15, LSL r3; pc = 0
-//
-//        gba.cpu.set_register(3, 0x01);
-//        let test_pc = 4; // points at next instruction
-//        gba.cpu.set_pc(test_pc);
-//
-//        gba.step(); // pc == 8
-//        gba.step(); // pc == 12
-//        gba.step(); // pc == 16
-//        assert!(gba.cpu.get_register(1) == (test_pc + 8) << 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn data_processing_with_pc_as_operand1_and_register_shift_delays_pc() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.prefetch[0] = Some(0xe09f1314); //  adds r1, pc, r4, lsl r3; pc = 0
-//
-//        gba.cpu.set_register(3, 0x01);
-//        gba.cpu.set_register(4, 0);
-//        let test_pc = 4; // points at next instruction
-//        gba.cpu.set_pc(test_pc);
-//
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_register(1) == test_pc + 8);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn data_processing_with_pc_as_destination_should_start_from_result() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        let _res = gba.memory.writeu32(0x3000000, 0xe25f1008);
-//        let _res = gba.memory.writeu32(0x3000004, 0xe1a00000);
-//        let _res = gba.memory.writeu32(0x3000008, 0xe1a00000); // nop
-//        let _res = gba.memory.writeu32(0x300000C, 0xe1a00000); // nop
-//        let _res = gba.memory.writeu32(0x3000010, 0xe1a00000); // nop
-//        let _res = gba.memory.writeu32(0x3000014, 0xe281f000);
-//
-//        gba.cpu.set_pc(0x3000000);
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        gba.step();
-//        assert_eq!(
-//            gba.cpu
-//                .decode_instruction(gba.cpu.prefetch[1].unwrap())
-//                .instruction,
-//            0xe25f1008
-//        );
-//    }
-//
-//    #[test]
-//    fn mov_instruction_should_set_n_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(3, 0x8001_0002);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1b04003); // mov r4, r3;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(4) == gba.cpu.get_register(3));
-//        assert!(gba.cpu.get_register(4) == 0x8001_0002);
-//    }
-//
-//    #[test]
-//    fn mvn_instruction_should_set_z_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        let input = 0xFFFF_FFFF;
-//        gba.cpu.set_register(4, input);
-//
-//        gba.cpu.prefetch[0] = Some(0xe1f05004); // mvn r5, r4;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(5) == !gba.cpu.get_register(4));
-//        assert!(gba.cpu.get_register(5) == !input);
-//    }
-//
-//    #[test]
-//    fn adc_instruction_should_add_2_registers_and_carry() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(1, 25);
-//        gba.cpu.set_register(2, 32);
-//        gba.cpu.set_flag(FlagsRegister::C);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0b14002); // adcs r4, r2, r1;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(4) == 58);
-//    }
-//
-//    #[test]
-//    fn adc_instruction_should_set_carry_register() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(1, 0xFFFF_FFFF);
-//        gba.cpu.set_register(2, 0x0);
-//        gba.cpu.set_flag(FlagsRegister::C);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0b14002); // adcs r4, r2, r1;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//        assert!(gba.cpu.get_register(4) == 0x0000_0000);
-//    }
-//
-//    #[test]
-//    fn adc_instruction_should_set_v_register() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(1, 0x8000_0000);
-//        gba.cpu.set_register(2, 0x8FFF_FFFF);
-//        gba.cpu.set_flag(FlagsRegister::C);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0b14002); // adcs r4, r2, r1;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 1);
-//        assert!(gba.cpu.get_register(4) == 0x1000_0000);
-//    }
-//
-//    #[test]
-//    fn sub_instruction_should_set_v_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(1, 0x7FFF_FFFF);
-//        gba.cpu.set_register(2, 0xFFFF_FFFF); // twos complement of -1
-//
-//        gba.cpu.prefetch[0] = Some(0xe0514002); // subs r4, r1, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
-//        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
-//        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
-//        assert_eq!(gba.cpu.get_flag(FlagsRegister::V), 1);
-//        assert_eq!(gba.cpu.get_register(4), 0x8000_0000);
-//    }
-//
-//    #[test]
-//    fn sub_instruction_should_reset_c_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(1, 5);
-//        gba.cpu.set_register(2, 10);
-//
-//        gba.cpu.prefetch[1] = Some(0xe0514002); // subs r4, r1, r2;
-//
-//        gba.step();
-//        assert!(gba.cpu.get_register(4) == 0xFFFF_FFFB);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[test]
-//    fn sub_instruction_should_set_c_flag() {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_register(1, 10);
-//        gba.cpu.set_register(2, 5);
-//
-//        gba.cpu.prefetch[0] = Some(0xe0514002); // subs r4, r1, r2;
-//
-//        gba.step();
-//        gba.step();
-//        assert!(gba.cpu.get_register(4) == 0x5);
-//        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
-//        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
-//        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
-//    }
-//
-//    #[rstest]
-//    #[case(0xe10f2000, 0x000000d3, 2, 0x000000d3)]
-//    #[case(0xe10f2000, 0x300000d3, 2, 0x300000d3)]
-//    fn mrs_should_move_instruction_from_psr_to_destination_reg(
-//        #[case] opcode: u32,
-//        #[case] cpsr: u32,
-//        #[case] expected_dst: REGISTER,
-//        #[case] expected_val: u32,
-//    ) {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_cpsr(cpsr.into());
-//
-//        gba.cpu.prefetch[0] = Some(opcode);
-//        gba.step();
-//        gba.step();
-//
-//        assert_eq!(gba.cpu.get_register(expected_dst), expected_val);
-//    }
-//
-//    #[rstest]
-//    #[case(0xe129f002, CPUMode::SVC, 0x000000d3, 2, 0x000000d3)] //msr CPSR_fc, r2
-//    #[case(0xe129f002, CPUMode::SVC, 0x00FFFFd3, 2, 0x000000d3)] //msr CPSR_fc, r2
-//    #[case(0xe129f002, CPUMode::SVC, 0xf0FFFFf3, 2, 0xf00000d3)] //msr CPSR_fc, r2
-//    //thumb bit should not get used
-//    #[case(0xe121f002, CPUMode::SVC, 0xF0FFFFd3, 2, 0x000000d3)] //msr CPSR_c, r2
-//    #[case(0xe128f002, CPUMode::SVC, 0xF0FFFFFF, 2, 0xF00000d3)] //msr CPSR_f, r2
-//    #[case(0xe129f002, CPUMode::USER, 0xF0FFFFd3, 2, 0xF00000d0)] //msr CPSR_fc, r2
-//                                                                  // shouldn't set C bits
-//    fn msr_should_move_psr_from_register_to_cpsr(
-//        #[case] opcode: u32,
-//        #[case] mode: CPUMode,
-//        #[case] psr_val: u32,
-//        #[case] register: u32,
-//        #[case] expected_val: u32,
-//    ) {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_mode(mode);
-//        gba.cpu.set_register(register, psr_val);
-//
-//        gba.cpu.prefetch[0] = Some(opcode);
-//        gba.step();
-//        gba.step();
-//
-//        assert_eq!(gba.cpu.get_cpsr(), expected_val.into());
-//    }
-//
-//    #[rstest]
-//    #[case(0xe169f002, CPUMode::SVC, 0x000000df, 2, 0x000000df)] // msr SPSR r2
-//    #[case(0xe169f002, CPUMode::SVC, 0x000000df, 2, 0x000000df)]
-//    #[case(0xe169f002, CPUMode::ABT, 0xF0FFFFdf, 2, 0xf00000df)]
-//    fn msr_should_move_psr_from_register_to_spsr(
-//        #[case] opcode: u32,
-//        #[case] mode: CPUMode,
-//        #[case] psr_val: u32,
-//        #[case] register: u32,
-//        #[case] expected_val: u32,
-//    ) {
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_mode(mode);
-//        gba.cpu.set_register(register, psr_val);
-//
-//        gba.cpu.prefetch[0] = Some(opcode);
-//        gba.step();
-//        gba.step();
-//
-//        assert_eq!(*gba.cpu.get_current_spsr().unwrap(), expected_val.into());
-//    }
-//
-//    #[rstest]
-//    #[case(0xe329f0d0, CPUMode::SVC, 0x000000d0)] // msr CPSR, 0x24
-//    #[case(0xe328f20d, CPUMode::SVC, 0xd00000d3)] // msr CPSR, 0xd0000000
-//    fn msr_should_move_imm_to_cpsr(
-//        #[case] opcode: u32,
-//        #[case] mode: CPUMode,
-//        #[case] expected_val: u32,
-//    ) {
-//        use crate::gba::GBA;
-//
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.set_mode(mode);
-//
-//        gba.cpu.prefetch[0] = Some(opcode);
-//        gba.step();
-//        gba.step();
-//
-//        assert_eq!(gba.cpu.get_cpsr(), expected_val.into());
-//    }
-//
-//    #[rstest]
-//    #[case(0xe14f0000, CPUMode::IRQ, 0x000000d0)] // mrs r0, SPSR
-//    fn mrs_should_move_spsr_to_reg(
-//        #[case] opcode: u32,
-//        #[case] mode: CPUMode,
-//        #[case] expected_val: u32,
-//    ) {
-//        use crate::gba::GBA;
-//
-//        let mut gba = GBA::new_no_bios();
-//
-//        gba.cpu.spsr[3] = PSR::from(expected_val);
-//        gba.cpu.set_mode(mode);
-//
-//        gba.cpu.prefetch[0] = Some(opcode);
-//        gba.step();
-//        gba.step();
-//
-//        assert_eq!(gba.cpu.get_register(0), expected_val.into());
-//    }
-//}
+#[cfg(test)]
+mod alu_tests {
+    use rstest::rstest;
+
+    use crate::arm7tdmi::cpsr::PSR;
+    use crate::gba::GBA;
+    use crate::{
+        arm7tdmi::cpu::{CPUMode, FlagsRegister},
+        types::REGISTER,
+    };
+
+    #[test]
+    fn add_instruction_should_set_carry_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, u32::MAX);
+        gba.cpu.set_register(3, 2);
+
+        gba.cpu.prefetch[0] = 0xe0931002; // adds r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_register(1) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn add_instruction_should_set_overflow_and_carry_flags() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8000_0000);
+        gba.cpu.set_register(3, 0x8000_0000);
+
+        gba.cpu.prefetch[0] = 0xe0931002; // adds r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_register(1) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 1);
+    }
+
+    #[test]
+    fn add_instruction_should_set_n_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8000_0000);
+        gba.cpu.set_register(3, 0x0000_0001);
+
+        gba.cpu.prefetch[0] = 0xe0931002; // adds r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_register(1) == 0x8000_0001);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn and_instruction_should_set_c_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x0000_FFFF);
+        gba.cpu.set_register(3, 0x0000_0001);
+
+        gba.cpu.prefetch[0] = 0xe01312a2; // ands r1, r3, r2 LSR 5;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x0000_0001);
+    }
+
+    #[test]
+    fn and_instruction_should_set_n_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8000_FFFF);
+        gba.cpu.set_register(3, 0x8000_0001);
+
+        gba.cpu.prefetch[0] = 0xe0131002; // ands r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x8000_0001);
+    }
+
+    #[test]
+    fn and_instruction_should_set_z_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8000_FFFF);
+        gba.cpu.set_register(3, 0x0000_0000);
+
+        gba.cpu.prefetch[0] = 0xe0131002; // ands r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x0000_0000);
+    }
+
+    #[test]
+    fn orr_instruction_should_set_z_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x0000_0000);
+        gba.cpu.set_register(3, 0x0000_0000);
+
+        gba.cpu.prefetch[0] = 0xe1931002; // orrs r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x0000_0000);
+    }
+
+    #[test]
+    fn orr_instruction_should_not_set_any_flags() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x0000_0000);
+        gba.cpu.set_register(3, 0x0000_0000);
+
+        gba.cpu.prefetch[0] = 0xe1831002; // orr r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x0000_0000);
+    }
+
+    #[test]
+    fn eor_instruction_should_set_n_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8001_0002);
+        gba.cpu.set_register(3, 0x1000_0010);
+
+        gba.cpu.prefetch[0] = 0xe0331002; // eors r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x9001_0012);
+    }
+
+    #[test]
+    fn eor_instruction_should_apply_asr_first() {
+        let mut gba = GBA::new_no_bios();
+        gba.cpu.set_flag(FlagsRegister::Z);
+        gba.cpu.set_flag(FlagsRegister::C);
+
+        gba.cpu.set_register(0, 0x630);
+        gba.cpu.set_register(3, 0x0);
+        gba.cpu.set_register(12, 0x3008e5c);
+
+        gba.cpu.prefetch[1] = 0xe033c040; //  eors r12, r3, r0, asr #32
+        gba.step();
+
+        assert_eq!(gba.cpu.get_register(12), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::V), 0);
+    }
+
+    #[test]
+    fn teq_instruction_should_set_n_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8001_0002);
+        gba.cpu.set_register(3, 0x1000_0010);
+
+        gba.cpu.prefetch[0] = 0xe1330002; // teq r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn teq_instruction_should_set_z_flag_when_equal() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8001_0002);
+        gba.cpu.set_register(3, 0x8001_0002);
+
+        gba.cpu.prefetch[0] = 0xe1330002; // teq r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn tst_instruction_should_set_z_flag_when_no_bits_match() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(2, 0x8001_0002);
+        gba.cpu.set_register(3, 0x0110_2224);
+
+        gba.cpu.prefetch[0] = 0xe1130002; // tst r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn bic_instruction_should_reset_all_bits() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(3, 0x8001_0002);
+        gba.cpu.set_register(2, 0x80F1_0102);
+
+        gba.cpu.prefetch[0] = 0xe1d31002; // bics r1, r3, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(1) == 0x00);
+    }
+
+    #[test]
+    fn data_processing_with_pc_as_operand2_and_register_shift_delays_pc() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.prefetch[0] = 0xe094131f; // adds r1, r3, r15, LSL r3; pc = 0
+
+        gba.cpu.set_register(3, 0x01);
+        let test_pc = 4; // points at next instruction
+        gba.cpu.set_pc(test_pc);
+
+        gba.step(); // pc == 8
+        gba.step(); // pc == 12
+        gba.step(); // pc == 16
+        assert!(gba.cpu.get_register(1) == (test_pc + 8) << 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn data_processing_with_pc_as_operand1_and_register_shift_delays_pc() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.prefetch[0] = 0xe09f1314; //  adds r1, pc, r4, lsl r3; pc = 0
+
+        gba.cpu.set_register(3, 0x01);
+        gba.cpu.set_register(4, 0);
+        let test_pc = 4; // points at next instruction
+        gba.cpu.set_pc(test_pc);
+
+        gba.step();
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_register(1) == test_pc + 8);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    //#[test]
+    //fn data_processing_with_pc_as_destination_should_start_from_result() {
+    //    let mut gba = GBA::new_no_bios();
+
+    //    let _res = gba.memory.writeu32(0x3000000, 0xe25f1008);
+    //    let _res = gba.memory.writeu32(0x3000004, 0xe1a00000);
+    //    let _res = gba.memory.writeu32(0x3000008, 0xe1a00000); // nop
+    //    let _res = gba.memory.writeu32(0x300000C, 0xe1a00000); // nop
+    //    let _res = gba.memory.writeu32(0x3000010, 0xe1a00000); // nop
+    //    let _res = gba.memory.writeu32(0x3000014, 0xe281f000);
+
+    //    gba.cpu.set_pc(0x3000000);
+    //    gba.step();
+    //    gba.step();
+    //    gba.step();
+    //    gba.step();
+    //    gba.step();
+    //    gba.step();
+    //    gba.step();
+    //    gba.step();
+    //    assert_eq!(
+    //        gba.cpu
+    //            .decode_instruction(gba.cpu.prefetch[1])
+    //        0xe25f1008
+    //    );
+    //}
+
+    #[test]
+    fn mov_instruction_should_set_n_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(3, 0x8001_0002);
+
+        gba.cpu.prefetch[0] = 0xe1b04003; // mov r4, r3;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(4) == gba.cpu.get_register(3));
+        assert!(gba.cpu.get_register(4) == 0x8001_0002);
+    }
+
+    #[test]
+    fn mvn_instruction_should_set_z_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        let input = 0xFFFF_FFFF;
+        gba.cpu.set_register(4, input);
+
+        gba.cpu.prefetch[0] = 0xe1f05004; // mvn r5, r4;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(5) == !gba.cpu.get_register(4));
+        assert!(gba.cpu.get_register(5) == !input);
+    }
+
+    #[test]
+    fn adc_instruction_should_add_2_registers_and_carry() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(1, 25);
+        gba.cpu.set_register(2, 32);
+        gba.cpu.set_flag(FlagsRegister::C);
+
+        gba.cpu.prefetch[0] = 0xe0b14002; // adcs r4, r2, r1;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(4) == 58);
+    }
+
+    #[test]
+    fn adc_instruction_should_set_carry_register() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(1, 0xFFFF_FFFF);
+        gba.cpu.set_register(2, 0x0);
+        gba.cpu.set_flag(FlagsRegister::C);
+
+        gba.cpu.prefetch[0] = 0xe0b14002; // adcs r4, r2, r1;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+        assert!(gba.cpu.get_register(4) == 0x0000_0000);
+    }
+
+    #[test]
+    fn adc_instruction_should_set_v_register() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(1, 0x8000_0000);
+        gba.cpu.set_register(2, 0x8FFF_FFFF);
+        gba.cpu.set_flag(FlagsRegister::C);
+
+        gba.cpu.prefetch[0] = 0xe0b14002; // adcs r4, r2, r1;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 1);
+        assert!(gba.cpu.get_register(4) == 0x1000_0000);
+    }
+
+    #[test]
+    fn sub_instruction_should_set_v_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(1, 0x7FFF_FFFF);
+        gba.cpu.set_register(2, 0xFFFF_FFFF); // twos complement of -1
+
+        gba.cpu.prefetch[0] = 0xe0514002; // subs r4, r1, r2;
+
+        gba.step();
+        gba.step();
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::C), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::N), 1);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::Z), 0);
+        assert_eq!(gba.cpu.get_flag(FlagsRegister::V), 1);
+        assert_eq!(gba.cpu.get_register(4), 0x8000_0000);
+    }
+
+    #[test]
+    fn sub_instruction_should_reset_c_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(1, 5);
+        gba.cpu.set_register(2, 10);
+
+        gba.cpu.prefetch[1] = 0xe0514002; // subs r4, r1, r2;
+
+        gba.step();
+        assert!(gba.cpu.get_register(4) == 0xFFFF_FFFB);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[test]
+    fn sub_instruction_should_set_c_flag() {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_register(1, 10);
+        gba.cpu.set_register(2, 5);
+
+        gba.cpu.prefetch[0] = 0xe0514002; // subs r4, r1, r2;
+
+        gba.step();
+        gba.step();
+        assert!(gba.cpu.get_register(4) == 0x5);
+        assert!(gba.cpu.get_flag(FlagsRegister::C) == 1);
+        assert!(gba.cpu.get_flag(FlagsRegister::N) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::Z) == 0);
+        assert!(gba.cpu.get_flag(FlagsRegister::V) == 0);
+    }
+
+    #[rstest]
+    #[case(0xe10f2000, 0x000000d3, 2, 0x000000d3)]
+    #[case(0xe10f2000, 0x300000d3, 2, 0x300000d3)]
+    fn mrs_should_move_instruction_from_psr_to_destination_reg(
+        #[case] opcode: u32,
+        #[case] cpsr: u32,
+        #[case] expected_dst: REGISTER,
+        #[case] expected_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_cpsr(cpsr.into());
+
+        gba.cpu.prefetch[0] = opcode;
+        gba.step();
+        gba.step();
+
+        assert_eq!(gba.cpu.get_register(expected_dst), expected_val);
+    }
+
+    #[rstest]
+    #[case(0xe129f002, CPUMode::SVC, 0x000000d3, 2, 0x000000d3)] //msr CPSR_fc, r2
+    #[case(0xe129f002, CPUMode::SVC, 0x00FFFFd3, 2, 0x000000d3)] //msr CPSR_fc, r2
+    #[case(0xe129f002, CPUMode::SVC, 0xf0FFFFf3, 2, 0xf00000d3)] //msr CPSR_fc, r2
+    //thumb bit should not get used
+    #[case(0xe121f002, CPUMode::SVC, 0xF0FFFFd3, 2, 0x000000d3)] //msr CPSR_c, r2
+    #[case(0xe128f002, CPUMode::SVC, 0xF0FFFFFF, 2, 0xF00000d3)] //msr CPSR_f, r2
+    #[case(0xe129f002, CPUMode::USER, 0xF0FFFFd3, 2, 0xF00000d0)] //msr CPSR_fc, r2
+                                                                  // shouldn't set C bits
+    fn msr_should_move_psr_from_register_to_cpsr(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] psr_val: u32,
+        #[case] register: u32,
+        #[case] expected_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_mode(mode);
+        gba.cpu.set_register(register, psr_val);
+
+        gba.cpu.prefetch[0] = opcode;
+        gba.step();
+        gba.step();
+
+        assert_eq!(gba.cpu.get_cpsr(), expected_val.into());
+    }
+
+    #[rstest]
+    #[case(0xe169f002, CPUMode::SVC, 0x000000df, 2, 0x000000df)] // msr SPSR r2
+    #[case(0xe169f002, CPUMode::SVC, 0x000000df, 2, 0x000000df)]
+    #[case(0xe169f002, CPUMode::ABT, 0xF0FFFFdf, 2, 0xf00000df)]
+    fn msr_should_move_psr_from_register_to_spsr(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] psr_val: u32,
+        #[case] register: u32,
+        #[case] expected_val: u32,
+    ) {
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_mode(mode);
+        gba.cpu.set_register(register, psr_val);
+
+        gba.cpu.prefetch[0] = opcode;
+        gba.step();
+        gba.step();
+
+        assert_eq!(*gba.cpu.get_current_spsr().unwrap(), expected_val.into());
+    }
+
+    #[rstest]
+    #[case(0xe329f0d0, CPUMode::SVC, 0x000000d0)] // msr CPSR, 0x24
+    #[case(0xe328f20d, CPUMode::SVC, 0xd00000d3)] // msr CPSR, 0xd0000000
+    fn msr_should_move_imm_to_cpsr(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] expected_val: u32,
+    ) {
+        use crate::gba::GBA;
+
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.set_mode(mode);
+
+        gba.cpu.prefetch[0] = opcode;
+        gba.step();
+        gba.step();
+
+        assert_eq!(gba.cpu.get_cpsr(), expected_val.into());
+    }
+
+    #[rstest]
+    #[case(0xe14f0000, CPUMode::IRQ, 0x000000d0)] // mrs r0, SPSR
+    fn mrs_should_move_spsr_to_reg(
+        #[case] opcode: u32,
+        #[case] mode: CPUMode,
+        #[case] expected_val: u32,
+    ) {
+        use crate::gba::GBA;
+
+        let mut gba = GBA::new_no_bios();
+
+        gba.cpu.spsr[3] = PSR::from(expected_val);
+        gba.cpu.set_mode(mode);
+
+        gba.cpu.prefetch[0] = opcode;
+        gba.step();
+        gba.step();
+
+        assert_eq!(gba.cpu.get_register(0), expected_val.into());
+    }
+}

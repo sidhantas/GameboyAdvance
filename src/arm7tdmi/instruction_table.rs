@@ -4,19 +4,41 @@ use tui::widgets::Block;
 
 use crate::{
     arm7tdmi::{
-        arm::{alu::{ALUInstruction, MRSInstruction, MSRInstruction}, branch::{BranchAndExchangeInstruction, BranchInstruction, SWI}, data_transfer_instructions::BlockDTInstruction, swap_instruction::SwapInstruction},
+        arm::{
+            alu::{ALUInstruction, MRSInstruction, MSRInstruction},
+            branch::{BranchAndExchangeInstruction, BranchInstruction, SWI},
+            data_transfer_instructions::BlockDTInstruction,
+            swap_instruction::SwapInstruction,
+        },
         thumb::{
             self,
             alu::{
-                ThumbALUInstruction, ThumbALUOperation, ThumbAddToSp, ThumbAdr, ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction, ThumbMoveShiftedRegister
-            }, data_transfer_instructions::{ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm}, jumps_and_calls::{ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSetLinkRegister, ThumbUnconditionalBranch},
+                ThumbALUInstruction, ThumbALUOperation, ThumbAddToSp, ThumbAdr,
+                ThumbArithmeticImmInstruction, ThumbBx, ThumbFullAdder, ThumbHiRegInstruction,
+                ThumbMoveShiftedRegister,
+            },
+            data_transfer_instructions::{
+                ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm,
+            },
+            jumps_and_calls::{
+                ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSetLinkRegister,
+                ThumbUnconditionalBranch,
+            },
         },
     },
     memory::memory::GBAMemory,
     types::{CYCLES, REGISTER},
 };
 
-use super::{arm::{data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction}, instructions::ARMDecodedInstruction, multiply::MultiplyInstruction}, cpu::CPU, thumb::data_transfer_instructions::{LdrPCRelative, ThumbSdtRegisterOffset}};
+use super::{
+    arm::{
+        data_transfer_instructions::{SdtInstruction, SignedAndHwDtInstruction},
+        instructions::ARMDecodedInstruction,
+        multiply::MultiplyInstruction,
+    },
+    cpu::CPU,
+    thumb::data_transfer_instructions::{LdrPCRelative, ThumbSdtRegisterOffset},
+};
 
 pub(crate) trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
@@ -83,10 +105,8 @@ pub enum Instruction {
     ThumbSetLinkRegister(ThumbSetLinkRegister),
     ThumbLongBranchWithLink(ThumbLongBranchWithLink),
     NotImplemented(u32),
-    Nop
+    Nop,
 }
-
-
 
 impl Execute for Instruction {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
@@ -99,8 +119,12 @@ impl Execute for Instruction {
                 thumb_alu_instruction.execute(cpu, memory)
             }
             Instruction::ThumbMoveShiftedRegister(instruction) => instruction.execute(cpu, memory),
-            Instruction::ThumbArithmeticImmInstruction(instruction) => instruction.execute(cpu, memory),
-            Instruction::ThumbHiRegisterInstruction(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbArithmeticImmInstruction(instruction) => {
+                instruction.execute(cpu, memory)
+            }
+            Instruction::ThumbHiRegisterInstruction(instruction) => {
+                instruction.execute(cpu, memory)
+            }
             Instruction::ThumbBx(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbAdr(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbAddToSp(instruction) => instruction.execute(cpu, memory),
@@ -123,8 +147,10 @@ impl Execute for Instruction {
             Instruction::ThumbUnconditionalBranch(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbSetLinkRegister(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbLongBranchWithLink(instruction) => instruction.execute(cpu, memory),
-            Instruction::NotImplemented(instruction) => panic!("Not implemented: {:#x}", instruction),
-            Instruction::Nop => return 0
+            Instruction::NotImplemented(instruction) => {
+                panic!("Not implemented: {:#x}", instruction)
+            }
+            Instruction::Nop => return 0,
         }
     }
 }
@@ -136,29 +162,35 @@ pub(crate) fn instruction_to_string(condition_code: u32, instruction: Instructio
         Instruction::ALUInstruction(data_processing_instruction) => {
             data_processing_instruction.instruction_to_string(condition_code)
         }
-        Instruction::MRS(data_processing_instruction) => data_processing_instruction
-            .instruction_to_string(condition_code),
-        Instruction::MSR(data_processing_instruction) => data_processing_instruction
-            .instruction_to_string(condition_code),
+        Instruction::MRS(data_processing_instruction) => {
+            data_processing_instruction.instruction_to_string(condition_code)
+        }
+        Instruction::MSR(data_processing_instruction) => {
+            data_processing_instruction.instruction_to_string(condition_code)
+        }
         Instruction::ThumbFullAdder(full_adder) => full_adder.instruction_to_string(),
         Instruction::ThumbMoveShiftedRegister(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbAluInstruction(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbArithmeticImmInstruction(instruction) => {
             instruction.instruction_to_string()
         }
-        Instruction::ThumbHiRegisterInstruction(instruction) => {
-            instruction.instruction_to_string()
-        }
+        Instruction::ThumbHiRegisterInstruction(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbBx(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbAdr(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbAddToSp(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbSdtImmOffset(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbSdtHwImmOffset(instruction) => instruction.instruction_to_string(),
-        Instruction::SdtInstruction(instruction) => instruction.instruction_to_string(condition_code),
-        Instruction::SignedAndHwDtInstruction(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::SdtInstruction(instruction) => {
+            instruction.instruction_to_string(condition_code)
+        }
+        Instruction::SignedAndHwDtInstruction(instruction) => {
+            instruction.instruction_to_string(condition_code)
+        }
         Instruction::BlockDT(instruction) => instruction.instruction_to_string(condition_code),
         Instruction::Branch(instruction) => instruction.instruction_to_string(condition_code),
-        Instruction::BranchAndExchange(instruction) => instruction.instruction_to_string(condition_code),
+        Instruction::BranchAndExchange(instruction) => {
+            instruction.instruction_to_string(condition_code)
+        }
         Instruction::SWI(instruction) => instruction.instruction_to_string(condition_code),
         Instruction::Swap(instruction) => instruction.instruction_to_string(condition_code),
         Instruction::Multiply(instruction) => instruction.instruction_to_string(condition_code),

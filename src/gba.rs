@@ -74,14 +74,16 @@ impl GBA {
         }
 
         println!("CPSR: {}", self.cpu.get_cpsr());
+        println!("CYCLES: {}", self.cpu.cycles);
 
         println!(
-            "Last Instruction: {}",
+            "Last Instruction: {} {:#x}",
             instruction_to_string(
                 self.cpu.executed_instruction_hex >> 28,
                 self.cpu
-                    .decode_instruction(self.cpu.executed_instruction_hex)
-            )
+                    .decode_instruction(self.cpu.executed_instruction_hex),
+            ),
+            self.cpu.executed_instruction_hex
         );
 
         println!(

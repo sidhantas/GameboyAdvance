@@ -8,6 +8,12 @@ use super::cpu::{CPUMode, FlagsRegister, InstructionMode};
 pub(crate) struct PSR(u32);
 
 
+impl PartialEq<u32> for PSR {
+    fn eq(&self, other: &u32) -> bool {
+        self.0 == *other
+    }
+}
+
 impl From<PSR> for u32 {
     fn from(value: PSR) -> Self {
         value.0
