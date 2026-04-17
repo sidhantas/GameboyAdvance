@@ -93,6 +93,10 @@ impl ALUInstruction {
         (self.0 & 0x0000_0F00) >> 8
     }
 
+    fn shift_type(&self) -> u32 {
+        (self.0 & 0x0000_0060) >> 5
+    }
+
     fn opcode(&self) -> ALUOpcode {
         match (self.0 & 0x01E0_0000) >> 21 {
             0x0 => ALUOpcode::Logical(LogicalInstruction::And),
@@ -115,7 +119,7 @@ impl ALUInstruction {
         }
     }
 
-    fn get_operand2(
+    fn get_operands(
         &self,
         cycles: &mut CYCLES,
         cpu: &mut CPU,
@@ -135,7 +139,7 @@ impl ALUInstruction {
         }
 
         let mut operand2 = cpu.get_register(self.rm());
-        let mut shift_type = (self.0 & 0x0000_0060) >> 5;
+        let mut shift_type = self.shift_type();
         let shift_amount = if self.0.bit_is_set(4) {
             *cycles += 1;
             if self.rm() == PC_REGISTER as u32 {
@@ -284,7 +288,7 @@ impl Execute for ALUInstruction {
         //let (operand2, shift) = self.get_operand2_and_shift();
         let destination = self.rd();
         let set_flags = self.set_flags() && destination != PC_REGISTER as u32;
-        let (rn, shifted_operand2) = self.get_operand2(&mut cycles, cpu, memory);
+        let (rn, shifted_operand2) = self.get_operands(&mut cycles, cpu, memory);
 
         let result = match self.opcode() {
             ALUOpcode::Arithmetic(instruction) => cpu.execute_arithmetic_instruction(
