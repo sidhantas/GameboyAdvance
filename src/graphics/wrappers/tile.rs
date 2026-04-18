@@ -7,7 +7,7 @@ use crate::memory::{
     },
 };
 
-pub enum Tile<'a> {
+pub(crate) enum Tile<'a> {
     FourBit {
         tile: &'a [u8; 32],
         pallete_num: usize,
@@ -18,7 +18,7 @@ pub enum Tile<'a> {
 }
 
 impl<'a> Tile<'a> {
-    pub fn get_tile_relative_obj(
+    pub(crate) fn get_tile_relative_obj(
         memory: &'a GBAMemory,
         oam: &Oam,
         tile_x: i32,
@@ -45,7 +45,7 @@ impl<'a> Tile<'a> {
         }
     }
 
-    pub fn get_tile_relative_bg(
+    pub(crate) fn get_tile_relative_bg(
         memory: &'a GBAMemory,
         bgcnt: &BGCnt,
         y: usize,
@@ -83,14 +83,14 @@ impl<'a> Tile<'a> {
     }
 }
 
-struct BGEntry<'a>(pub &'a u16);
+struct BGEntry<'a>(pub(crate) &'a u16);
 
 impl<'a> BGEntry<'a> {
-    pub fn tile_number(&self) -> usize {
+    pub(crate) fn tile_number(&self) -> usize {
         (self.0 & 0x1FF).into()
     }
 
-    pub fn pallete_num(&self) -> usize {
+    pub(crate) fn pallete_num(&self) -> usize {
         ((self.0 >> 12) & 0xF).into()
     }
 }

@@ -7,23 +7,23 @@ use crate::memory::{
 
 use super::{pallete::BGPalleteData, ppu_modes::hdraw::RGBComponents, wrappers::tile::Tile};
 
-pub struct DisplayContext {
-    pub bg0_enabled: bool,
-    pub bg1_enabled: bool,
-    pub bg2_enabled: bool,
-    pub bg3_enabled: bool,
-    pub obj_enabled: bool,
-    pub color_special_effects_enabled: bool,
+pub(crate) struct DisplayContext {
+    pub(crate) bg0_enabled: bool,
+    pub(crate) bg1_enabled: bool,
+    pub(crate) bg2_enabled: bool,
+    pub(crate) bg3_enabled: bool,
+    pub(crate) obj_enabled: bool,
+    pub(crate) color_special_effects_enabled: bool,
 }
 
 #[derive(Clone)]
-pub struct Layers {
-    pub bg0: Option<BGPixel>,
-    pub bg1: Option<BGPixel>,
-    pub bg2: Option<BGPixel>,
-    pub bg3: Option<BGPixel>,
-    pub obj: Option<OBJPixel>,
-    pub bd: BGPixel,
+pub(crate) struct Layers {
+    pub(crate) bg0: Option<BGPixel>,
+    pub(crate) bg1: Option<BGPixel>,
+    pub(crate) bg2: Option<BGPixel>,
+    pub(crate) bg3: Option<BGPixel>,
+    pub(crate) obj: Option<OBJPixel>,
+    pub(crate) bd: BGPixel,
 }
 
 impl Default for Layers {
@@ -40,33 +40,33 @@ impl Default for Layers {
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct OBJPixel {
-    pub priority: u16,
-    pub pixel: RGBComponents,
-    pub mode: OBJMode,
+pub(crate) struct OBJPixel {
+    pub(crate) priority: u16,
+    pub(crate) pixel: RGBComponents,
+    pub(crate) mode: OBJMode,
 }
 
 #[derive(Clone, Copy)]
-pub struct BGPixel {
-    pub priority: u16,
-    pub pixel: Option<RGBComponents>,
+pub(crate) struct BGPixel {
+    pub(crate) priority: u16,
+    pub(crate) pixel: Option<RGBComponents>,
 }
 
 #[derive(Clone, Copy)]
-pub enum LayerPixel {
+pub(crate) enum LayerPixel {
     OBJ(OBJPixel),
     BG(BGPixel),
 }
 
 impl LayerPixel {
-    pub fn pixel(&self) -> Option<RGBComponents> {
+    pub(crate) fn pixel(&self) -> Option<RGBComponents> {
         match self {
             LayerPixel::OBJ(obj) => Some(obj.pixel),
             LayerPixel::BG(bg) => bg.pixel,
         }
     }
 
-    pub const fn priority(&self) -> u16 {
+    pub(crate) const fn priority(&self) -> u16 {
         match self {
             LayerPixel::OBJ(obj) => obj.priority,
             LayerPixel::BG(bg) => bg.priority,
@@ -75,7 +75,7 @@ impl LayerPixel {
 }
 
 impl BGPixel {
-    pub const fn backdrop() -> Self {
+    pub(crate) const fn backdrop() -> Self {
         Self {
             priority: 3,
             pixel: Some(RGBComponents {
@@ -88,7 +88,7 @@ impl BGPixel {
 }
 
 impl Layers {
-    pub fn get_top_layer(&self) -> LayerPixel {
+    pub(crate) fn get_top_layer(&self) -> LayerPixel {
         let pixels = [
             self.bg3.map(|pixel| LayerPixel::BG(pixel)),
             self.bg2.map(|pixel| LayerPixel::BG(pixel)),
@@ -111,7 +111,7 @@ impl Layers {
         )
     }
 
-    pub fn get_top_bg_pixel(&self) -> BGPixel {
+    pub(crate) fn get_top_bg_pixel(&self) -> BGPixel {
         let pixels = [self.bg3, self.bg2, self.bg1, self.bg0];
         pixels
             .into_iter()
@@ -127,7 +127,7 @@ impl Layers {
             })
     }
 
-    pub fn get_enabled_layers(
+    pub(crate) fn get_enabled_layers(
         x: i32,
         y: i32,
         memory: &GBAMemory,

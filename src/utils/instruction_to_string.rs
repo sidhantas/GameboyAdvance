@@ -51,7 +51,7 @@ fn print_option_register(register: &Option<REGISTER>) -> String {
     })
 }
 
-pub fn print_register(register: &REGISTER) -> String {
+pub(crate) fn print_register(register: &REGISTER) -> String {
     let register = *register;
     match register {
         13 => "sp".into(),
@@ -61,7 +61,7 @@ pub fn print_register(register: &REGISTER) -> String {
     }
 }
 
-pub fn print_shifted_operand(operand2: &Operand, shift: &Shift) -> String {
+pub(crate) fn print_shifted_operand(operand2: &Operand, shift: &Shift) -> String {
     match operand2 {
         Operand::Register(_) => {
             if let Shift(ShiftType::LSL, Operand::Immediate(0)) = shift {

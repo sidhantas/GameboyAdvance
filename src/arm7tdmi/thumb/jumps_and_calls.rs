@@ -8,7 +8,7 @@ use crate::{
     utils::bits::sign_extend,
 };
 
-pub struct ThumbConditionalBranch(pub u32);
+pub(crate) struct ThumbConditionalBranch(pub(crate) u32);
 
 impl ThumbConditionalBranch {
     fn offset(&self) -> u32 {
@@ -68,7 +68,7 @@ impl DecodeThumbInstructionToString for ThumbConditionalBranch {
     }
 }
 
-pub struct ThumbUnconditionalBranch(pub u32);
+pub(crate) struct ThumbUnconditionalBranch(pub(crate) u32);
 
 impl ThumbUnconditionalBranch {
     fn offset(&self) -> u32 {
@@ -89,7 +89,7 @@ impl DecodeThumbInstructionToString for ThumbUnconditionalBranch {
     }
 }
 
-pub struct ThumbSetLinkRegister(pub u32);
+pub(crate) struct ThumbSetLinkRegister(pub(crate) u32);
 
 impl ThumbSetLinkRegister {
     fn offset(&self) -> u32 {
@@ -111,7 +111,7 @@ impl DecodeThumbInstructionToString for ThumbSetLinkRegister {
     }
 }
 
-pub struct ThumbLongBranchWithLink(pub u32);
+pub(crate) struct ThumbLongBranchWithLink(pub(crate) u32);
 
 impl ThumbLongBranchWithLink {
     fn offset(&self) -> u32 {

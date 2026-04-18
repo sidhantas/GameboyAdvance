@@ -44,15 +44,15 @@ pub(crate) trait Execute {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES;
 }
 
-pub trait DecodeARMInstructionToString {
+pub(crate) trait DecodeARMInstructionToString {
     fn instruction_to_string(&self, condition_code: &str) -> String;
 }
 
-pub trait DecodeThumbInstructionToString {
+pub(crate) trait DecodeThumbInstructionToString {
     fn instruction_to_string(&self) -> String;
 }
 
-pub fn condition_code_as_str(condition_code: u32) -> &'static str {
+pub(crate) fn condition_code_as_str(condition_code: u32) -> &'static str {
     match condition_code {
         0b0000 => "eq",
         0b0001 => "ne",
@@ -73,7 +73,7 @@ pub fn condition_code_as_str(condition_code: u32) -> &'static str {
     }
 }
 
-pub enum Instruction {
+pub(crate) enum Instruction {
     ALUInstruction(ALUInstruction),
     MSR(MSRInstruction),
     MRS(MRSInstruction),
@@ -211,7 +211,7 @@ pub(crate) fn instruction_to_string(condition_code: u32, instruction: Instructio
 }
 
 #[derive(Debug)]
-pub enum Operand {
+pub(crate) enum Operand {
     Register(REGISTER),
     Immediate(u32),
 }

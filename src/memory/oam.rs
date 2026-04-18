@@ -2,10 +2,10 @@ use std::cell::Cell;
 
 use crate::utils::bits::{sign_extend, Bits};
 
-pub const NUM_OAM_ENTRIES: usize = 128;
+pub(crate) const NUM_OAM_ENTRIES: usize = 128;
 
 #[derive(Default, Debug)]
-pub struct Oam {
+pub(crate) struct Oam {
     data: [u16; 3],
     x: Cell<Option<i32>>,
     y: Cell<Option<i32>>,
@@ -21,7 +21,7 @@ pub struct Oam {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum OBJMode {
+pub(crate) enum OBJMode {
     Normal,
     SemiTransparent,
     OBJWindow,
@@ -41,7 +41,7 @@ impl Into<OBJMode> for u16 {
 }
 
 #[derive(Debug)]
-pub enum OBJShape {
+pub(crate) enum OBJShape {
     Square,
     Horizonatal,
     Vertical,
@@ -61,13 +61,13 @@ impl Into<OBJShape> for u16 {
 }
 
 impl Oam {
-    pub fn new(data: [u16; 3]) -> Self {
+    pub(crate) fn new(data: [u16; 3]) -> Self {
         let mut oam = Self::default();
 
         oam.data = data;
         oam
     }
-    pub fn y(&self) -> i32 {
+    pub(crate) fn y(&self) -> i32 {
         if let Some(y) = self.y.get() {
             return y;
         }
@@ -76,7 +76,7 @@ impl Oam {
         y
     }
 
-    pub fn rotation_and_scaling_enabled(&self) -> bool {
+    pub(crate) fn rotation_and_scaling_enabled(&self) -> bool {
         if let Some(rotation_and_scaling_enabled) = self.rotation_and_scaling_enabled.get() {
             return rotation_and_scaling_enabled;
         }
@@ -88,7 +88,7 @@ impl Oam {
         rotation_and_scaling_enabled
     }
 
-    pub fn double_sized(&self) -> bool {
+    pub(crate) fn double_sized(&self) -> bool {
         if let Some(double_sized) = self.double_sized.get() {
             return double_sized;
         }
@@ -98,27 +98,27 @@ impl Oam {
         double_sized
     }
 
-    pub fn obj_disabled(&self) -> bool {
+    pub(crate) fn obj_disabled(&self) -> bool {
         !self.rotation_and_scaling_enabled() && self.data[0].bit_is_set(9)
     }
 
-    pub fn obj_mode(&self) -> OBJMode {
+    pub(crate) fn obj_mode(&self) -> OBJMode {
         ((self.data[0] >> 10) & 0x3).into()
     }
 
-    pub fn obj_mosaic(&self) -> bool {
+    pub(crate) fn obj_mosaic(&self) -> bool {
         self.data[0].bit_is_set(12)
     }
 
-    pub fn color_pallete(&self) -> usize {
+    pub(crate) fn color_pallete(&self) -> usize {
         (self.data[0].get_bit(13)).into()
     }
 
-    pub fn obj_shape(&self) -> OBJShape {
+    pub(crate) fn obj_shape(&self) -> OBJShape {
         ((self.data[0] >> 14) & 0x3).into()
     }
 
-    pub fn x(&self) -> i32 {
+    pub(crate) fn x(&self) -> i32 {
         if let Some(x) = self.x.get() {
             return x;
         }
@@ -127,7 +127,7 @@ impl Oam {
         x
     }
 
-    pub fn width(&self) -> i32 {
+    pub(crate) fn width(&self) -> i32 {
         if let Some(width) = self.width.get() {
             return width;
         }
@@ -160,7 +160,7 @@ impl Oam {
         width
     }
 
-    pub fn view_width(&self) -> i32 {
+    pub(crate) fn view_width(&self) -> i32 {
         if let Some(view_width) = self.view_width.get() {
             return view_width;
         }
@@ -175,7 +175,7 @@ impl Oam {
         view_width
     }
 
-    pub fn height(&self) -> i32 {
+    pub(crate) fn height(&self) -> i32 {
         if let Some(height) = self.height.get() {
             return height;
         }
@@ -208,7 +208,7 @@ impl Oam {
         height
     }
 
-    pub fn view_height(&self) -> i32 {
+    pub(crate) fn view_height(&self) -> i32 {
         if let Some(view_height) = self.view_height.get() {
             return view_height;
         }
@@ -222,7 +222,7 @@ impl Oam {
         view_height
     }
 
-    pub fn rotation_scaling_parameter(&self) -> Option<usize> {
+    pub(crate) fn rotation_scaling_parameter(&self) -> Option<usize> {
         if let Some(rotation_and_scaling_parameter) = self.rotation_and_scaling_parameter.get() {
             return rotation_and_scaling_parameter;
         }
@@ -235,7 +235,7 @@ impl Oam {
         parameter
     }
 
-    pub fn center(&self) -> (i32, i32) {
+    pub(crate) fn center(&self) -> (i32, i32) {
         if let Some(center) = self.center.get() {
             return center;
         }
@@ -244,7 +244,7 @@ impl Oam {
         center
     }
 
-    pub fn view_center(&self) -> (i32, i32) {
+    pub(crate) fn view_center(&self) -> (i32, i32) {
         if let Some(view_center) = self.view_center.get() {
             return view_center;
         }
@@ -253,27 +253,27 @@ impl Oam {
         view_center
     }
 
-    pub fn horizontal_flip(&self) -> bool {
+    pub(crate) fn horizontal_flip(&self) -> bool {
         self.data[1].bit_is_set(12)
     }
 
-    pub fn vertical_flip(&self) -> bool {
+    pub(crate) fn vertical_flip(&self) -> bool {
         self.data[1].bit_is_set(13)
     }
 
-    pub fn obj_size(&self) -> u16 {
+    pub(crate) fn obj_size(&self) -> u16 {
         (self.data[1] >> 14) & 0x3
     }
 
-    pub fn tile_number(&self) -> usize {
+    pub(crate) fn tile_number(&self) -> usize {
         self.data[2] as usize & 0x3FF
     }
 
-    pub fn priority(&self) -> u16 {
+    pub(crate) fn priority(&self) -> u16 {
         (self.data[2] >> 10) & 0x3
     }
 
-    pub fn pallete_number(&self) -> usize {
+    pub(crate) fn pallete_number(&self) -> usize {
         ((self.data[2] >> 12) & 0xF).into()
     }
 }

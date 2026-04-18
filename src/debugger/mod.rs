@@ -1,4 +1,4 @@
-pub mod breakpoints;
-pub mod debugger;
-pub mod terminal_commands;
-pub mod terminal_debugger;
+pub(crate) mod breakpoints;
+pub(crate) mod debugger;
+pub(crate) mod terminal_commands;
+pub(crate) mod terminal_debugger;

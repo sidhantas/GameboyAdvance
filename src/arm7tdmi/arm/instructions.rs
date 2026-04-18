@@ -10,12 +10,12 @@ use crate::{
     utils::bits::{sign_extend, Bits},
 };
 
-pub type ARMExecutable = fn(&mut CPU, ARMByteCode, memory: &mut GBAMemory) -> CYCLES;
+pub(crate) type ARMExecutable = fn(&mut CPU, ARMByteCode, memory: &mut GBAMemory) -> CYCLES;
 
 #[derive(Clone, Copy)]
-pub struct ARMDecodedInstruction {
-    pub executable: ARMExecutable,
-    pub instruction: u32,
+pub(crate) struct ARMDecodedInstruction {
+    pub(crate) executable: ARMExecutable,
+    pub(crate) instruction: u32,
 }
 
 impl Default for ARMDecodedInstruction {
@@ -28,17 +28,17 @@ impl Default for ARMDecodedInstruction {
 }
 
 impl CPU {
-    pub fn set_executed_instruction(&mut self, name: Arguments<'_>) {
+    pub(crate) fn set_executed_instruction(&mut self, name: Arguments<'_>) {
        //self.executed_instruction.clear();
        //write!(self.executed_instruction, "{}", name).unwrap();
     }
 
-    pub fn arm_nop(&mut self, _instruction: ARMByteCode, _memory: &mut GBAMemory) -> CYCLES {
+    pub(crate) fn arm_nop(&mut self, _instruction: ARMByteCode, _memory: &mut GBAMemory) -> CYCLES {
         self.set_executed_instruction(format_args!("NOP"));
         return 0;
     }
 
-    pub fn arm_multiply(&mut self, instruction: ARMByteCode, _memory: &mut GBAMemory) -> CYCLES {
+    pub(crate) fn arm_multiply(&mut self, instruction: ARMByteCode, _memory: &mut GBAMemory) -> CYCLES {
         let rd = (instruction & 0x000F_0000) >> 16;
         let rs = (instruction & 0x0000_0F00) >> 8;
         let rm = instruction & 0x0000_000F;
@@ -72,7 +72,7 @@ impl CPU {
         }
     }
 
-    pub fn arm_multiply_accumulate(
+    pub(crate) fn arm_multiply_accumulate(
         &mut self,
         instruction: ARMByteCode,
         memory: &mut GBAMemory,
@@ -109,7 +109,7 @@ impl CPU {
         }
     }
 
-    pub fn arm_multiply_long(
+    pub(crate) fn arm_multiply_long(
         &mut self,
         instruction: ARMByteCode,
         memory: &mut GBAMemory,
@@ -117,7 +117,7 @@ impl CPU {
         todo!();
     }
 
-    pub fn arm_not_implemented(
+    pub(crate) fn arm_not_implemented(
         &mut self,
         instruction: ARMByteCode,
         memory: &mut GBAMemory,

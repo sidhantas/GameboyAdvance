@@ -3,7 +3,7 @@ use crate::{memory::memory::GBAMemory, types::CYCLES, utils::bits::Bits};
 use super::cpu::{CPUMode, InstructionMode, CPU, LINK_REGISTER};
 
 #[derive(Clone, Copy)]
-pub enum Exceptions {
+pub(crate) enum Exceptions {
     Reset,
     Undefined,
     Software,
@@ -22,7 +22,7 @@ impl From<Exceptions> for CPUMode {
 }
 
 impl CPU {
-    pub fn raise_exception(&mut self, exception: Exceptions, memory: &mut GBAMemory) -> CYCLES {
+    pub(crate) fn raise_exception(&mut self, exception: Exceptions, memory: &mut GBAMemory) -> CYCLES {
         self.is_halted = false;
         let instruction_size = match self.get_instruction_mode() {
             super::cpu::InstructionMode::ARM => 4,
@@ -66,11 +66,11 @@ impl CPU {
         self.flush_pipeline(memory)
     }
 
-    pub fn halt(&mut self) {
+    pub(crate) fn halt(&mut self) {
         self.is_halted = true;
     }
 
-    pub fn raise_irq(&mut self, memory: &mut GBAMemory) {
+    pub(crate) fn raise_irq(&mut self, memory: &mut GBAMemory) {
         if self.get_cpsr().irq_enabled() {
             self.raise_exception(Exceptions::IRQ, memory);
         }

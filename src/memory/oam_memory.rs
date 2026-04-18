@@ -7,17 +7,17 @@ use super::{
     memory_block::{MemoryBlock, SimpleMemoryBlock},
     oam::NUM_OAM_ENTRIES,
 };
-pub struct OAMBlock {
-    pub memory: SimpleMemoryBlock<OAM_MIRROR_MASK>,
+pub(crate) struct OAMBlock {
+    pub(crate) memory: SimpleMemoryBlock<OAM_MIRROR_MASK>,
     affine_parameters: Vec<AffineParameters>,
-    pub is_dirty: bool,
+    pub(crate) is_dirty: bool,
     active_objects: Vec<Oam>,
 }
 const OAM_SIZE: usize = 0x400;
 const OAM_MIRROR_MASK: usize = 0x3FF;
 
 impl OAMBlock {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let oam = SimpleMemoryBlock::new(OAM_SIZE);
         let mut affine_parameters = Vec::with_capacity(NUM_OAM_AFFINE_PARAMETERS);
 
@@ -37,11 +37,11 @@ impl OAMBlock {
         self.affine_parameters[group] = AffineParameters::create_parameters(&self.memory, group);
     }
 
-    pub fn get_affine_paramters(&self, group: usize) -> AffineParameters {
+    pub(crate) fn get_affine_paramters(&self, group: usize) -> AffineParameters {
         self.affine_parameters[group].clone()
     }
 
-    pub fn oam_read(&self, oam_num: usize) -> Oam {
+    pub(crate) fn oam_read(&self, oam_num: usize) -> Oam {
         let oam_slice: [u8; 6] = self.memory.memory[oam_num * 0x08..][..6]
             .try_into()
             .unwrap();

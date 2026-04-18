@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-pub struct BranchInstruction(pub u32);
+pub(crate) struct BranchInstruction(pub(crate) u32);
 
 impl BranchInstruction {
     fn set_lr(&self) -> bool {
@@ -50,7 +50,7 @@ impl DecodeARMInstructionToString for BranchInstruction {
     }
 }
 
-pub struct BranchAndExchangeInstruction(pub u32);
+pub(crate) struct BranchAndExchangeInstruction(pub(crate) u32);
 
 impl BranchAndExchangeInstruction {
     fn rn(&self) -> REGISTER {
@@ -88,7 +88,7 @@ impl DecodeARMInstructionToString for BranchAndExchangeInstruction {
 }
 
 #[allow(unused)]
-pub struct SWI(pub u32);
+pub(crate) struct SWI(pub(crate) u32);
 
 impl Execute for SWI {
     fn execute(

@@ -8,7 +8,7 @@ use num_traits::Num;
 use regex::Regex;
 use sdl2::sys::Atom;
 
-pub fn print_vec<T: Display>(vec: &Vec<T>) -> String {
+pub(crate) fn print_vec<T: Display>(vec: &Vec<T>) -> String {
     let mut s = String::new();
 
     for elem in vec {
@@ -20,7 +20,7 @@ pub fn print_vec<T: Display>(vec: &Vec<T>) -> String {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ParsingError;
+pub(crate) struct ParsingError;
 
 fn parse_hex<T: Num>(str: &str) -> Result<T, ParsingError> {
     let hex_rust = Regex::new(r"^0x([0-9a-fA-F]*)$").unwrap();
@@ -53,7 +53,7 @@ impl KillSignal {
     }
 }
 
-pub fn try_parse_num<T: Num + FromStr>(str: &str) -> Result<T, ParsingError> {
+pub(crate) fn try_parse_num<T: Num + FromStr>(str: &str) -> Result<T, ParsingError> {
     if let Ok(parsed_value) = str.parse() {
         return Ok(parsed_value);
     }
@@ -61,7 +61,7 @@ pub fn try_parse_num<T: Num + FromStr>(str: &str) -> Result<T, ParsingError> {
     parse_hex::<T>(str)
 }
 
-pub fn try_parse_reg<T: Num + FromStr>(reg: &str) -> Result<T, ParsingError> {
+pub(crate) fn try_parse_reg<T: Num + FromStr>(reg: &str) -> Result<T, ParsingError> {
     let mut reg_iter = reg.chars();
     if let Some('r') = reg_iter.next() {
     } else {

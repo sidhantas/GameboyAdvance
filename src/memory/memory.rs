@@ -22,9 +22,9 @@ use super::{
     oam_memory::OAMBlock,
 };
 
-pub struct MemoryFetch<T> {
-    pub cycles: CYCLES,
-    pub data: T,
+pub(crate) struct MemoryFetch<T> {
+    pub(crate) cycles: CYCLES,
+    pub(crate) data: T,
 }
 
 impl Into<MemoryFetch<WORD>> for MemoryFetch<BYTE> {
@@ -71,7 +71,7 @@ const ROM_SIZE: usize = 0x1000000;
 const SRAM_SIZE: usize = 0x10000;
 
 #[derive(Clone, Copy, Debug)]
-pub enum CPUCallbacks {
+pub(crate) enum CPUCallbacks {
     Halt,
     Stop,
     RaiseIrq,
@@ -79,7 +79,7 @@ pub enum CPUCallbacks {
 }
 
 #[derive(Debug)]
-pub enum MemoryError {
+pub(crate) enum MemoryError {
     NoIODefinition(usize),
     ReadError(usize),
     WriteError(usize, u32),
@@ -104,26 +104,26 @@ const IWRAM_MIRROR_MASK: usize = 0x7FFF;
 const BGRAM_MIRROR_MASK: usize = 0x3FF;
 const OAM_MIRROR_MASK: usize = 0x3FF;
 
-pub struct GBAMemory {
+pub(crate) struct GBAMemory {
     bios: SimpleMemoryBlock<0xFFFFFF>,
     exwram: SimpleMemoryBlock<EXWRAM_MIRROR_MASK>,
     iwram: SimpleMemoryBlock<IWRAM_MIRROR_MASK>,
-    pub ioram: IOBlock,
-    pub pallete_ram: SimpleMemoryBlock<BGRAM_MIRROR_MASK>,
-    pub vram: SimpleMemoryBlock<0xFFFFFF>,
-    pub oam: OAMBlock,
+    pub(crate) ioram: IOBlock,
+    pub(crate) pallete_ram: SimpleMemoryBlock<BGRAM_MIRROR_MASK>,
+    pub(crate) vram: SimpleMemoryBlock<0xFFFFFF>,
+    pub(crate) oam: OAMBlock,
     rom: SimpleMemoryBlock<0xFFFFFF>,
     sram: SimpleMemoryBlock<0xFFFFFF>,
     active_region: u32,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
     pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
-    pub triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
-    pub breakpoints: Option<Vec<Breakpoint>>,
+    pub(crate) triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
+    pub(crate) breakpoints: Option<Vec<Breakpoint>>,
 }
 
 impl GBAMemory {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut wait_cycles_u16 = [0; 15];
         wait_cycles_u16[BIOS_REGION] = 1;
         wait_cycles_u16[IWRAM_REGION] = 1;
@@ -178,7 +178,7 @@ impl GBAMemory {
         memory
     }
 
-    pub fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
+    pub(crate) fn initialize_bios(&mut self, filename: String) -> Result<(), std::io::Error> {
         let mut bios_file = File::options().read(true).open(filename)?;
         let mut buffer = Vec::new();
         bios_file.rewind()?;
@@ -187,7 +187,7 @@ impl GBAMemory {
         Ok(())
     }
 
-    pub fn initialize_rom(&mut self, filename: String) -> Result<(), std::io::Error> {
+    pub(crate) fn initialize_rom(&mut self, filename: String) -> Result<(), std::io::Error> {
         let mut bios_file = File::options().read(true).open(filename)?;
         let mut buffer = Vec::new();
         bios_file.rewind()?;
@@ -196,7 +196,7 @@ impl GBAMemory {
         Ok(())
     }
 
-    pub fn clear_ram(&mut self) {
+    pub(crate) fn clear_ram(&mut self) {
         //self.exwram = vec![0; EXWRAM_SIZE];
         //self.iwram = vec![0; IWRAM_SIZE];
         //self.ioram = vec![0; IORAM_SIZE >> 1];
@@ -206,11 +206,11 @@ impl GBAMemory {
         //self.sram = vec![0; SRAM_SIZE];
     }
 
-    pub fn io_load(&self, address: usize) -> u16 {
+    pub(crate) fn io_load(&self, address: usize) -> u16 {
         self.ioram.io_load(address)
     }
 
-    pub fn ppu_io_write(&mut self, address: usize, value: u16) {
+    pub(crate) fn ppu_io_write(&mut self, address: usize, value: u16) {
         self.ioram.ppu_io_write(address, value)
     }
 
@@ -244,7 +244,7 @@ impl GBAMemory {
         }
     }
 
-    pub fn write(&mut self, address: usize, value: u8) -> CYCLES {
+    pub(crate) fn write(&mut self, address: usize, value: u8) -> CYCLES {
         let region = address >> 24;
 
         if let Some(memory_block) = self.get_memory_block_mut(region) {
@@ -258,7 +258,7 @@ impl GBAMemory {
         self.wait_cycles_u16[region]
     }
 
-    pub fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
+    pub(crate) fn writeu16(&mut self, address: usize, value: u16) -> CYCLES {
         let region = address >> 24;
         if let Some(memory_block) = self.get_memory_block_mut(region) {
             memory_block.writeu16(address, value);
@@ -270,7 +270,7 @@ impl GBAMemory {
         self.wait_cycles_u16[region]
     }
 
-    pub fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
+    pub(crate) fn writeu32(&mut self, address: usize, value: u32) -> CYCLES {
         let region = address >> 24;
         if let Some(memory_block) = self.get_memory_block_mut(region) {
             memory_block.writeu32(address, value);
@@ -282,7 +282,7 @@ impl GBAMemory {
         self.wait_cycles_u32[region]
     }
 
-    pub fn read(&self, address: usize) -> MemoryFetch<u8> {
+    pub(crate) fn read(&self, address: usize) -> MemoryFetch<u8> {
         let region = address >> 24;
         let read = self.get_memory_block(region).readu8(address);
 
@@ -296,12 +296,12 @@ impl GBAMemory {
         }
     }
 
-    pub fn read_raw(&self, address: usize) -> u8 {
+    pub(crate) fn read_raw(&self, address: usize) -> u8 {
         let region = address >> 24;
         self.get_memory_block(region).readu8(address)
     }
 
-    pub fn readu16(&self, address: usize) -> MemoryFetch<u16> {
+    pub(crate) fn readu16(&self, address: usize) -> MemoryFetch<u16> {
         let region = address >> 24;
         let read = self.get_memory_block(region).readu16(address);
         if let Some(breakpoint_checker) = &self.breakpoint_checker {
@@ -313,7 +313,7 @@ impl GBAMemory {
         }
     }
 
-    pub fn readu32(&self, address: usize) -> MemoryFetch<u32> {
+    pub(crate) fn readu32(&self, address: usize) -> MemoryFetch<u32> {
         let region = address >> 24;
         let read = match region {
             BIOS_REGION => self.bios.readu32(address),
@@ -336,7 +336,7 @@ impl GBAMemory {
         }
     }
 
-    pub fn readu32_double(&self, address: usize) -> (MemoryFetch<u32>, MemoryFetch<u32>) {
+    pub(crate) fn readu32_double(&self, address: usize) -> (MemoryFetch<u32>, MemoryFetch<u32>) {
         let region = address >> 24;
         let read_1 = match region {
             BIOS_REGION => self.bios.readu32(address),
@@ -380,7 +380,7 @@ impl GBAMemory {
         )
     }
 
-    pub fn get_oam_borders(&self) -> Vec<Border> {
+    pub(crate) fn get_oam_borders(&self) -> Vec<Border> {
         let mut borders = Vec::new();
         for i in 0..NUM_OAM_ENTRIES {
             let oam = self.oam.oam_read(i);

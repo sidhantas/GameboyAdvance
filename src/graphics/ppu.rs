@@ -8,10 +8,10 @@ use std::sync::Arc;
 use super::display::DisplayBuffer;
 use super::layers::OBJPixel;
 
-pub const HDRAW: i32 = 240;
-pub const HBLANK: i32 = 68;
-pub const VDRAW: i32 = 160;
-pub const VBLANK: i32 = 68;
+pub(crate) const HDRAW: i32 = 240;
+pub(crate) const HBLANK: i32 = 68;
+pub(crate) const VDRAW: i32 = 160;
+pub(crate) const VBLANK: i32 = 68;
 
 pub(super) const VBLANK_FLAG: u16 = 1 << 0;
 pub(super) const HBLANK_FLAG: u16 = 1 << 1;
@@ -28,21 +28,21 @@ pub(crate) enum PPUModes {
 }
 
 #[derive(Debug)]
-pub struct PPU {
+pub(crate) struct PPU {
     usable_cycles: u32,
     available_dots: u32,
     pub(super) current_mode: PPUModes,
-    pub x: i32,
-    pub y: i32,
-    pub obj_buffer: [Option<OBJPixel>; HDRAW as usize],
-    pub obj_window: [bool; HDRAW as usize],
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) obj_buffer: [Option<OBJPixel>; HDRAW as usize],
+    pub(crate) obj_window: [bool; HDRAW as usize],
     pub(super) active_objects: Vec<Oam>,
-    pub show_borders: bool,
+    pub(crate) show_borders: bool,
     pub(super) ppu_to_display_sender: Sender<PPUToDisplayCommands>,
 }
 
 impl PPU {
-    pub fn new(ppu_to_display_sender: Sender<PPUToDisplayCommands>) -> Self {
+    pub(crate) fn new(ppu_to_display_sender: Sender<PPUToDisplayCommands>) -> Self {
         Self {
             usable_cycles: 0,
             available_dots: 0,
@@ -57,14 +57,14 @@ impl PPU {
         }
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.usable_cycles = 0;
         self.available_dots = 0;
         self.current_mode = PPUModes::HDRAW;
         self.x = 0;
         self.y = 0;
     }
-    pub fn advance_ppu(
+    pub(crate) fn advance_ppu(
         &mut self,
         cycles: u8,
         memory: &mut GBAMemory,

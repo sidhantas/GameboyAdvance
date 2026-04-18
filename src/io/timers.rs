@@ -1,7 +1,7 @@
 use crate::memory::wrappers::tmcnt::TMCntH;
 
 #[derive(Debug)]
-pub struct Timers([Timer; 4]);
+pub(crate) struct Timers([Timer; 4]);
 
 impl Timers {
     pub(crate) fn new() -> Self {

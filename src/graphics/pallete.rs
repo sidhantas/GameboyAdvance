@@ -1,9 +1,9 @@
 use super::{ppu_modes::hdraw::RGBComponents, wrappers::tile::Tile};
 
-pub struct OBJPalleteData(pub [u8; 0x200]);
+pub(crate) struct OBJPalleteData(pub(crate) [u8; 0x200]);
 
 impl OBJPalleteData {
-    pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
+    pub(crate) fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
         match tile {
             Tile::FourBit { tile, pallete_num } => {
                 let palette_index = tile[y * 4 + x / 2];
@@ -18,7 +18,7 @@ impl OBJPalleteData {
         }
     }
 
-    pub fn get_obj_color(
+    pub(crate) fn get_obj_color(
         &self,
         palette_index: usize,
         pallete_num: usize,
@@ -39,10 +39,10 @@ impl OBJPalleteData {
     }
 }
 
-pub struct BGPalleteData<'a>(pub &'a [u8; 0x200]);
+pub(crate) struct BGPalleteData<'a>(pub(crate) &'a [u8; 0x200]);
 
 impl<'a> BGPalleteData<'a> {
-    pub fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
+    pub(crate) fn get_pixel_from_tile(&self, tile: &Tile, x: usize, y: usize) -> Option<RGBComponents> {
         match tile {
             Tile::FourBit { .. } => Some(RGBComponents {
                 r: 0,
@@ -56,7 +56,7 @@ impl<'a> BGPalleteData<'a> {
         }
     }
 
-    pub fn get_bg_color(
+    pub(crate) fn get_bg_color(
         &self,
         palette_index: usize,
         pallete_num: usize,
@@ -78,7 +78,7 @@ impl<'a> BGPalleteData<'a> {
     }
 }
 
-pub fn rgb555_to_rgb24(rgb555: RGBComponents) -> u32 {
+pub(crate) fn rgb555_to_rgb24(rgb555: RGBComponents) -> u32 {
     let r8: u32 = (rgb555.r * 8).into();
     let g8: u32 = (rgb555.g * 8).into();
     let b8: u32 = (rgb555.b * 8).into();

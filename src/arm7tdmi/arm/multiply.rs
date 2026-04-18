@@ -7,7 +7,7 @@ use crate::{
     utils::{bits::Bits, instruction_to_string::print_register},
 };
 
-pub struct MultiplyInstruction(pub u32);
+pub(crate) struct MultiplyInstruction(pub(crate) u32);
 
 enum MultiplyOpcodes {
     MUL,

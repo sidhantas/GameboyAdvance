@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{fmt::Display, mem, time::Instant};
 
-pub enum TerminalCommandErrors {
+pub(crate) enum TerminalCommandErrors {
     CouldNotFindCommand,
     NotEnoughArguments,
     CouldNotParse,
@@ -31,25 +31,25 @@ impl Display for TerminalCommandErrors {
     }
 }
 
-pub struct TerminalCommand {
-    pub name: &'static str,
-    pub _arguments: u8,
-    pub _description: &'static str,
-    pub handler:
+pub(crate) struct TerminalCommand {
+    pub(crate) name: &'static str,
+    pub(crate) _arguments: u8,
+    pub(crate) _description: &'static str,
+    pub(crate) handler:
         fn(debugger: &mut Debugger, args: Vec<&str>) -> Result<String, TerminalCommandErrors>,
 }
 
-pub enum PPUToDisplayCommands {
+pub(crate) enum PPUToDisplayCommands {
     Render,
     RenderWithBorders(Vec<Border>),
 }
 
-pub struct TerminalHistoryEntry {
-    pub command: String,
-    pub result: String,
+pub(crate) struct TerminalHistoryEntry {
+    pub(crate) command: String,
+    pub(crate) result: String,
 }
 
-pub const TERMINAL_COMMANDS: [TerminalCommand; 14] = [
+pub(crate) const TERMINAL_COMMANDS: [TerminalCommand; 14] = [
     TerminalCommand {
         name: "next",
         _arguments: 1,
@@ -145,7 +145,7 @@ fn find_command(command: &str) -> Result<&TerminalCommand, TerminalCommandErrors
     Err(TerminalCommandErrors::CouldNotFindCommand)
 }
 
-pub fn parse_command(debugger: &mut Debugger) -> Result<String, TerminalCommandErrors> {
+pub(crate) fn parse_command(debugger: &mut Debugger) -> Result<String, TerminalCommandErrors> {
     let buff = debugger.terminal_buffer.clone();
     let mut split_command = buff.split_whitespace();
     let Some(command_name) = split_command.next() else {

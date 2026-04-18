@@ -18,14 +18,14 @@ use crate::{
 };
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RGBComponents {
-    pub r: u16,
-    pub g: u16,
-    pub b: u16,
+pub(crate) struct RGBComponents {
+    pub(crate) r: u16,
+    pub(crate) g: u16,
+    pub(crate) b: u16,
 }
 
 impl RGBComponents {
-    pub fn backdrop() -> Self {
+    pub(crate) fn backdrop() -> Self {
         Self {
             r: 0x1f,
             g: 0x1f,

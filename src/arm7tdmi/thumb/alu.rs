@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-pub struct ThumbFullAdder(pub u32);
+pub(crate) struct ThumbFullAdder(pub(crate) u32);
 
 impl ThumbFullAdder {
     fn full_adder_operation(&self) -> (ThumbFullAdderOperations, Operand) {
@@ -38,7 +38,7 @@ impl ThumbFullAdder {
     }
 }
 
-pub enum ThumbFullAdderOperations {
+pub(crate) enum ThumbFullAdderOperations {
     Add,
     Sub,
 }
@@ -87,13 +87,13 @@ impl Display for ThumbFullAdderOperations {
     }
 }
 
-pub enum ThumbALUInstruction {
+pub(crate) enum ThumbALUInstruction {
     Logical(ThumbLogicalInstruction),
     Arithmetic(ThumbArithmeticInstruction),
     Shift(ThumbShiftInstruction),
 }
 
-pub struct ThumbALUOperation(pub u32);
+pub(crate) struct ThumbALUOperation(pub(crate) u32);
 
 impl ThumbALUOperation {
     fn rd(&self) -> REGISTER {
@@ -127,7 +127,7 @@ impl ThumbALUOperation {
     }
 }
 
-pub enum ThumbArithmeticInstruction {
+pub(crate) enum ThumbArithmeticInstruction {
     Adc,
     Sbc,
     Neg,
@@ -136,7 +136,7 @@ pub enum ThumbArithmeticInstruction {
     Mul,
 }
 
-pub enum ThumbLogicalInstruction {
+pub(crate) enum ThumbLogicalInstruction {
     And,
     Eor,
     Tst,
@@ -145,7 +145,7 @@ pub enum ThumbLogicalInstruction {
     Mvn,
 }
 
-pub enum ThumbShiftInstruction {
+pub(crate) enum ThumbShiftInstruction {
     Lsl,
     Lsr,
     Asr,
@@ -392,7 +392,7 @@ impl CPU {
     }
 }
 
-pub struct ThumbMoveShiftedRegister(pub u32);
+pub(crate) struct ThumbMoveShiftedRegister(pub(crate) u32);
 
 enum ThumbMoveShiftedRegisterOperations {
     LSL,
@@ -453,7 +453,7 @@ impl DecodeThumbInstructionToString for ThumbMoveShiftedRegister {
     }
 }
 
-pub struct ThumbArithmeticImmInstruction(pub u32);
+pub(crate) struct ThumbArithmeticImmInstruction(pub(crate) u32);
 
 enum ThumbArithmeticImmOperations {
     Mov,
@@ -514,9 +514,9 @@ impl Execute for ThumbArithmeticImmInstruction {
     }
 }
 
-pub struct ThumbHiRegInstruction(pub u32);
+pub(crate) struct ThumbHiRegInstruction(pub(crate) u32);
 
-pub enum ThumbHiRegOperations {
+pub(crate) enum ThumbHiRegOperations {
     Add,
     Cmp,
     Mov,
@@ -587,7 +587,7 @@ impl DecodeThumbInstructionToString for ThumbHiRegInstruction {
     }
 }
 
-pub struct ThumbBx(pub u32);
+pub(crate) struct ThumbBx(pub(crate) u32);
 
 impl ThumbBx {
     fn rs(&self) -> REGISTER {
@@ -620,7 +620,7 @@ impl DecodeThumbInstructionToString for ThumbBx {
     }
 }
 
-pub struct ThumbAdr(pub u32);
+pub(crate) struct ThumbAdr(pub(crate) u32);
 
 enum ThumbAdrRegister {
     PC,
@@ -675,7 +675,7 @@ impl DecodeThumbInstructionToString for ThumbAdr {
     }
 }
 
-pub struct ThumbAddToSp(pub u32);
+pub(crate) struct ThumbAddToSp(pub(crate) u32);
 
 enum ThumbAddToSpOpcodes {
     Add,

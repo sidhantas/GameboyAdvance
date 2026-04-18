@@ -15,7 +15,7 @@ use crate::{
     utils::{bits::Bits, instruction_to_string::print_register},
 };
 
-pub struct LdrPCRelative(pub u32);
+pub(crate) struct LdrPCRelative(pub(crate) u32);
 
 impl LdrPCRelative {
     fn rd(&self) -> REGISTER {
@@ -51,7 +51,7 @@ impl DecodeThumbInstructionToString for LdrPCRelative {
     }
 }
 
-pub struct ThumbSdtRegisterOffset(pub u32);
+pub(crate) struct ThumbSdtRegisterOffset(pub(crate) u32);
 
 enum ThumbSdtRegisterOffsetOpcodes {
     SdtOpcode(SdtOpcode),
@@ -140,7 +140,7 @@ impl DecodeThumbInstructionToString for ThumbSdtRegisterOffset {
     }
 }
 
-pub struct ThumbSdtImmOffset(pub u32);
+pub(crate) struct ThumbSdtImmOffset(pub(crate) u32);
 
 impl ThumbSdtImmOffset {
     fn opcode(&self) -> SdtOpcode {
@@ -194,7 +194,7 @@ impl DecodeThumbInstructionToString for ThumbSdtImmOffset {
     }
 }
 
-pub struct ThumbSdtHwImmOffset(pub u32);
+pub(crate) struct ThumbSdtHwImmOffset(pub(crate) u32);
 
 impl ThumbSdtHwImmOffset {
     fn opcode(&self) -> SignedAndHwDtOpcodes {
@@ -240,7 +240,7 @@ impl DecodeThumbInstructionToString for ThumbSdtHwImmOffset {
     }
 }
 
-pub struct ThumbSdtSpImm(pub u32);
+pub(crate) struct ThumbSdtSpImm(pub(crate) u32);
 
 impl ThumbSdtSpImm {
     fn rd(&self) -> REGISTER {
@@ -282,7 +282,7 @@ impl DecodeThumbInstructionToString for ThumbSdtSpImm {
     }
 }
 
-pub struct ThumbPushPop(pub u32);
+pub(crate) struct ThumbPushPop(pub(crate) u32);
 
 impl ThumbPushPop {
     fn opcode(&self) -> ThumbPushPopOpcodes {
@@ -377,7 +377,7 @@ impl DecodeThumbInstructionToString for ThumbPushPop {
     }
 }
 
-pub struct ThumbBlockDT(pub u32);
+pub(crate) struct ThumbBlockDT(pub(crate) u32);
 
 impl ThumbBlockDT {
     fn opcode(&self) -> BlockDTOpcodes {

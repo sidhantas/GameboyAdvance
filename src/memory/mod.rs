@@ -1,8 +1,8 @@
-pub mod affine_parameters;
-pub mod debugger_memory;
-pub mod io_handlers;
-pub mod memory;
-pub mod memory_block;
-pub mod oam;
-pub mod oam_memory;
-pub mod wrappers;
+pub(crate) mod affine_parameters;
+pub(crate) mod debugger_memory;
+pub(crate) mod io_handlers;
+pub(crate) mod memory;
+pub(crate) mod memory_block;
+pub(crate) mod oam;
+pub(crate) mod oam_memory;
+pub(crate) mod wrappers;

@@ -1,6 +1,6 @@
-pub mod alu;
-pub mod data_transfer_instructions;
-pub mod instructions;
-pub mod swap_instruction;
-pub mod branch;
-pub mod multiply;
+pub(crate) mod alu;
+pub(crate) mod data_transfer_instructions;
+pub(crate) mod instructions;
+pub(crate) mod swap_instruction;
+pub(crate) mod branch;
+pub(crate) mod multiply;

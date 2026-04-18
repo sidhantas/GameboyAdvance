@@ -1,3 +1,3 @@
-pub mod bits;
-pub mod utils;
-pub mod instruction_to_string;
+pub(crate) mod bits;
+pub(crate) mod utils;
+pub(crate) mod instruction_to_string;

@@ -10,7 +10,7 @@ use super::{
     ppu_modes::hdraw::RGBComponents,
 };
 
-pub fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponents {
+pub(crate) fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBComponents {
     let binding = memory.io_load(BLDCNT);
     let bldcnt = BldCnt(&binding);
 
@@ -73,16 +73,16 @@ fn get_blend_mode(layers: &Layers, bldcnt: &BldCnt<'_>) -> BlendMode {
 
 #[derive(Default)]
 struct TargetLayer {
-    pub bg0: Option<BGPixel>,
-    pub bg1: Option<BGPixel>,
-    pub bg2: Option<BGPixel>,
-    pub bg3: Option<BGPixel>,
-    pub obj: Option<OBJPixel>,
-    pub bd: Option<BGPixel>,
+    pub(crate) bg0: Option<BGPixel>,
+    pub(crate) bg1: Option<BGPixel>,
+    pub(crate) bg2: Option<BGPixel>,
+    pub(crate) bg3: Option<BGPixel>,
+    pub(crate) obj: Option<OBJPixel>,
+    pub(crate) bd: Option<BGPixel>,
 }
 
 impl TargetLayer {
-    pub fn get_target_pixel_a(&self) -> Option<LayerPixel> {
+    pub(crate) fn get_target_pixel_a(&self) -> Option<LayerPixel> {
         if let Some(obj) = self.obj {
             if obj.mode == OBJMode::SemiTransparent {
                 return Some(LayerPixel::OBJ(obj));
@@ -116,7 +116,7 @@ impl TargetLayer {
         )
     }
 
-    pub fn get_target_pixel_b(&self, target_pixel_a: LayerPixel) -> Option<LayerPixel> {
+    pub(crate) fn get_target_pixel_b(&self, target_pixel_a: LayerPixel) -> Option<LayerPixel> {
         let target_pixel_a_priority = target_pixel_a.priority();
         let pixels = [
             self.bd.map(|pixel| LayerPixel::BG(pixel)),
@@ -152,7 +152,7 @@ impl TargetLayer {
         )
     }
 
-    pub fn get_enabled_layers(layers: &Layers, bldcnt: &BldCnt) -> (Self, Self) {
+    pub(crate) fn get_enabled_layers(layers: &Layers, bldcnt: &BldCnt) -> (Self, Self) {
         let mut target_layers_a = TargetLayer::default();
         let mut target_layers_b = TargetLayer::default();
 

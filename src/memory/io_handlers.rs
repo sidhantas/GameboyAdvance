@@ -10,13 +10,13 @@ use super::{
 
 const IORAM_SIZE: usize = 0x3FF;
 
-pub const DISPCNT: usize = 0x000;
-pub const DISPSTAT: usize = 0x004;
-pub const VCOUNT: usize = 0x006;
-pub const BG0CNT: usize = 0x008;
-pub const BG1CNT: usize = 0x00A;
-pub const BG2CNT: usize = 0x00C;
-pub const BG3CNT: usize = 0x00E;
+pub(crate) const DISPCNT: usize = 0x000;
+pub(crate) const DISPSTAT: usize = 0x004;
+pub(crate) const VCOUNT: usize = 0x006;
+pub(crate) const BG0CNT: usize = 0x008;
+pub(crate) const BG1CNT: usize = 0x00A;
+pub(crate) const BG2CNT: usize = 0x00C;
+pub(crate) const BG3CNT: usize = 0x00E;
 const BG0HOFS: usize = 0x010;
 const BG0VOFS: usize = 0x012;
 const BG1HOFS: usize = 0x014;
@@ -41,58 +41,58 @@ const BG3X_L: usize = 0x038;
 const BG3X_H: usize = 0x03A;
 const BG3Y_L: usize = 0x03C;
 const BG3Y_H: usize = 0x03E;
-pub const WIN0H: usize = 0x040;
-pub const WIN1H: usize = 0x042;
-pub const WIN0V: usize = 0x044;
-pub const WIN1V: usize = 0x046;
-pub const WININ: usize = 0x048;
-pub const WINOUT: usize = 0x04A;
+pub(crate) const WIN0H: usize = 0x040;
+pub(crate) const WIN1H: usize = 0x042;
+pub(crate) const WIN0V: usize = 0x044;
+pub(crate) const WIN1V: usize = 0x046;
+pub(crate) const WININ: usize = 0x048;
+pub(crate) const WINOUT: usize = 0x04A;
 const MOSAIC: usize = 0x04C;
-pub const BLDCNT: usize = 0x050;
-pub const BLDALPHA: usize = 0x052;
-pub const BLDY: usize = 0x054;
+pub(crate) const BLDCNT: usize = 0x050;
+pub(crate) const BLDALPHA: usize = 0x052;
+pub(crate) const BLDY: usize = 0x054;
 
-pub const DMA0SAD: usize = 0x0B0;
-pub const DMA0DAD: usize = 0x0B4;
-pub const DMA0CNT_L: usize = 0x0B8;
-pub const DMA0CNT_H: usize = 0x0BA;
-pub const DMA1SAD: usize = 0x0BC;
-pub const DMA1DAD: usize = 0x0C0;
-pub const DMA1CNT_L: usize = 0x0C4;
-pub const DMA1CNT_H: usize = 0x0C6;
-pub const DMA2SAD: usize = 0x0C8;
-pub const DMA2DAD: usize = 0x0CC;
-pub const DMA2CNT_L: usize = 0x0D0;
-pub const DMA2CNT_H: usize = 0x0D2;
-pub const DMA3SAD: usize = 0x0D4;
-pub const DMA3DAD: usize = 0x0D8;
-pub const DMA3CNT_L: usize = 0x0DC;
-pub const DMA3CNT_H: usize = 0x0DE;
-pub const TM0CNT_L: usize = 0x100;
-pub const TM0CNT_H: usize = 0x102;
-pub const TM1CNT_L: usize = 0x104;
-pub const TM1CNT_H: usize = 0x106;
-pub const TM2CNT_L: usize = 0x108;
-pub const TM2CNT_H: usize = 0x10A;
-pub const TM3CNT_L: usize = 0x10C;
-pub const TM3CNT_H: usize = 0x10E;
-pub const KEYINPUT: usize = 0x130;
+pub(crate) const DMA0SAD: usize = 0x0B0;
+pub(crate) const DMA0DAD: usize = 0x0B4;
+pub(crate) const DMA0CNT_L: usize = 0x0B8;
+pub(crate) const DMA0CNT_H: usize = 0x0BA;
+pub(crate) const DMA1SAD: usize = 0x0BC;
+pub(crate) const DMA1DAD: usize = 0x0C0;
+pub(crate) const DMA1CNT_L: usize = 0x0C4;
+pub(crate) const DMA1CNT_H: usize = 0x0C6;
+pub(crate) const DMA2SAD: usize = 0x0C8;
+pub(crate) const DMA2DAD: usize = 0x0CC;
+pub(crate) const DMA2CNT_L: usize = 0x0D0;
+pub(crate) const DMA2CNT_H: usize = 0x0D2;
+pub(crate) const DMA3SAD: usize = 0x0D4;
+pub(crate) const DMA3DAD: usize = 0x0D8;
+pub(crate) const DMA3CNT_L: usize = 0x0DC;
+pub(crate) const DMA3CNT_H: usize = 0x0DE;
+pub(crate) const TM0CNT_L: usize = 0x100;
+pub(crate) const TM0CNT_H: usize = 0x102;
+pub(crate) const TM1CNT_L: usize = 0x104;
+pub(crate) const TM1CNT_H: usize = 0x106;
+pub(crate) const TM2CNT_L: usize = 0x108;
+pub(crate) const TM2CNT_H: usize = 0x10A;
+pub(crate) const TM3CNT_L: usize = 0x10C;
+pub(crate) const TM3CNT_H: usize = 0x10E;
+pub(crate) const KEYINPUT: usize = 0x130;
 const KEYCNT: usize = 0x132;
 
 const SOUNDBIAS: usize = 0x088;
 
-pub const IME: usize = 0x208;
-pub const IE: usize = 0x200;
-pub const IF: usize = 0x202;
+pub(crate) const IME: usize = 0x208;
+pub(crate) const IE: usize = 0x200;
+pub(crate) const IF: usize = 0x202;
 const WAITCNT: usize = 0x204;
 const POSTFLG: usize = 0x300;
 const HALTCNT: usize = 0x301;
 
 #[derive(Copy, Clone)]
 struct IORegisterDefinition {
-    pub mask: BitMask,
+    pub(crate) mask: BitMask,
     needs_special_handling: bool,
-    pub callback: Option<fn(&mut IOBlock, u16, u16) -> ()>,
+    pub(crate) callback: Option<fn(&mut IOBlock, u16, u16) -> ()>,
 }
 
 #[derive(Clone, Copy)]
@@ -104,7 +104,7 @@ enum BitMask {
 }
 
 impl IORegisterDefinition {
-    pub const fn new(mask: BitMask, needs_special_handling: bool) -> Self {
+    pub(crate) const fn new(mask: BitMask, needs_special_handling: bool) -> Self {
         Self {
             mask,
             needs_special_handling,
@@ -112,7 +112,7 @@ impl IORegisterDefinition {
         }
     }
 
-    pub const fn with_callback(mut self, callback: fn(&mut IOBlock, u16, u16) -> ()) -> Self {
+    pub(crate) const fn with_callback(mut self, callback: fn(&mut IOBlock, u16, u16) -> ()) -> Self {
         self.callback = Some(callback);
         self
     }
@@ -526,18 +526,18 @@ fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError>
     return Err(MemoryError::NoIODefinition(offset));
 }
 
-pub struct IOBlock {
+pub(crate) struct IOBlock {
     memory: Vec<u16>,
-    pub timers: Timers,
-    pub cpu_commands: Vec<CPUCallbacks>,
-    pub dma_0_address: DMAControl,
-    pub dma_1_address: DMAControl,
-    pub dma_2_address: DMAControl,
-    pub dma_3_address: DMAControl,
+    pub(crate) timers: Timers,
+    pub(crate) cpu_commands: Vec<CPUCallbacks>,
+    pub(crate) dma_0_address: DMAControl,
+    pub(crate) dma_1_address: DMAControl,
+    pub(crate) dma_2_address: DMAControl,
+    pub(crate) dma_3_address: DMAControl,
 }
 
 impl IOBlock {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             memory: vec![0; IORAM_SIZE >> 1],
             timers: Timers::new(),
@@ -549,7 +549,7 @@ impl IOBlock {
         }
     }
 
-    pub fn ppu_io_write(&mut self, address: usize, value: u16) {
+    pub(crate) fn ppu_io_write(&mut self, address: usize, value: u16) {
         let old_value = self.memory[(address & 0xFFF) >> 1];
         self.memory[(address & 0xFFF) >> 1] = value;
         let Ok(def) = get_io_definition(address & 0xFFF) else {
@@ -598,7 +598,7 @@ impl IOBlock {
     }
 
     #[inline(always)]
-    pub fn io_load(&self, address: usize) -> u16 {
+    pub(crate) fn io_load(&self, address: usize) -> u16 {
         *self.memory.get(address >> 1).unwrap_or(&0)
     }
 

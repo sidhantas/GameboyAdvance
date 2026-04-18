@@ -16,15 +16,15 @@ use crate::{debugger::terminal_commands::PPUToDisplayCommands, gba::KILL_SIGNAL}
 use super::ppu::{HDRAW, VDRAW};
 
 const DISPLAY_SCALE: u32 = 3;
-pub const CANVAS_AREA: usize = (HDRAW * VDRAW) as usize;
+pub(crate) const CANVAS_AREA: usize = (HDRAW * VDRAW) as usize;
 
-pub struct DisplayBuffer {
-    pub buffer: Mutex<[u32; CANVAS_AREA]>,
-    pub ready_to_render: AtomicBool,
+pub(crate) struct DisplayBuffer {
+    pub(crate) buffer: Mutex<[u32; CANVAS_AREA]>,
+    pub(crate) ready_to_render: AtomicBool,
 }
 
 impl DisplayBuffer {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             buffer: Mutex::new([0; CANVAS_AREA]),
             ready_to_render: true.into(),
@@ -32,14 +32,14 @@ impl DisplayBuffer {
     }
 }
 
-pub struct Border {
-    pub x: i32,
-    pub y: i32,
-    pub width: i32,
-    pub height: i32,
+pub(crate) struct Border {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: i32,
+    pub(crate) height: i32,
 }
 
-pub fn start_display(
+pub(crate) fn start_display(
     pixel_buffer: Arc<DisplayBuffer>,
     ppu_to_display_recv: Receiver<PPUToDisplayCommands>,
 ) {

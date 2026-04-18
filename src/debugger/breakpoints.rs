@@ -3,25 +3,25 @@ use std::fmt::Display;
 use crate::{memory::memory::MemoryError, types::REGISTER};
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum BreakType {
+pub(crate) enum BreakType {
     Break(u32),
     WatchRegister(REGISTER, u32),
     WatchAddress(usize, usize),
 }
 
 #[derive(Debug)]
-pub enum TriggeredWatchpoints {
+pub(crate) enum TriggeredWatchpoints {
     Address(usize),
     Error(MemoryError),
 }
 
 #[derive(Clone)]
-pub struct Breakpoint {
-    pub break_type: BreakType,
+pub(crate) struct Breakpoint {
+    pub(crate) break_type: BreakType,
 }
 
 impl Breakpoint {
-    pub fn new(break_type: BreakType) -> Self {
+    pub(crate) fn new(break_type: BreakType) -> Self {
         Self { break_type }
     }
 }

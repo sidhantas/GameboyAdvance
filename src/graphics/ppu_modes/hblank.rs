@@ -48,7 +48,7 @@ impl PPU {
             }
         }
     }
-    pub fn update_oam_objects(&mut self, memory: &mut GBAMemory, dispcnt: Dispcnt) {
+    pub(crate) fn update_oam_objects(&mut self, memory: &mut GBAMemory, dispcnt: Dispcnt) {
         let pallete_region = memory.pallete_ram.memory[0x200..][..0x200]
             .try_into()
             .unwrap();

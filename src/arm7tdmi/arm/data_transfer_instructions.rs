@@ -15,19 +15,19 @@ use crate::{
     },
 };
 
-pub struct SdtInstruction(pub u32);
+pub(crate) struct SdtInstruction(pub(crate) u32);
 
-pub enum SdtOpcode {
+pub(crate) enum SdtOpcode {
     Load(LoadOpcodes),
     Store(StoreOpcodes),
 }
 
-pub enum LoadOpcodes {
+pub(crate) enum LoadOpcodes {
     LDR,
     LDRB,
 }
 
-pub enum StoreOpcodes {
+pub(crate) enum StoreOpcodes {
     STR,
     STRB,
 }
@@ -125,7 +125,7 @@ impl SdtInstruction {
 
 impl SdtOpcode {
     #[inline]
-    pub fn execute(&self, cpu: &mut CPU, memory: &mut GBAMemory, rd: REGISTER, access_address: usize) -> CYCLES {
+    pub(crate) fn execute(&self, cpu: &mut CPU, memory: &mut GBAMemory, rd: REGISTER, access_address: usize) -> CYCLES {
         let mut cycles = 0;
         match self {
             SdtOpcode::Load(load_opcode) => {
@@ -231,14 +231,14 @@ impl DecodeARMInstructionToString for SdtInstruction {
     }
 }
 
-pub struct SignedAndHwDtInstruction(pub u32);
+pub(crate) struct SignedAndHwDtInstruction(pub(crate) u32);
 
-pub enum SignedAndHwDtOpcodes {
+pub(crate) enum SignedAndHwDtOpcodes {
     Load(SignedAndHwDtLoadOpcodes),
     STRH,
 }
 
-pub enum SignedAndHwDtLoadOpcodes {
+pub(crate) enum SignedAndHwDtLoadOpcodes {
     LDRH,
     LDRSB,
     LDRSH,
@@ -301,7 +301,7 @@ impl SignedAndHwDtInstruction {
 }
 
 impl SignedAndHwDtOpcodes {
-    pub fn execute(&self, cpu: &mut CPU, memory: &mut GBAMemory, rd: REGISTER, access_address: usize) -> CYCLES {
+    pub(crate) fn execute(&self, cpu: &mut CPU, memory: &mut GBAMemory, rd: REGISTER, access_address: usize) -> CYCLES {
         let mut cycles = 0;
         match self {
             SignedAndHwDtOpcodes::Load(load_opcode) => {
@@ -410,9 +410,9 @@ impl DecodeARMInstructionToString for SignedAndHwDtInstruction {
     }
 }
 
-pub struct BlockDTInstruction(pub u32);
+pub(crate) struct BlockDTInstruction(pub(crate) u32);
 
-pub enum BlockDTOpcodes {
+pub(crate) enum BlockDTOpcodes {
     STM,
     LDM,
 }
@@ -453,7 +453,7 @@ impl BlockDTInstruction {
     }
 }
 
-pub struct RegisterList {
+pub(crate) struct RegisterList {
     pub(crate) list: u32,
     pub(crate) i: u32,
 }

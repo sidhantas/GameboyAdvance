@@ -17,7 +17,7 @@ use crate::{
 
 static COMMANDS_EXECUTED: AtomicUsize = AtomicUsize::new(0);
 
-pub fn start_debugger(
+pub(crate) fn start_debugger(
     bios: String,
     rom: String,
     pixel_buffer: Arc<DisplayBuffer>,

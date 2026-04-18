@@ -1,7 +1,7 @@
 mod color_effects;
-pub mod display;
+pub(crate) mod display;
 mod layers;
-pub mod pallete;
-pub mod ppu;
+pub(crate) mod pallete;
+pub(crate) mod ppu;
 mod ppu_modes;
-pub mod wrappers;
+pub(crate) mod wrappers;

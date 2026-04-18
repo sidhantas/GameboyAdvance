@@ -3,8 +3,8 @@ use crate::types::WORD;
 use super::cpu::CPUMode;
 
 #[derive(Debug)]
-pub struct Registers {
-    pub active_registers: [WORD; 16],
+pub(crate) struct Registers {
+    pub(crate) active_registers: [WORD; 16],
     registers_user: [WORD; 16],
     registers_svc: [WORD; 16],
     registers_abt: [WORD; 16],
@@ -14,7 +14,7 @@ pub struct Registers {
 }
 
 impl Registers {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Registers {
             active_registers: [0; 16],
             registers_user: [0; 16],
@@ -26,15 +26,15 @@ impl Registers {
         }
     }
 
-    pub fn get_register(&self, register_num: usize) -> WORD {
+    pub(crate) fn get_register(&self, register_num: usize) -> WORD {
         self.active_registers[register_num]
     }
 
-    pub fn set_register(&mut self, register_num: usize, value: WORD) {
+    pub(crate) fn set_register(&mut self, register_num: usize, value: WORD) {
         self.active_registers[register_num] = value;
     }
 
-    pub fn update_registers(&mut self, cpu_mode: CPUMode) {
+    pub(crate) fn update_registers(&mut self, cpu_mode: CPUMode) {
         // store current registers
         for i in 0..13 {
             self.registers_user[i] = self.active_registers[i]

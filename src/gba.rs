@@ -15,16 +15,16 @@ use crate::{arm7tdmi::cpu::CPU, memory::memory::GBAMemory};
 
 pub(crate) static KILL_SIGNAL: KillSignal = KillSignal::new();
 
-pub struct GBA {
-    pub cpu: CPU,
-    pub memory: GBAMemory,
-    pub ppu: PPU,
+pub(crate) struct GBA {
+    pub(crate) cpu: CPU,
+    pub(crate) memory: GBAMemory,
+    pub(crate) ppu: PPU,
     display_buffer: Arc<DisplayBuffer>,
 }
 
 impl GBA {
     #[cfg(test)]
-    pub fn new_no_bios() -> Self {
+    pub(crate) fn new_no_bios() -> Self {
         use std::sync::mpsc::channel;
 
         Self {
@@ -35,7 +35,7 @@ impl GBA {
         }
     }
 
-    pub fn new(
+    pub(crate) fn new(
         bios: String,
         rom: String,
         display_buffer: Arc<DisplayBuffer>,
@@ -54,13 +54,13 @@ impl GBA {
         gba
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.memory.clear_ram();
         self.cpu.reset();
         self.ppu.reset();
     }
 
-    pub fn get_status(&self) {
+    pub(crate) fn get_status(&self) {
         for i in 0..4 {
             for j in 0..4 {
                 let register = i * 4 + j;
@@ -95,7 +95,7 @@ impl GBA {
         );
     }
 
-    pub fn step(&mut self) {
+    pub(crate) fn step(&mut self) {
         let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
         self.ppu
             .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);

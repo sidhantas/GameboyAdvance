@@ -35,7 +35,7 @@ use super::{
 };
 
 impl CPU {
-    pub fn decode_instruction(&self, instruction: WORD) -> Instruction {
+    pub(crate) fn decode_instruction(&self, instruction: WORD) -> Instruction {
         return match self.get_instruction_mode() {
             InstructionMode::ARM => self.decode_arm_instruction(instruction),
             InstructionMode::THUMB => self.decode_thumb_instruction(instruction),
@@ -190,139 +190,139 @@ impl CPU {
 mod arm_decoders {
     use super::ARMByteCode;
 
-    pub fn is_multiply_instruction(instruction: ARMByteCode) -> bool {
+    pub(crate) fn is_multiply_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0b0000_1111_1100_0000_0000_0000_1111_0000
             == 0b0000_0000_0000_0000_0000_0000_0000_1001_0000
     }
 
-    pub fn is_multiply_long_instruction(instruction: ARMByteCode) -> bool {
+    pub(crate) fn is_multiply_long_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0b0000_1111_1000_0000_0000_0000_1111_0000
             == 0b0000_0000_1000_0000_0000_0000_0000_1001_0000
     }
 
-    pub fn is_branch_instruction(instruction: ARMByteCode) -> bool {
+    pub(crate) fn is_branch_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0x0E00_0000 == 0x0A00_0000
     }
 
-    pub fn is_branch_and_link_instruction(instruction: ARMByteCode) -> bool {
+    pub(crate) fn is_branch_and_link_instruction(instruction: ARMByteCode) -> bool {
         instruction & 0x0F00_0000 == 0x0B00_0000
     }
 
-    pub fn is_single_data_swap(instruction: ARMByteCode) -> bool {
+    pub(crate) fn is_single_data_swap(instruction: ARMByteCode) -> bool {
         instruction & 0x0FB0_0FF0 == 0x0100_0090
     }
 
-    pub fn is_software_interrupt(instruction: u32) -> bool {
+    pub(crate) fn is_software_interrupt(instruction: u32) -> bool {
         instruction & 0x0F00_0000 == 0x0F00_0000
     }
 
-    pub fn is_block_data_transfer(instruction: u32) -> bool {
+    pub(crate) fn is_block_data_transfer(instruction: u32) -> bool {
         instruction & 0x0E00_0000 == 0x0800_0000
     }
 
-    pub fn is_undefined(instruction: u32) -> bool {
+    pub(crate) fn is_undefined(instruction: u32) -> bool {
         instruction & 0x0E00_0010 == 0x0600_0010
     }
 
-    pub fn is_load_or_store_register_unsigned(instruction: u32) -> bool {
+    pub(crate) fn is_load_or_store_register_unsigned(instruction: u32) -> bool {
         instruction & 0x0C00_0000 == 0x0400_0000
     }
 
-    pub fn is_msr(instruction: u32) -> bool {
+    pub(crate) fn is_msr(instruction: u32) -> bool {
         instruction & 0x0DB0_0000 == 0x0120_0000
     }
 
-    pub fn is_mrs(instruction: u32) -> bool {
+    pub(crate) fn is_mrs(instruction: u32) -> bool {
         instruction & 0x0DB0_0000 == 0x0100_0000
     }
 
-    pub fn is_data_processing(instruction: u32) -> bool {
+    pub(crate) fn is_data_processing(instruction: u32) -> bool {
         instruction & 0x0C00_0000 == 0x0000_0000
     }
 
-    pub fn is_hw_or_signed_data_transfer(instruction: u32) -> bool {
+    pub(crate) fn is_hw_or_signed_data_transfer(instruction: u32) -> bool {
         instruction & 0x0E00_0090 == 0x0000_0090
     }
 
-    pub fn is_branch_and_exchange_instruction(instruction: u32) -> bool {
+    pub(crate) fn is_branch_and_exchange_instruction(instruction: u32) -> bool {
         instruction & 0x0FFF_FF00 == 0x012F_FF00
     }
 }
 
 mod thumb_decoders {
-    pub fn is_add_or_subtract_instruction(instruction: u32) -> bool {
+    pub(crate) fn is_add_or_subtract_instruction(instruction: u32) -> bool {
         instruction & 0xF800 == 0x1800
     }
 
-    pub fn is_move_shifted_register(instruction: u32) -> bool {
+    pub(crate) fn is_move_shifted_register(instruction: u32) -> bool {
         instruction & 0xE000 == 0x0000
     }
 
-    pub fn is_move_compare_add_subtract_immediate(instruction: u32) -> bool {
+    pub(crate) fn is_move_compare_add_subtract_immediate(instruction: u32) -> bool {
         instruction & 0xE000 == 0x2000
     }
 
-    pub fn is_alu_operation(instruction: u32) -> bool {
+    pub(crate) fn is_alu_operation(instruction: u32) -> bool {
         instruction & 0xFC00 == 0x4000
     }
 
-    pub fn is_thumb_hi_reg_operation(instruction: u32) -> bool {
+    pub(crate) fn is_thumb_hi_reg_operation(instruction: u32) -> bool {
         instruction & 0xFC00 == 0x4400
     }
 
-    pub fn is_thumb_bx(instruction: u32) -> bool {
+    pub(crate) fn is_thumb_bx(instruction: u32) -> bool {
         instruction & 0xFF00 == 0x4700
     }
 
-    pub fn is_load_pc_relative(instruction: u32) -> bool {
+    pub(crate) fn is_load_pc_relative(instruction: u32) -> bool {
         instruction & 0xF800 == 0x4800
     }
 
-    pub fn is_sdt_register_offset(instruction: u32) -> bool {
+    pub(crate) fn is_sdt_register_offset(instruction: u32) -> bool {
         instruction & 0xF000 == 0x5000
     }
 
-    pub fn is_sdt_imm_offset(instruction: u32) -> bool {
+    pub(crate) fn is_sdt_imm_offset(instruction: u32) -> bool {
         instruction & 0xE000 == 0x6000
     }
 
-    pub fn is_sdt_halfword(instruction: u32) -> bool {
+    pub(crate) fn is_sdt_halfword(instruction: u32) -> bool {
         instruction & 0xF000 == 0x8000
     }
 
-    pub fn is_sdt_sp_imm(instruction: u32) -> bool {
+    pub(crate) fn is_sdt_sp_imm(instruction: u32) -> bool {
         instruction & 0xF000 == 0x9000
     }
 
-    pub fn is_get_relative_address(instruction: u32) -> bool {
+    pub(crate) fn is_get_relative_address(instruction: u32) -> bool {
         instruction & 0xF000 == 0xA000
     }
 
-    pub fn is_add_offset_to_sp(instruction: u32) -> bool {
+    pub(crate) fn is_add_offset_to_sp(instruction: u32) -> bool {
         instruction & 0xFF00 == 0xB000
     }
 
-    pub fn is_push_pop(instruction: u32) -> bool {
+    pub(crate) fn is_push_pop(instruction: u32) -> bool {
         instruction & 0xF600 == 0xB400
     }
 
-    pub fn is_thumb_block_dt(instruction: u32) -> bool {
+    pub(crate) fn is_thumb_block_dt(instruction: u32) -> bool {
         instruction & 0xF000 == 0xC000
     }
 
-    pub fn is_conditional_branch(instruction: u32) -> bool {
+    pub(crate) fn is_conditional_branch(instruction: u32) -> bool {
         instruction & 0xF000 == 0xD000
     }
-    pub fn is_unconditional_branch(instruction: u32) -> bool {
+    pub(crate) fn is_unconditional_branch(instruction: u32) -> bool {
         instruction & 0xF800 == 0xE000
     }
-    pub fn is_set_link_register(instruction: u32) -> bool {
+    pub(crate) fn is_set_link_register(instruction: u32) -> bool {
         instruction & 0xF800 == 0xF000
     }
-    pub fn is_long_branch_with_link(instruction: u32) -> bool {
+    pub(crate) fn is_long_branch_with_link(instruction: u32) -> bool {
         instruction & 0xF800 == 0xF800
     }
-    pub fn is_thumb_swi(instruction: u32) -> bool {
+    pub(crate) fn is_thumb_swi(instruction: u32) -> bool {
         instruction & 0xFF00 == 0xDF00
     }
 }
@@ -333,7 +333,7 @@ mod sub_decoders {
     use super::{instructions::ARMDecodedInstruction, ARMByteCode};
 
     impl CPU {
-        pub fn decode_multiply(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
+        pub(crate) fn decode_multiply(&self, instruction: ARMByteCode) -> ARMDecodedInstruction {
             if instruction.bit_is_set(21) {
                 return ARMDecodedInstruction {
                     executable: CPU::arm_multiply_accumulate,

@@ -1,14 +1,14 @@
 //use super::memory::{DebuggerMemoryBus, MemoryError, MemoryFetch};
 //
-//pub struct DebuggerMemory {
+//pub(crate) struct DebuggerMemory {
 //    catch_memory_error: Box<dyn Fn(MemoryError) -> ()>,
 //    breakpoint_checker: Box<dyn Fn(usize) -> ()>,
-//    pub memory: Box<dyn DebuggerMemoryBus>,
+//    pub(crate) memory: Box<dyn DebuggerMemoryBus>,
 //}
 //
 //
 //impl DebuggerMemory {
-//    pub fn new(
+//    pub(crate) fn new(
 //        memory: Box<dyn DebuggerMemoryBus>,
 //        breakpoint_checker: Box<dyn Fn(usize) -> ()>,
 //        catch_memory_error: Box<dyn Fn(MemoryError) -> ()>,

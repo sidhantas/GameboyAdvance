@@ -8,7 +8,7 @@ use crate::{
     utils::{bits::Bits, instruction_to_string::print_register},
 };
 
-pub struct SwapInstruction(pub u32);
+pub(crate) struct SwapInstruction(pub(crate) u32);
 
 impl SwapInstruction {
     fn swap_byte(&self) -> bool {

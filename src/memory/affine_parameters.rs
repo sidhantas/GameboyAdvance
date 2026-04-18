@@ -2,12 +2,12 @@ use crate::utils::bits::fixed88_point_to_floating_point;
 
 use super::{memory_block::SimpleMemoryBlock, oam::Oam};
 
-pub const NUM_OAM_AFFINE_PARAMETERS: usize = 32;
+pub(crate) const NUM_OAM_AFFINE_PARAMETERS: usize = 32;
 #[derive(Clone)]
-pub struct AffineParameters([[f32; 2]; 2]);
+pub(crate) struct AffineParameters([[f32; 2]; 2]);
 
 impl AffineParameters {
-    pub fn create_parameters<const MASK: usize>(oam_memory: &SimpleMemoryBlock<MASK>, group: usize) -> Self {
+    pub(crate) fn create_parameters<const MASK: usize>(oam_memory: &SimpleMemoryBlock<MASK>, group: usize) -> Self {
         Self([
             [
                 fixed88_point_to_floating_point(u16::from_le_bytes(
@@ -36,7 +36,7 @@ impl AffineParameters {
         ])
     }
 
-    pub fn transform_coordinates(&self, x: i32, y: i32, oam: &Oam) -> (i32, i32) {
+    pub(crate) fn transform_coordinates(&self, x: i32, y: i32, oam: &Oam) -> (i32, i32) {
         let (view_center_x, view_center_y) = oam.view_center();
         let (relative_x, relative_y) = (x - view_center_x, y - view_center_y);
         let transform_x = relative_x as f32 * self.0[0][0] + relative_x as f32 * self.0[1][0];

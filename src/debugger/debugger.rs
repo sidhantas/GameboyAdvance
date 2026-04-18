@@ -44,19 +44,19 @@ use crate::{
 
 use super::terminal_commands::{parse_command, TerminalHistoryEntry};
 
-pub struct Debugger {
-    pub memory_start_address: u32,
-    pub terminal_buffer: String,
-    pub terminal_history: Vec<TerminalHistoryEntry>,
-    pub terminal_enabled: bool,
-    pub end_debugger: bool,
-    pub gba: GBA,
-    pub breakpoints: Option<Vec<Breakpoint>>,
-    pub triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
+pub(crate) struct Debugger {
+    pub(crate) memory_start_address: u32,
+    pub(crate) terminal_buffer: String,
+    pub(crate) terminal_history: Vec<TerminalHistoryEntry>,
+    pub(crate) terminal_enabled: bool,
+    pub(crate) end_debugger: bool,
+    pub(crate) gba: GBA,
+    pub(crate) breakpoints: Option<Vec<Breakpoint>>,
+    pub(crate) triggered_watchpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
 }
 
 impl Debugger {
-    pub fn new(
+    pub(crate) fn new(
         bios: String,
         rom: String,
         pixel_buffer: Arc<DisplayBuffer>,
@@ -95,7 +95,7 @@ impl Debugger {
     }
 }
 
-pub fn start_debugger(
+pub(crate) fn start_debugger(
     bios: String,
     rom: String,
     pixel_buffer: Arc<DisplayBuffer>,

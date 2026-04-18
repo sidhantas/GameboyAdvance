@@ -7,7 +7,7 @@ use num_traits::{Bounded, PrimInt, Unsigned};
 
 use crate::types::{BYTE, HWORD, WORD};
 
-//pub trait Bits2
+//pub(crate) trait Bits2
 //where
 //    Self: Shr<u8, Output = Self>,
 //    Self: BitAnd<Self, Output = Self>,
@@ -42,7 +42,7 @@ use crate::types::{BYTE, HWORD, WORD};
 //
 //impl Bits2 for HWORD {}
 
-pub trait Bits: PrimInt + Shr<u8> + BitAnd + Eq {
+pub(crate) trait Bits: PrimInt + Shr<u8> + BitAnd + Eq {
     fn twos_complement(self) -> Self;
     fn bit_is_set(&self, bit: u8) -> bool;
     fn set_bit(&mut self, bit: u8);
@@ -137,7 +137,7 @@ impl Bits for BYTE {
     }
 }
 
-pub fn sign_extend<T>(word: T, sign_bit: u8) -> T
+pub(crate) fn sign_extend<T>(word: T, sign_bit: u8) -> T
 where
     T: Bounded + Shl<u8, Output = T> + Bits,
 {
@@ -149,7 +149,7 @@ where
     word
 }
 
-pub fn fixed88_point_to_floating_point(mut fixed88: u16) -> f32 {
+pub(crate) fn fixed88_point_to_floating_point(mut fixed88: u16) -> f32 {
     let mut float: u32 = 0;
 
     if fixed88 == 0 {
@@ -189,7 +189,7 @@ mod fixed88_tests {
     #[case(0xb8, 0.71875)]
     #[case(0x0100, 1.)]
     #[case(0x0040, 0.25)]
-    pub fn converts_fixed_point_to_f32(#[case] fixed88: u16, #[case] expected_output: f32) {
+    pub(crate) fn converts_fixed_point_to_f32(#[case] fixed88: u16, #[case] expected_output: f32) {
         let result = dbg!(fixed88_point_to_floating_point(fixed88));
         println!("0b{:0>32b}", result.to_bits());
         assert_eq!(result, expected_output);

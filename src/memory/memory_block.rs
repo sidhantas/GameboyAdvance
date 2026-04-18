@@ -2,7 +2,7 @@ use std::{mem::size_of, usize};
 
 use super::{io_handlers::IOBlock, oam_memory::OAMBlock};
 
-pub trait MemoryBlock {
+pub(crate) trait MemoryBlock {
     fn writeu8(&mut self, address: usize, value: u8);
     fn writeu16(&mut self, address: usize, value: u16);
     fn writeu32(&mut self, address: usize, value: u32);
@@ -11,12 +11,12 @@ pub trait MemoryBlock {
     fn readu32(&self, address: usize) -> u32;
 }
 
-pub struct SimpleMemoryBlock<const MASK: usize> {
-    pub memory: Vec<u8>,
+pub(crate) struct SimpleMemoryBlock<const MASK: usize> {
+    pub(crate) memory: Vec<u8>,
 }
 
 impl<const MASK: usize> SimpleMemoryBlock<MASK> {
-    pub fn new(size: usize) -> Self {
+    pub(crate) fn new(size: usize) -> Self {
         SimpleMemoryBlock::<MASK> {
             memory: vec![0; size + 4],
         }

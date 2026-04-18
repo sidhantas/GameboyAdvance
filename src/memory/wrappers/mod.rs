@@ -1,6 +1,6 @@
-pub mod bgcnt;
-pub mod blending;
-pub mod dispcnt;
-pub mod tmcnt;
-pub mod window;
-pub mod dma;
+pub(crate) mod bgcnt;
+pub(crate) mod blending;
+pub(crate) mod dispcnt;
+pub(crate) mod tmcnt;
+pub(crate) mod window;
+pub(crate) mod dma;

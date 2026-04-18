@@ -18,7 +18,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum PSRRegister {
+pub(crate) enum PSRRegister {
     SPSR,
     CPSR,
 }
@@ -33,7 +33,7 @@ impl Display for PSRRegister {
 }
 
 #[derive(Debug)]
-pub enum ArithmeticInstruction {
+pub(crate) enum ArithmeticInstruction {
     Sub,
     Rsb,
     Add,
@@ -45,7 +45,7 @@ pub enum ArithmeticInstruction {
 }
 
 #[derive(Debug)]
-pub enum LogicalInstruction {
+pub(crate) enum LogicalInstruction {
     And,
     Eor,
     Tst,
@@ -57,10 +57,10 @@ pub enum LogicalInstruction {
 }
 
 #[derive(Debug)]
-pub struct Shift(pub ShiftType, pub(crate) Operand);
+pub(crate) struct Shift(pub(crate) ShiftType, pub(crate) Operand);
 
 #[derive(Debug, Clone, Copy)]
-pub enum ShiftType {
+pub(crate) enum ShiftType {
     LSL,
     LSR,
     ASR,
@@ -449,14 +449,14 @@ impl DecodeARMInstructionToString for ALUInstruction {
     }
 }
 
-pub struct MRSInstruction(pub u32);
+pub(crate) struct MRSInstruction(pub(crate) u32);
 
 impl MRSInstruction {
-    pub fn rd(&self) -> REGISTER {
+    pub(crate) fn rd(&self) -> REGISTER {
         (self.0 & 0x0000_F000) >> 12
     }
 
-    pub fn psr_register(&self) -> PSRRegister {
+    pub(crate) fn psr_register(&self) -> PSRRegister {
         if self.0.bit_is_set(22) {
             PSRRegister::SPSR
         } else {
@@ -488,10 +488,10 @@ impl DecodeARMInstructionToString for MRSInstruction {
     }
 }
 
-pub struct MSRInstruction(pub u32);
+pub(crate) struct MSRInstruction(pub(crate) u32);
 
 impl MSRInstruction {
-    pub fn operand(&self) -> Operand {
+    pub(crate) fn operand(&self) -> Operand {
         if self.0.bit_is_set(25) {
             let shift = (self.0 & 0x0000_0F00) >> 7;
             let imm = (self.0 & 0x0000_00FF);
@@ -502,7 +502,7 @@ impl MSRInstruction {
         }
     }
 
-    pub fn psr_register(&self) -> PSRRegister {
+    pub(crate) fn psr_register(&self) -> PSRRegister {
         if self.0.bit_is_set(22) {
             PSRRegister::SPSR
         } else {
@@ -510,11 +510,11 @@ impl MSRInstruction {
         }
     }
 
-    pub fn set_flags(&self) -> bool {
+    pub(crate) fn set_flags(&self) -> bool {
         self.0.bit_is_set(19)
     }
 
-    pub fn set_ctl(&self) -> bool {
+    pub(crate) fn set_ctl(&self) -> bool {
         self.0.bit_is_set(16)
     }
 }
@@ -802,7 +802,7 @@ impl CPU {
         }
     }
 
-    pub fn set_arm_logical_flags(&mut self, result: WORD, set_flags: bool) {
+    pub(crate) fn set_arm_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags {
             self.set_logical_flags(result, set_flags);
             if self.shifter_output > 0 {
@@ -813,7 +813,7 @@ impl CPU {
         }
     }
 
-    pub fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
+    pub(crate) fn set_logical_flags(&mut self, result: WORD, set_flags: bool) {
         if set_flags == false {
             return;
         }
@@ -829,7 +829,7 @@ impl CPU {
         }
     }
 
-    pub fn set_arithmetic_flags(
+    pub(crate) fn set_arithmetic_flags(
         &mut self,
         result: WORD,
         operand1: u32,
