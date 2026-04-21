@@ -3,19 +3,16 @@ use crate::graphics::layers::OBJPixel;
 use crate::graphics::pallete::OBJPalleteData;
 use crate::graphics::ppu::{PPUModes, HDRAW, PPU, VDRAW};
 use crate::graphics::wrappers::tile::Tile;
-use crate::memory::io_handlers::DISPCNT;
 use crate::memory::memory::{Event, GBAMemory};
 use crate::memory::oam::{OBJMode, NUM_OAM_ENTRIES};
-use crate::memory::wrappers::dispcnt::Dispcnt;
 
 impl PPU {
     pub(crate) fn hblank(&mut self, memory: &mut GBAMemory) {
         self.y += 1;
         self.x = 0;
         if self.y < VDRAW {
-            let dispcnt = Dispcnt(memory.io_load(DISPCNT));
             self.obj_selection(memory);
-            self.update_oam_objects(memory, dispcnt);
+            self.update_oam_objects(memory);
             memory.add_event(Event::HDraw);
             self.current_mode = PPUModes::HDRAW;
             return;
@@ -51,7 +48,7 @@ impl PPU {
             }
         }
     }
-    pub(crate) fn update_oam_objects(&mut self, memory: &mut GBAMemory, dispcnt: Dispcnt) {
+    pub(crate) fn update_oam_objects(&mut self, memory: &mut GBAMemory) {
         let pallete_region = memory.pallete_ram.memory[0x200..][..0x200]
             .try_into()
             .unwrap();

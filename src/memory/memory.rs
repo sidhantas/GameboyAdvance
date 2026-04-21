@@ -80,7 +80,7 @@ pub(crate) enum Event {
     HDraw,
     VBlank,
     HBlank,
-    VCount
+    VCount(i32)
 }
 
 #[derive(Debug)]
@@ -403,15 +403,14 @@ impl GBAMemory {
     }
 
     pub(crate) fn handle_events(&mut self) {
-        for event in &self.events {
+        for event in self.events.drain(..) {
             match event {
                 Event::HDraw => self.ioram.handle_hdraw(),
                 Event::VBlank => self.ioram.handle_vblank(),
                 Event::HBlank => self.ioram.handle_hblank(),
-                Event::VCount => todo!(),
+                Event::VCount(value) => self.ioram.handle_vcount(value),
             }
         }
-        self.events.clear()
     }
 
     pub(crate) fn add_event(&mut self, event: Event) {

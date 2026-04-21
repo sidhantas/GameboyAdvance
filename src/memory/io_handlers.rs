@@ -1,6 +1,6 @@
 use std::u16;
 
-use crate::{graphics::ppu::{HBLANK_FLAG, VBLANK_FLAG}, io::timers::Timers, utils::bits::Bits};
+use crate::{graphics::ppu::{HBLANK_FLAG, VBLANK_FLAG, VCOUNTER_FLAG}, io::timers::Timers, memory::wrappers::dispstat::Dispstat, utils::bits::Bits};
 
 use super::{
     memory::{CPUEvent, GBAMemory, MemoryError},
@@ -714,6 +714,19 @@ impl IOBlock {
         let mut dispstat = self.io_load(DISPSTAT);
         dispstat &= !(VBLANK_FLAG | HBLANK_FLAG);
         self.privileged_write(DISPSTAT, dispstat);
+    }
+
+    pub(crate) fn handle_vcount(&mut self, value: i32) {
+        self.privileged_write(VCOUNT, value as u16);
+        let mut dispstat_value = self.io_load(DISPSTAT);
+        let dispstat = Dispstat(dispstat_value);
+        
+        if dispstat.vcount_setting() == value as u16 {
+            dispstat_value |= VCOUNTER_FLAG;
+        } else {
+            dispstat_value &= !VCOUNTER_FLAG;
+        }
+        self.privileged_write(DISPSTAT, dispstat_value);
     }
 }
 

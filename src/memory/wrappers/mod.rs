@@ -4,3 +4,4 @@ pub(crate) mod dispcnt;
 pub(crate) mod tmcnt;
 pub(crate) mod window;
 pub(crate) mod dma;
+pub(crate) mod dispstat;
