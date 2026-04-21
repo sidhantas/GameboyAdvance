@@ -4,7 +4,7 @@ use crate::graphics::pallete::OBJPalleteData;
 use crate::graphics::ppu::{PPUModes, HDRAW, PPU, VDRAW};
 use crate::graphics::wrappers::tile::Tile;
 use crate::memory::io_handlers::DISPCNT;
-use crate::memory::memory::GBAMemory;
+use crate::memory::memory::{Event, GBAMemory};
 use crate::memory::oam::{OBJMode, NUM_OAM_ENTRIES};
 use crate::memory::wrappers::dispcnt::Dispcnt;
 
@@ -16,9 +16,12 @@ impl PPU {
             let dispcnt = Dispcnt(memory.io_load(DISPCNT));
             self.obj_selection(memory);
             self.update_oam_objects(memory, dispcnt);
+            memory.add_event(Event::HDraw);
             self.current_mode = PPUModes::HDRAW;
             return;
         }
+
+        memory.add_event(Event::VBlank);
         self.current_mode = PPUModes::VBLANK;
         self.start_display_rendering(memory);
     }

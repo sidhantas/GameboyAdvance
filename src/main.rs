@@ -2,22 +2,24 @@ use std::sync::Arc;
 use std::thread;
 use std::{panic, sync::mpsc::channel};
 
+pub(crate) mod arm7tdmi;
+pub(crate) mod debugger;
+pub(crate) mod gba;
+pub(crate) mod graphics;
+pub(crate) mod io;
+pub(crate) mod memory;
+pub(crate) mod types;
+pub(crate) mod utils;
+
+
 use getopts::Options;
 use graphics::display::{start_display, DisplayBuffer};
 use std::env;
 
-use crate::debugger::terminal_debugger::start_debugger;
+pub(crate) use crate::debugger::terminal_debugger::start_debugger;
 
-mod arm7tdmi;
-mod debugger;
-mod gba;
-mod graphics;
-mod io;
-mod memory;
-mod types;
-mod utils;
 
-fn main() -> Result<(), std::io::Error> {
+pub fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut opts = Options::new();
@@ -42,6 +44,4 @@ fn main() -> Result<(), std::io::Error> {
         scope.spawn(move || start_debugger(bios, rom, gba_pixel_buff, ppu_to_display_send));
         start_display(pixel_buffer.clone(), ppu_to_display_recv);
     });
-
-    Ok(())
 }

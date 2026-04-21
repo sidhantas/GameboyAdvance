@@ -2,6 +2,7 @@ use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::memory::io_handlers::{DISPSTAT, VCOUNT};
 use crate::memory::memory::GBAMemory;
 use crate::memory::oam::Oam;
+use std::fmt::Display;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
@@ -13,11 +14,11 @@ pub(crate) const HBLANK: i32 = 68;
 pub(crate) const VDRAW: i32 = 160;
 pub(crate) const VBLANK: i32 = 68;
 
-pub(super) const VBLANK_FLAG: u16 = 1 << 0;
-pub(super) const HBLANK_FLAG: u16 = 1 << 1;
-pub(super) const VCOUNTER_FLAG: u16 = 1 << 2;
-pub(super) const VBLANK_ENABLE: u16 = 1 << 3;
-pub(super) const HBLANK_ENABLE: u16 = 1 << 4;
+pub(crate) const VBLANK_FLAG: u16 = 1 << 0;
+pub(crate) const HBLANK_FLAG: u16 = 1 << 1;
+pub(crate) const VCOUNTER_FLAG: u16 = 1 << 2;
+pub(crate) const VBLANK_ENABLE: u16 = 1 << 3;
+pub(crate) const HBLANK_ENABLE: u16 = 1 << 4;
 
 #[derive(Default, Debug)]
 pub(crate) enum PPUModes {
@@ -27,11 +28,21 @@ pub(crate) enum PPUModes {
     VBLANK,
 }
 
+impl Display for PPUModes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            PPUModes::HDRAW => "HDRAW",
+            PPUModes::HBLANK => "HBLANK",
+            PPUModes::VBLANK => "VBLANK",
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PPU {
     usable_cycles: u32,
     available_dots: u32,
-    pub(super) current_mode: PPUModes,
+    pub(crate) current_mode: PPUModes,
     pub(crate) x: i32,
     pub(crate) y: i32,
     pub(crate) obj_buffer: [Option<OBJPixel>; HDRAW as usize],
@@ -72,34 +83,30 @@ impl PPU {
     ) {
         self.available_dots += cycles as u32;
 
-        let mut dispstat = memory.ioram.io_load(DISPSTAT);
         match self.current_mode {
             PPUModes::HDRAW => {
                 if self.available_dots < 4 * HDRAW as u32 {
-                    // accumulate enough dots to draw entire lin
+                    // accumulate enough dots to draw entire line
                     return;
                 }
                 self.available_dots -= 4 * HDRAW as u32;
                 self.hdraw(memory, display_buffer);
             }
             PPUModes::HBLANK => {
-                dispstat |= HBLANK_FLAG;
                 if self.available_dots < 4 * HBLANK as u32 {
-                    // accumulate enough dots to draw entire lin
+                    // accumulate enough dots to draw entire line
                     return;
                 }
                 self.available_dots -= 4 * HBLANK as u32;
                 self.hblank(memory);
-                dispstat &= !HBLANK_FLAG;
             }
             PPUModes::VBLANK => {
-                dispstat |= VBLANK_FLAG;
                 if self.available_dots < 4 * (HBLANK + HDRAW) as u32 {
-                    // accumulate enough dots to draw entire lin
+                    // accumulate enough dots to draw entire line
                     return;
                 }
                 self.available_dots -= 4 * (HBLANK + HDRAW) as u32;
-                self.vblank(&mut dispstat);
+                self.vblank(memory);
             }
         };
 
@@ -107,8 +114,7 @@ impl PPU {
         // get window pixels with priority
         // get obj pixels with priority
         // overlay on top of each other
-        memory.ppu_io_write(DISPSTAT, dispstat);
-        memory.ppu_io_write(VCOUNT, self.y as u16);
+        memory.privileged_io_write(VCOUNT, self.y as u16);
     }
 }
 

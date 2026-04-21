@@ -1,10 +1,8 @@
 use crate::{
-    debugger::breakpoints::{Breakpoint, TriggeredWatchpoints},
-    graphics::{
+    debugger::breakpoints::{Breakpoint, TriggeredWatchpoints}, graphics::{
         display::Border,
-        ppu::{HDRAW, VDRAW},
-    },
-    types::{BYTE, CYCLES, HWORD, WORD},
+        ppu::{HBLANK_FLAG, HDRAW, VDRAW},
+    }, memory::io_handlers::DISPSTAT, types::{BYTE, CYCLES, HWORD, WORD}
 };
 use std::{
     cell::RefCell,
@@ -71,11 +69,18 @@ const ROM_SIZE: usize = 0x1000000;
 const SRAM_SIZE: usize = 0x10000;
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum CPUCallbacks {
+pub(crate) enum CPUEvent {
     Halt,
     Stop,
     RaiseIrq,
     DMA(usize),
+}
+
+pub(crate) enum Event {
+    HDraw,
+    VBlank,
+    HBlank,
+    VCount
 }
 
 #[derive(Debug)]
@@ -102,7 +107,6 @@ impl Display for MemoryError {
 const EXWRAM_MIRROR_MASK: usize = 0x3FFFF;
 const IWRAM_MIRROR_MASK: usize = 0x7FFF;
 const BGRAM_MIRROR_MASK: usize = 0x3FF;
-const OAM_MIRROR_MASK: usize = 0x3FF;
 
 pub(crate) struct GBAMemory {
     bios: SimpleMemoryBlock<0xFFFFFF>,
@@ -117,6 +121,7 @@ pub(crate) struct GBAMemory {
     active_region: u32,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
+    events: Vec<Event>,
     pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
     pub(crate) triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
     pub(crate) breakpoints: Option<Vec<Breakpoint>>,
@@ -166,6 +171,7 @@ impl GBAMemory {
             rom: SimpleMemoryBlock::new(ROM_SIZE),
             sram: SimpleMemoryBlock::new(SRAM_SIZE),
             wait_cycles_u16,
+            events: Vec::new(),
             active_region: 0,
             wait_cycles_u32,
             breakpoint_checker: None,
@@ -210,8 +216,8 @@ impl GBAMemory {
         self.ioram.io_load(address)
     }
 
-    pub(crate) fn ppu_io_write(&mut self, address: usize, value: u16) {
-        self.ioram.ppu_io_write(address, value)
+    pub(crate) fn privileged_io_write(&mut self, address: usize, value: u16) {
+        self.ioram.privileged_write(address, value)
     }
 
     fn get_memory_block_mut(&mut self, region: usize) -> Option<&mut dyn MemoryBlock> {
@@ -395,6 +401,23 @@ impl GBAMemory {
         }
         borders
     }
+
+    pub(crate) fn handle_events(&mut self) {
+        for event in &self.events {
+            match event {
+                Event::HDraw => self.ioram.handle_hdraw(),
+                Event::VBlank => self.ioram.handle_vblank(),
+                Event::HBlank => self.ioram.handle_hblank(),
+                Event::VCount => todo!(),
+            }
+        }
+        self.events.clear()
+    }
+
+    pub(crate) fn add_event(&mut self, event: Event) {
+        self.events.push(event);
+    }
+
 }
 
 #[cfg(test)]

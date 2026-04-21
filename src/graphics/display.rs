@@ -2,9 +2,9 @@ use std::{
     mem::size_of,
     ops::ControlFlow,
     sync::{
-        atomic::{AtomicBool, Ordering::Relaxed},
+        atomic::{AtomicBool},
         mpsc::Receiver,
-        Arc, Condvar, Mutex, MutexGuard,
+        Arc, Mutex,
     },
     time::Duration,
 };

@@ -272,6 +272,17 @@ fn draw_ppu(
         ppu_values[4],
     );
 
+    f.render_widget(
+        Paragraph::new(format!("PPU Mode")).alignment(Alignment::Center),
+        ppu_regs[4],
+    );
+
+    f.render_widget(
+        Paragraph::new(format!("{}", cpu.ppu.current_mode))
+            .alignment(Alignment::Center),
+        ppu_values[4],
+    );
+
     f.render_widget(block, ppu_chunk);
 
     Ok(())

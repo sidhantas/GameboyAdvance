@@ -1,9 +1,9 @@
 use std::u16;
 
-use crate::{io::timers::Timers, utils::bits::Bits};
+use crate::{graphics::ppu::{HBLANK_FLAG, VBLANK_FLAG}, io::timers::Timers, utils::bits::Bits};
 
 use super::{
-    memory::{CPUCallbacks, GBAMemory, MemoryError},
+    memory::{CPUEvent, GBAMemory, MemoryError},
     memory_block::{MemoryBlock, SimpleMemoryBlock},
     wrappers::{dma::DMAControl, tmcnt::TMCntH},
 };
@@ -112,7 +112,10 @@ impl IORegisterDefinition {
         }
     }
 
-    pub(crate) const fn with_callback(mut self, callback: fn(&mut IOBlock, u16, u16) -> ()) -> Self {
+    pub(crate) const fn with_callback(
+        mut self,
+        callback: fn(&mut IOBlock, u16, u16) -> (),
+    ) -> Self {
         self.callback = Some(callback);
         self
     }
@@ -529,7 +532,7 @@ fn get_io_definition(offset: usize) -> Result<IORegisterDefinition, MemoryError>
 pub(crate) struct IOBlock {
     memory: Vec<u16>,
     pub(crate) timers: Timers,
-    pub(crate) cpu_commands: Vec<CPUCallbacks>,
+    pub(crate) cpu_events: Vec<CPUEvent>,
     pub(crate) dma_0_address: DMAControl,
     pub(crate) dma_1_address: DMAControl,
     pub(crate) dma_2_address: DMAControl,
@@ -541,7 +544,7 @@ impl IOBlock {
         Self {
             memory: vec![0; IORAM_SIZE >> 1],
             timers: Timers::new(),
-            cpu_commands: Vec::new(),
+            cpu_events: Vec::new(),
             dma_0_address: DMAControl::default(),
             dma_1_address: DMAControl::default(),
             dma_2_address: DMAControl::default(),
@@ -549,7 +552,7 @@ impl IOBlock {
         }
     }
 
-    pub(crate) fn ppu_io_write(&mut self, address: usize, value: u16) {
+    pub(crate) fn privileged_write(&mut self, address: usize, value: u16) {
         let old_value = self.memory[(address & 0xFFF) >> 1];
         self.memory[(address & 0xFFF) >> 1] = value;
         let Ok(def) = get_io_definition(address & 0xFFF) else {
@@ -585,8 +588,8 @@ impl IOBlock {
                     };
                     mask
                 });
-                let full_mask: u16 = ((upper_mask as u16) << 8) | lower_mask as u16;
 
+                let full_mask: u16 = ((upper_mask as u16) << 8) | lower_mask as u16;
                 data & full_mask
             }
             BitMask::SIXTEEN(mask, _) => mask & data,
@@ -665,10 +668,10 @@ impl IOBlock {
 
     pub(super) fn halt(&mut self, _old_value: u16, value: u16) {
         if value & 0x8000 > 0 {
-            self.cpu_commands.push(CPUCallbacks::Stop);
+            self.cpu_events.push(CPUEvent::Stop);
             return;
         }
-        self.cpu_commands.push(CPUCallbacks::Halt);
+        self.cpu_events.push(CPUEvent::Halt);
     }
 
     pub(super) fn check_interrupts(&mut self, _old_value: u16, _value: u16) {
@@ -676,7 +679,7 @@ impl IOBlock {
             return;
         }
         if self.io_load(IF) & self.io_load(IE) > 0 {
-            self.cpu_commands.push(CPUCallbacks::RaiseIrq);
+            self.cpu_events.push(CPUEvent::RaiseIrq);
         }
     }
 
@@ -692,6 +695,25 @@ impl IOBlock {
         current_if |= available_interrupts;
         self.io_store(IF, current_if);
         self.check_interrupts(old_value, value);
+    }
+
+    pub(crate) fn handle_hblank(&mut self) {
+        let mut dispstat = self.io_load(DISPSTAT);
+        dispstat |= HBLANK_FLAG;
+        self.privileged_write(DISPSTAT, dispstat);
+    }
+
+    pub(crate) fn handle_vblank(&mut self) {
+        let mut dispstat = self.io_load(DISPSTAT);
+        dispstat &= !HBLANK_FLAG;
+        dispstat |= VBLANK_FLAG;
+        self.privileged_write(DISPSTAT, dispstat);
+    }
+
+    pub(crate) fn handle_hdraw(&mut self) {
+        let mut dispstat = self.io_load(DISPSTAT);
+        dispstat &= !(VBLANK_FLAG | HBLANK_FLAG);
+        self.privileged_write(DISPSTAT, dispstat);
     }
 }
 

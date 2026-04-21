@@ -7,7 +7,7 @@ use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::PPU;
 use crate::memory::io_handlers::IF;
-use crate::memory::memory::CPUCallbacks;
+use crate::memory::memory::CPUEvent;
 use crate::utils::bits::Bits;
 use crate::utils::instruction_to_string::print_register;
 use crate::utils::utils::KillSignal;
@@ -107,16 +107,17 @@ impl GBA {
                     if_flag.set_bit((3 + i) as u8);
                 }
             }
-            self.memory.ppu_io_write(IF, if_flag);
+            self.memory.privileged_io_write(IF, if_flag);
         }
+        self.memory.handle_events();
 
-        for command in self.memory.ioram.cpu_commands.drain(..) {
+        for command in self.memory.ioram.cpu_events.drain(..) {
             match command {
-                CPUCallbacks::Halt => self.cpu.halt(),
-                CPUCallbacks::RaiseIrq => {
+                CPUEvent::Halt => self.cpu.halt(),
+                CPUEvent::RaiseIrq => {
                     self.cpu.interrupt_triggered = true;
                 }
-                CPUCallbacks::DMA(dma_num) => {}
+                CPUEvent::DMA(dma_num) => {}
                 _ => panic!("{:#?}", command),
             }
         }

@@ -82,7 +82,7 @@ mod timer_tests {
         io::timers::Timers,
         memory::{
             io_handlers::{IE, IF, IME, TM0CNT_H, TM0CNT_L, TM1CNT_H},
-            memory::{CPUCallbacks, GBAMemory},
+            memory::{CPUEvent, GBAMemory},
         },
         utils::bits::Bits,
     };
@@ -93,7 +93,7 @@ mod timer_tests {
         let mut timers = Timers::new();
         let mut tmcnt = memory.io_load(TM0CNT_H);
         tmcnt.set_bit(7); // enables timer
-        memory.ppu_io_write(TM0CNT_H, tmcnt);
+        memory.privileged_io_write(TM0CNT_H, tmcnt);
 
         timers.tick(1);
 
@@ -107,7 +107,7 @@ mod timer_tests {
         let mut tmcnt = memory.io_load(TM0CNT_H);
         tmcnt.set_bit(7); // enables timer
         tmcnt.set_bit(1); // set prescalar to 256 clocks
-        memory.ppu_io_write(TM0CNT_H, tmcnt);
+        memory.privileged_io_write(TM0CNT_H, tmcnt);
 
         timers.tick(256);
 
@@ -121,7 +121,7 @@ mod timer_tests {
         let mut tmcnt = memory.io_load(TM0CNT_H);
         tmcnt.set_bit(7); // enables timer
         tmcnt.set_bit(1); // set prescalar to 256 clocks
-        memory.ppu_io_write(TM0CNT_H, tmcnt);
+        memory.privileged_io_write(TM0CNT_H, tmcnt);
 
         timers.tick(255);
 
@@ -134,12 +134,12 @@ mod timer_tests {
         let mut timers = Timers::new();
         let mut tmcnt0 = memory.io_load(TM0CNT_H);
         tmcnt0.set_bit(7); // enables timer
-        memory.ppu_io_write(TM0CNT_H, tmcnt0);
+        memory.privileged_io_write(TM0CNT_H, tmcnt0);
 
         let mut tmcnt1 = memory.io_load(TM1CNT_H);
         tmcnt1.set_bit(7); // enables timer
         tmcnt1.set_bit(2); // enable count up timing
-        memory.ppu_io_write(TM1CNT_H, tmcnt1);
+        memory.privileged_io_write(TM1CNT_H, tmcnt1);
 
         timers.tick(u16::MAX as u32 + 1);
 
@@ -154,8 +154,8 @@ mod timer_tests {
         let mut tm0cnt_h = memory.io_load(TM0CNT_H);
         let reload_value = 0xFF;
         tm0cnt_h.set_bit(7); // enables timer
-        memory.ppu_io_write(TM0CNT_L, reload_value);
-        memory.ppu_io_write(TM0CNT_H, tm0cnt_h);
+        memory.privileged_io_write(TM0CNT_L, reload_value);
+        memory.privileged_io_write(TM0CNT_H, tm0cnt_h);
 
         timers.tick(u16::MAX as u32 + 1);
 
@@ -169,15 +169,15 @@ mod timer_tests {
         let mut tmcnt0 = memory.io_load(TM0CNT_H);
         tmcnt0.set_bit(7); // enables timer
         tmcnt0.set_bit(6); // enables IRQ
-        memory.ppu_io_write(TM0CNT_H, tmcnt0);
-        memory.ppu_io_write(IE, 1 << 3); // Enable Timer0 IRQ
-        memory.ppu_io_write(IME, 1); // Enable Timer0 IRQ
+        memory.privileged_io_write(TM0CNT_H, tmcnt0);
+        memory.privileged_io_write(IE, 1 << 3); // Enable Timer0 IRQ
+        memory.privileged_io_write(IME, 1); // Enable Timer0 IRQ
         timers.tick(u16::MAX as u32 + 1);
 
         assert_eq!(memory.io_load(IF), 1 << 3);
         assert!(matches!(
-            memory.ioram.cpu_commands.get(0).unwrap(),
-            CPUCallbacks::RaiseIrq
+            memory.ioram.cpu_events.get(0).unwrap(),
+            CPUEvent::RaiseIrq
         ));
     }
 }
