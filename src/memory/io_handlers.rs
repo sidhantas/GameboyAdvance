@@ -135,7 +135,6 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
     ));
     definitions[DISPSTAT] = Some(
         IORegisterDefinition::new(BitMask::SIXTEEN(0xFF3F, 0xFF38), false)
-            .with_callback(IOBlock::dispstat_callback),
     );
     definitions[VCOUNT] = Some(IORegisterDefinition::new(
         BitMask::SIXTEEN(0x00FF, 0x0000),
@@ -697,23 +696,40 @@ impl IOBlock {
         self.check_interrupts(old_value, value);
     }
 
+    fn update_dispstat(&mut self, old_dispstat: u16, new_dispstat: u16) {
+        self.io_store(DISPSTAT, new_dispstat);
+
+        let triggered_flags = (!old_dispstat & new_dispstat) & 0x7;
+        if triggered_flags == 0 {
+            return;
+        }
+        let toggled_interrupts = (new_dispstat >> 3) & 0x7;
+        let available_interrupts = triggered_flags & toggled_interrupts;
+        let mut current_if = self.io_load(IF);
+        current_if &= !0x7;
+        current_if |= available_interrupts;
+        self.io_store(IF, current_if);
+        self.check_interrupts(old_dispstat, new_dispstat);
+
+    }
+
     pub(crate) fn handle_hblank(&mut self) {
-        let mut dispstat = self.io_load(DISPSTAT);
-        dispstat |= HBLANK_FLAG;
-        self.privileged_write(DISPSTAT, dispstat);
+        let dispstat = self.io_load(DISPSTAT);
+        let new_dispstat = dispstat | HBLANK_FLAG;
+        self.update_dispstat(dispstat, new_dispstat);
     }
 
     pub(crate) fn handle_vblank(&mut self) {
-        let mut dispstat = self.io_load(DISPSTAT);
-        dispstat &= !HBLANK_FLAG;
-        dispstat |= VBLANK_FLAG;
-        self.privileged_write(DISPSTAT, dispstat);
+        let dispstat = self.io_load(DISPSTAT);
+        let new_dispstat = dispstat & !HBLANK_FLAG;
+        let new_dispstat = new_dispstat | VBLANK_FLAG;
+        self.update_dispstat(dispstat, new_dispstat);
     }
 
     pub(crate) fn handle_hdraw(&mut self) {
-        let mut dispstat = self.io_load(DISPSTAT);
-        dispstat &= !(VBLANK_FLAG | HBLANK_FLAG);
-        self.privileged_write(DISPSTAT, dispstat);
+        let dispstat = self.io_load(DISPSTAT);
+        let new_dispstat = dispstat & !(VBLANK_FLAG | HBLANK_FLAG);
+        self.update_dispstat(dispstat, new_dispstat);
     }
 
     pub(crate) fn handle_vcount(&mut self, value: i32) {
