@@ -68,15 +68,46 @@ const OAM_SIZE: usize = 0x400;
 const ROM_SIZE: usize = 0x1000000;
 const SRAM_SIZE: usize = 0x10000;
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum CPUEvent {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum CPUEventType {
     Halt,
     Stop,
     RaiseIrq,
+    Break(usize),
     DMA(usize),
 }
 
-pub(crate) enum Event {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CPUEvent {
+   pub(crate)delay: i32,
+   pub(crate)event: CPUEventType
+}
+
+impl CPUEvent {
+    pub(crate) fn new(delay: i32, event: CPUEventType) -> Self {
+        Self {
+            delay,
+            event
+        }
+    }
+
+    pub(crate) fn dma(dma_num: usize) -> Self {
+        Self {
+            delay: 2,
+            event: CPUEventType::DMA(dma_num)
+        }
+    }
+
+    pub(crate) fn irq() -> Self {
+        Self {
+            delay: 0,
+            event: CPUEventType::RaiseIrq
+        }
+
+    }
+}
+
+pub(crate) enum IOEvent {
     HDraw,
     VBlank,
     HBlank,
@@ -121,7 +152,7 @@ pub(crate) struct GBAMemory {
     active_region: u32,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
-    events: Vec<Event>,
+    events: Vec<IOEvent>,
     pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
     pub(crate) triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
     pub(crate) breakpoints: Option<Vec<Breakpoint>>,
@@ -402,18 +433,18 @@ impl GBAMemory {
         borders
     }
 
-    pub(crate) fn handle_events(&mut self) {
+    pub(crate) fn handle_io_events(&mut self) {
         for event in self.events.drain(..) {
             match event {
-                Event::HDraw => self.ioram.handle_hdraw(),
-                Event::VBlank => self.ioram.handle_vblank(),
-                Event::HBlank => self.ioram.handle_hblank(),
-                Event::VCount(value) => self.ioram.handle_vcount(value),
+                IOEvent::HDraw => self.ioram.handle_hdraw(),
+                IOEvent::VBlank => self.ioram.handle_vblank(),
+                IOEvent::HBlank => self.ioram.handle_hblank(),
+                IOEvent::VCount(value) => self.ioram.handle_vcount(value),
             }
         }
     }
 
-    pub(crate) fn add_event(&mut self, event: Event) {
+    pub(crate) fn add_event(&mut self, event: IOEvent) {
         self.events.push(event);
     }
 

@@ -1,31 +1,41 @@
 use crate::{memory::memory::GBAMemory, utils::bits::Bits};
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone, Copy)]
 pub(crate) struct DMAControl {
-    source: usize,
-    destination: usize,
-    word_count: usize
+    pub(crate) source: usize,
+    pub(crate) destination: usize,
+    pub(crate) word_count: usize,
 }
 
-pub(crate) struct DmaCNTH(u16);
+pub(crate) struct DmaCNTH(pub(crate) u16);
 
-enum DestinationAddressControlMode {
+pub(crate) enum DestinationAddressControlMode {
     Increment = 0,
     Decrement = 1,
     Fixed = 2,
     IncrementReload = 3,
 }
 
-enum SourceAddressControlMode {
+pub(crate) enum SourceAddressControlMode {
     Increment = 0,
     Decrement = 1,
     Fixed = 2,
     Prohibited = 3,
 }
 
-enum DMATransferType {
-    Bit32,
-    Bit16,
+#[repr(usize)]
+#[derive(Copy, Clone)]
+pub(crate) enum DMATransferType {
+    Bit16 = 2,
+    Bit32 = 4,
+}
+
+#[derive(PartialEq)]
+pub(crate) enum StartTiming {
+    Immediately,
+    VBlank,
+    HBlank,
+    Special,
 }
 
 impl DmaCNTH {
@@ -39,12 +49,12 @@ impl DmaCNTH {
         }
     }
 
-    pub(crate) fn source_address_control(&self) -> DestinationAddressControlMode {
-        match (self.0 >> 5) & 0b11 {
-            0 => DestinationAddressControlMode::Increment,
-            1 => DestinationAddressControlMode::Decrement,
-            2 => DestinationAddressControlMode::Fixed,
-            3 => DestinationAddressControlMode::IncrementReload,
+    pub(crate) fn source_address_control(&self) -> SourceAddressControlMode {
+        match (self.0 >> 7) & 0b11 {
+            0 => SourceAddressControlMode::Increment,
+            1 => SourceAddressControlMode::Decrement,
+            2 => SourceAddressControlMode::Fixed,
+            3 => SourceAddressControlMode::Prohibited,
             _ => unreachable!(),
         }
     }
@@ -65,6 +75,16 @@ impl DmaCNTH {
         self.0.bit_is_set(11)
     }
 
+    pub(crate) fn start_timing(&self) -> StartTiming {
+        match (self.0 >> 12) & 0b11 {
+            0 => StartTiming::Immediately,
+            1 => StartTiming::VBlank,
+            2 => StartTiming::HBlank,
+            3 => StartTiming::Special,
+            _ => unreachable!(),
+        }
+    }
+
     pub(crate) fn irq_at_end(&self) -> bool {
         self.0.bit_is_set(14)
     }
@@ -77,20 +97,62 @@ impl DmaCNTH {
 pub(crate) fn handle_dma_transfer(dma_num: usize, memory: &mut GBAMemory) -> usize {
     let mut cycles = 0;
     let dma_io_address_start = 0xB0 + 0xC * dma_num;
-    let (dma_start_address, dma_destination_address) =
-        get_start_addresses(dma_num, memory, dma_io_address_start);
-    cycles += update_cycles_from_region(dma_start_address, dma_destination_address);
 
-    let word_count = memory.io_load(dma_io_address_start + 8) as usize;
     let dma_cnt_h = DmaCNTH(memory.io_load(dma_io_address_start + 10));
 
-    for i in 0..word_count {
-        let read = memory.readu16(dma_start_address + 2 * i);
-        cycles += read.cycles as usize;
-        cycles += memory.writeu16(dma_destination_address + 2 * i, read.data) as usize;
+    let mut dma_controller = memory.ioram.dma_controllers[dma_num];
+    let start_dest = dma_controller.destination;
+    cycles += update_cycles_from_region(dma_controller.source, dma_controller.destination);
+    let dmatransfer_type = dma_cnt_h.dma_transfer_type();
+    let word_size = dmatransfer_type as usize;
+    for i in 0..dma_controller.word_count {
+        match dmatransfer_type {
+            DMATransferType::Bit16 => {
+                let read = memory.readu16(dma_controller.source);
+                cycles += memory.writeu16(
+                    dma_controller.destination + i * word_size as usize,
+                    read.data,
+                ) as usize;
+                adjust_source_address(&mut dma_controller.source, word_size, dma_cnt_h.source_address_control());
+                adjust_destination_address(&mut dma_controller.destination, word_size, dma_cnt_h.destination_address_control());
+                cycles += read.cycles as usize;
+            }
+            DMATransferType::Bit32 => {
+                let read = memory.readu32(dma_controller.source + i * word_size as usize);
+                cycles += memory.writeu32(
+                    dma_controller.destination + i * word_size as usize,
+                    read.data,
+                ) as usize;
+                adjust_source_address(&mut dma_controller.source, word_size, dma_cnt_h.source_address_control());
+                adjust_destination_address(&mut dma_controller.destination, word_size, dma_cnt_h.destination_address_control());
+                cycles += read.cycles as usize;
+            }
+        }
+    }
+
+    if matches!(dma_cnt_h.destination_address_control(), DestinationAddressControlMode::IncrementReload) {
+       dma_controller.destination = start_dest;
     }
 
     cycles
+}
+
+fn adjust_source_address(source_address: &mut usize, word_size: usize, control_mode: SourceAddressControlMode) {
+    match control_mode {
+        SourceAddressControlMode::Increment => *source_address += word_size,
+        SourceAddressControlMode::Decrement => *source_address -= word_size,
+        SourceAddressControlMode::Fixed => {},
+        SourceAddressControlMode::Prohibited => panic!(),
+    }
+}
+
+fn adjust_destination_address(destination_address: &mut usize, word_size: usize, control_mode: DestinationAddressControlMode) {
+    match control_mode {
+        DestinationAddressControlMode::Increment => *destination_address += word_size,
+        DestinationAddressControlMode::Decrement => *destination_address -= word_size,
+        DestinationAddressControlMode::Fixed => {},
+        DestinationAddressControlMode::IncrementReload => *destination_address += word_size,
+    }
 }
 
 fn update_cycles_from_region(dma_start_address: usize, dma_destination_address: usize) -> usize {
@@ -109,29 +171,4 @@ fn update_cycles_from_region(dma_start_address: usize, dma_destination_address: 
         cycles += 1;
     }
     cycles
-}
-
-fn get_start_addresses(
-    dma_num: usize,
-    memory: &mut GBAMemory,
-    dma_io_address_start: usize,
-) -> (usize, usize) {
-    let mut dma_source_address = (memory.io_load(dma_io_address_start + 2) as usize) << 16
-        & (memory.io_load(dma_io_address_start) as usize);
-
-    if dma_num == 0 {
-        dma_source_address &= 0x07FFFFFF;
-    } else {
-        dma_source_address &= 0x0FFFFFFF;
-    }
-
-    let mut dma_destination_address = (memory.io_load(dma_io_address_start + 6) as usize) << 16
-        & (memory.io_load(dma_io_address_start + 4) as usize);
-
-    if dma_num == 3 {
-        dma_destination_address &= 0x0FFFFFFF;
-    } else {
-        dma_destination_address &= 0x07FFFFFF;
-    }
-    (dma_source_address, dma_destination_address)
 }

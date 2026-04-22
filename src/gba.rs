@@ -1,13 +1,18 @@
 use std::convert::identity;
+use std::mem::swap;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
+use sdl2::cpuinfo::cpu_count;
+
+use crate::arm7tdmi::cpu;
 use crate::arm7tdmi::instruction_table::instruction_to_string;
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::PPU;
 use crate::memory::io_handlers::IF;
-use crate::memory::memory::CPUEvent;
+use crate::memory::memory::{CPUEvent, CPUEventType};
+use crate::memory::wrappers::dma::handle_dma_transfer;
 use crate::utils::bits::Bits;
 use crate::utils::instruction_to_string::print_register;
 use crate::utils::utils::KillSignal;
@@ -20,6 +25,7 @@ pub(crate) struct GBA {
     pub(crate) memory: GBAMemory,
     pub(crate) ppu: PPU,
     display_buffer: Arc<DisplayBuffer>,
+    cpu_events: Vec<CPUEvent>
 }
 
 impl GBA {
@@ -32,6 +38,7 @@ impl GBA {
             cpu: CPU::new(),
             ppu: PPU::new(channel().0),
             display_buffer: Arc::new(DisplayBuffer::new()),
+            cpu_events: Vec::new()
         }
     }
 
@@ -49,6 +56,7 @@ impl GBA {
             cpu: CPU::new(),
             ppu: PPU::new(ppu_to_display_sender),
             display_buffer,
+            cpu_events: Vec::new()
         };
         gba.cpu.flush_pipeline(&mut gba.memory);
         gba
@@ -109,17 +117,33 @@ impl GBA {
             }
             self.memory.privileged_io_write(IF, if_flag);
         }
-        self.memory.handle_events();
+        self.memory.handle_io_events();
 
-        for command in self.memory.ioram.cpu_events.drain(..) {
-            match command {
-                CPUEvent::Halt => self.cpu.halt(),
-                CPUEvent::RaiseIrq => {
-                    self.cpu.interrupt_triggered = true;
+        if self.memory.ioram.cpu_events.is_empty() {
+            return;
+        }
+        swap(&mut self.cpu_events, &mut self.memory.ioram.cpu_events);
+
+        for mut command in self.cpu_events.drain(..) {
+            command.delay -= cpu_cycles as i32;
+            if command.delay <= 0 {
+                match command.event {
+                    CPUEventType::Halt => self.cpu.halt(),
+                    CPUEventType::RaiseIrq => {
+                        self.cpu.interrupt_triggered = true;
+                    }
+                    CPUEventType::DMA(dma_num) => {
+                        handle_dma_transfer(
+                            dma_num,
+                            &mut self.memory,
+                        );
+                    }
+                    _ => panic!("{:#?}", command),
                 }
-                CPUEvent::DMA(dma_num) => {}
-                _ => panic!("{:#?}", command),
+            } else {
+                self.memory.ioram.cpu_events.push(command);
             }
         }
     }
 }
+

@@ -82,7 +82,7 @@ mod timer_tests {
         io::timers::Timers,
         memory::{
             io_handlers::{IE, IF, IME, TM0CNT_H, TM0CNT_L, TM1CNT_H},
-            memory::{CPUEvent, GBAMemory},
+            memory::{CPUEvent, CPUEventType, GBAMemory},
         },
         utils::bits::Bits,
     };
@@ -175,9 +175,9 @@ mod timer_tests {
         timers.tick(u16::MAX as u32 + 1);
 
         assert_eq!(memory.io_load(IF), 1 << 3);
-        assert!(matches!(
+        assert_eq!(
             memory.ioram.cpu_events.get(0).unwrap(),
-            CPUEvent::RaiseIrq
-        ));
+            &CPUEvent::irq()
+        );
     }
 }

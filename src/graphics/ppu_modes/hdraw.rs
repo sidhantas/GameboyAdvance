@@ -11,7 +11,7 @@ use crate::{
     },
     memory::{
         io_handlers::{DISPCNT, WINOUT},
-        memory::{Event, GBAMemory},
+        memory::{IOEvent, GBAMemory},
         oam::{OBJMode, Oam},
         wrappers::{dispcnt::Dispcnt, window::WinOut},
     },
@@ -100,7 +100,7 @@ impl PPU {
             display_buffer[(self.y * HDRAW + x) as usize] =
                 rgb555_to_rgb24(color_effects_pipeline(memory, enabled_layers));
         }
-        memory.add_event(Event::HBlank);
+        memory.add_event(IOEvent::HBlank);
         self.current_mode = PPUModes::HBLANK;
     }
 

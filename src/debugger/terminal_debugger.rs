@@ -53,24 +53,24 @@ pub(crate) fn start_debugger(
         match parse_command(&command) {
             Some(command) => match command {
                 Commands::Exit => {
-                    break;
-                }
+                                break;
+                            }
                 Commands::Next(steps) => {
-                    let now = Instant::now();
-                    for _ in 0..steps {
-                        gba.step();
-                        COMMANDS_EXECUTED.fetch_add(1, Ordering::AcqRel);
-                    }
+                                let now = Instant::now();
+                                for _ in 0..steps {
+                                    gba.step();
+                                    COMMANDS_EXECUTED.fetch_add(1, Ordering::AcqRel);
+                                }
 
+                                gba.get_status();
 
-                    gba.get_status();
-
-                    println!(
-                        "Completed {} instructions in {}ms",
-                        steps,
-                        Instant::now().duration_since(now).as_millis()
-                    );
-                }
+                                println!(
+                                    "Completed {} instructions in {}ms",
+                                    steps,
+                                    Instant::now().duration_since(now).as_millis()
+                                );
+                            },
+                Commands::Break(address) => todo!(),
             },
             None => println!("Invalid Command"),
         };
@@ -81,6 +81,7 @@ pub(crate) fn start_debugger(
 enum Commands {
     Exit,
     Next(u32),
+    Break(usize)
 }
 
 fn parse_command(command_string: &String) -> Option<Commands> {
@@ -91,12 +92,18 @@ fn parse_command(command_string: &String) -> Option<Commands> {
     };
 
     Some(match action {
-        "exit" | "quit" => Exit,
+        "exit" | "quit" | "q" => Exit,
         "next" | "n" => {
             let Some(count) = parts.next() else {
                 return Some(Next(1));
             };
             Next(str::parse::<u32>(count).ok()?)
+        },
+        "break" | "b" => {
+            let Some(count) = parts.next() else {
+                return None;
+            };
+            Break(str::parse::<usize>(count).ok()?)
         }
         _ => return None,
     })
