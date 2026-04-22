@@ -544,7 +544,6 @@ pub(crate) struct IOBlock {
     memory: Vec<u16>,
     pub(crate) timers: Timers,
     pub(crate) cpu_events: Vec<CPUEvent>,
-    pub(crate) dma_controllers: [DMAControl; 4],
 }
 
 impl IOBlock {
@@ -553,7 +552,6 @@ impl IOBlock {
             memory: vec![0; IORAM_SIZE >> 1],
             timers: Timers::new(),
             cpu_events: Vec::new(),
-            dma_controllers: [DMAControl::default(); 4],
         }
     }
 
@@ -725,20 +723,10 @@ impl IOBlock {
         self.check_interrupts(old_dispstat, new_dispstat);
     }
 
-    pub(crate) fn check_need_dma_transfer(&mut self, start_condition: StartTiming) {
-        for i in 0..4 {
-            let dma_cnt = DmaCNTH(self.io_load(DMA0CNT_H + Self::dma_address_offset(i)));
-            if dma_cnt.dma_enabled() && dma_cnt.start_timing() == start_condition {
-                self.cpu_events.push(CPUEvent::dma(i));
-            }
-        }
-    }
-
     pub(crate) fn handle_hblank(&mut self) {
         let dispstat = self.io_load(DISPSTAT);
         let new_dispstat = dispstat | HBLANK_FLAG;
         self.update_dispstat(dispstat, new_dispstat);
-        self.check_need_dma_transfer(StartTiming::HBlank);
     }
 
     pub(crate) fn handle_vblank(&mut self) {
@@ -746,7 +734,6 @@ impl IOBlock {
         let new_dispstat = dispstat & !HBLANK_FLAG;
         let new_dispstat = new_dispstat | VBLANK_FLAG;
         self.update_dispstat(dispstat, new_dispstat);
-        self.check_need_dma_transfer(StartTiming::VBlank);
     }
 
     pub(crate) fn handle_hdraw(&mut self) {
@@ -768,7 +755,7 @@ impl IOBlock {
         self.privileged_write(DISPSTAT, dispstat_value);
     }
 
-    const fn dma_address_offset(dma_num: usize) -> usize {
+    pub(crate) const fn dma_address_offset(dma_num: usize) -> usize {
         match dma_num {
             0 => 0,
             1 => 12,
@@ -794,11 +781,13 @@ impl IOBlock {
             dma_controller.source = self.io_loadu32(source_address) as usize;
             dma_controller.destination = self.io_loadu32(destination_address) as usize;
             dma_controller.word_count = self.io_load(wc_address) as usize;
+            dma_controller.start_destination = dma_controller.destination;
+            dma_controller.start_word_count = dma_controller.word_count;
             if let StartTiming::Immediately = DmaCNTH(value).start_timing() {
-                self.cpu_events.push(CPUEvent::dma(DMANUM));
+                dma_controller.immediately = true;
             }
+            self.cpu_events.push(CPUEvent::reload_dma(DMANUM, dma_controller));
 
-            self.dma_controllers[DMANUM] = dma_controller;
         }
     }
 }
@@ -863,8 +852,7 @@ mod io_block_tests {
     use rstest::rstest;
 
     use crate::{
-        gba::GBA,
-        memory::{io_handlers::*, memory::IOEvent},
+        gba::GBA, graphics::ppu::PPUModes, memory::{io_handlers::*, memory::IOEvent}
     };
 
     #[rstest]
@@ -890,31 +878,29 @@ mod io_block_tests {
             word_count,
         );
 
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].word_count, 0);
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].source, 0);
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].destination, 0);
+
+        assert_eq!(gba.dma_controllers[dma_num].word_count, 0);
+        assert_eq!(gba.dma_controllers[dma_num].source, 0);
+        assert_eq!(gba.dma_controllers[dma_num].destination, 0);
 
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0x8000,
         );
+
+        gba.step();
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].source,
+            gba.dma_controllers[dma_num].source,
             source_address as usize
         );
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].destination,
+            gba.dma_controllers[dma_num].destination,
             destination_address as usize
         );
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].word_count,
+            gba.dma_controllers[dma_num].word_count,
             word_count as usize
         );
-        assert!(gba
-            .memory
-            .ioram
-            .cpu_events
-            .contains(&CPUEvent::dma(dma_num)));
     }
 
     #[rstest]
@@ -940,31 +926,30 @@ mod io_block_tests {
             word_count,
         );
 
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].word_count, 0);
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].source, 0);
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].destination, 0);
+        assert_eq!(gba.dma_controllers[dma_num].word_count, 0);
+        assert_eq!(gba.dma_controllers[dma_num].source, 0);
+        assert_eq!(gba.dma_controllers[dma_num].destination, 0);
+
 
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0xB000,
         );
+
+        gba.step();
+
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].source,
+            gba.dma_controllers[dma_num].source,
             source_address as usize
         );
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].destination,
+            gba.dma_controllers[dma_num].destination,
             destination_address as usize
         );
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].word_count,
+            gba.dma_controllers[dma_num].word_count,
             word_count as usize
         );
-        assert!(!gba
-            .memory
-            .ioram
-            .cpu_events
-            .contains(&CPUEvent::dma(dma_num)));
     }
 
     #[rstest]
@@ -994,24 +979,26 @@ mod io_block_tests {
             word_count,
         );
 
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].word_count, 0);
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].source, 0);
-        assert_eq!(gba.memory.ioram.dma_controllers[dma_num].destination, 0);
+        assert_eq!(gba.dma_controllers[dma_num].word_count, 0);
+        assert_eq!(gba.dma_controllers[dma_num].source, 0);
+        assert_eq!(gba.dma_controllers[dma_num].destination, 0);
+
 
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0xB000,
         );
+        gba.step();
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].source,
+            gba.dma_controllers[dma_num].source,
             source_limit
         );
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].destination,
+            gba.dma_controllers[dma_num].destination,
             destination_limit
         );
         assert_eq!(
-            gba.memory.ioram.dma_controllers[dma_num].word_count,
+            gba.dma_controllers[dma_num].word_count,
             word_count as usize
         );
     }
@@ -1021,55 +1008,10 @@ mod io_block_tests {
     #[case(1)]
     #[case(2)]
     #[case(3)]
-    fn dma_enqueued_when_hblank_started(#[case] dma_num: usize) {
-        let mut gba = GBA::new_no_bios();
-        gba.memory.add_event(IOEvent::HBlank);
-
-        gba.memory.writeu16(
-            0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
-            0xA000,
-        );
-
-        gba.memory.handle_io_events();
-
-        assert!(gba
-            .memory
-            .ioram
-            .cpu_events
-            .contains(&CPUEvent::dma(dma_num)));
-    }
-
-    #[rstest]
-    #[case(0)]
-    #[case(1)]
-    #[case(2)]
-    #[case(3)]
-    fn dma_enqueued_when_vblank_started(#[case] dma_num: usize) {
-        let mut gba = GBA::new_no_bios();
-        gba.memory.add_event(IOEvent::VBlank);
-
-        gba.memory.writeu16(
-            0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
-            0x9000,
-        );
-
-        gba.memory.handle_io_events();
-
-        assert!(gba
-            .memory
-            .ioram
-            .cpu_events
-            .contains(&CPUEvent::dma(dma_num)));
-    }
-    #[rstest]
-    #[case(0)]
-    #[case(1)]
-    #[case(2)]
-    #[case(3)]
     fn test_dma_transfer_moves_bytes(#[case] dma_num: usize) {
         let mut gba = GBA::new_no_bios();
 
-        for i in 0..0x1000 {
+        for i in 0..0x100 {
             gba.memory.writeu16(0x3000000 + i * 2, 0xABAB);
         }
 
@@ -1083,17 +1025,58 @@ mod io_block_tests {
         );
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_L + IOBlock::dma_address_offset(dma_num),
-            0x1000,
+            0x100,
         );
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0x8000,
         );
 
-        gba.step();
 
-        for i in 0..0x1000 {
-            assert_eq!(gba.memory.readu16(0x3000000 + i * 2).data, 0xABAB);
+        gba.step();
+        gba.step();
+        for i in 0..0x100 {
+            gba.step();
+            assert_eq!(gba.memory.readu16(0x2000000 + i * 2).data, 0xABAB);
+        }
+    }
+
+    #[rstest]
+    #[case(0)]
+    #[case(1)]
+    #[case(2)]
+    #[case(3)]
+    fn test_dma_handler_starts_when_hblank(#[case] dma_num: usize) {
+        let mut gba = GBA::new_no_bios();
+
+        for i in 0..0x20 {
+            gba.memory.writeu16(0x3000000 + i * 2, 0xABAB);
+        }
+
+        gba.memory.writeu32(
+            0x4000000 + DMA0SAD + IOBlock::dma_address_offset(dma_num),
+            0x3000000,
+        );
+        gba.memory.writeu32(
+            0x4000000 + DMA0DAD + IOBlock::dma_address_offset(dma_num),
+            0x2000000,
+        );
+        gba.memory.writeu16(
+            0x4000000 + DMA0CNT_L + IOBlock::dma_address_offset(dma_num),
+            0x100,
+        );
+        gba.memory.writeu16(
+            0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
+            0xA000,
+        );
+
+        gba.ppu.current_mode = PPUModes::HBLANK;
+
+        gba.step();
+        gba.step();
+        for i in 0..0x20 {
+            gba.step();
+            assert_eq!(dbg!(gba.memory.readu16(0x2000000 + i * 2).data), 0xABAB);
         }
     }
 

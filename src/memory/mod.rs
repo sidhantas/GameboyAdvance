@@ -6,3 +6,4 @@ pub(crate) mod memory_block;
 pub(crate) mod oam;
 pub(crate) mod oam_memory;
 pub(crate) mod wrappers;
+pub(crate) mod dma;

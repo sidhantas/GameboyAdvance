@@ -20,7 +20,7 @@ pub(crate) const VCOUNTER_FLAG: u16 = 1 << 2;
 pub(crate) const VBLANK_ENABLE: u16 = 1 << 3;
 pub(crate) const HBLANK_ENABLE: u16 = 1 << 4;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub(crate) enum PPUModes {
     #[default]
     HDRAW,

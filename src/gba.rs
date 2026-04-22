@@ -9,10 +9,10 @@ use crate::arm7tdmi::cpu;
 use crate::arm7tdmi::instruction_table::instruction_to_string;
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
-use crate::graphics::ppu::PPU;
-use crate::memory::io_handlers::IF;
+use crate::graphics::ppu::{PPUModes, PPU};
+use crate::memory::io_handlers::{IOBlock, DMA0CNT_H, IF};
 use crate::memory::memory::{CPUEvent, CPUEventType};
-use crate::memory::wrappers::dma::handle_dma_transfer;
+use crate::memory::wrappers::dma::{DMAControl, DmaCNTH, StartTiming};
 use crate::utils::bits::Bits;
 use crate::utils::instruction_to_string::print_register;
 use crate::utils::utils::KillSignal;
@@ -24,8 +24,9 @@ pub(crate) struct GBA {
     pub(crate) cpu: CPU,
     pub(crate) memory: GBAMemory,
     pub(crate) ppu: PPU,
+    pub(crate) dma_controllers: [DMAControl; 4],
     display_buffer: Arc<DisplayBuffer>,
-    cpu_events: Vec<CPUEvent>
+    cpu_events: Vec<CPUEvent>,
 }
 
 impl GBA {
@@ -38,7 +39,8 @@ impl GBA {
             cpu: CPU::new(),
             ppu: PPU::new(channel().0),
             display_buffer: Arc::new(DisplayBuffer::new()),
-            cpu_events: Vec::new()
+            cpu_events: Vec::new(),
+            dma_controllers: [DMAControl::default(); 4],
         }
     }
 
@@ -56,7 +58,8 @@ impl GBA {
             cpu: CPU::new(),
             ppu: PPU::new(ppu_to_display_sender),
             display_buffer,
-            cpu_events: Vec::new()
+            cpu_events: Vec::new(),
+            dma_controllers: [DMAControl::default(); 4],
         };
         gba.cpu.flush_pipeline(&mut gba.memory);
         gba
@@ -104,7 +107,12 @@ impl GBA {
     }
 
     pub(crate) fn step(&mut self) {
-        let cpu_cycles = self.cpu.execute_cpu_cycle(&mut self.memory);
+        let cpu_cycles =
+            if let Some(cpu_cycles) = self.try_dmas() {
+                cpu_cycles as u8
+            } else {
+                self.cpu.execute_cpu_cycle(&mut self.memory)
+            };
         self.ppu
             .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);
         let triggered_irqs = self.memory.ioram.timers.tick(cpu_cycles.into());
@@ -123,7 +131,6 @@ impl GBA {
             return;
         }
         swap(&mut self.cpu_events, &mut self.memory.ioram.cpu_events);
-
         for mut command in self.cpu_events.drain(..) {
             command.delay -= cpu_cycles as i32;
             if command.delay <= 0 {
@@ -132,11 +139,8 @@ impl GBA {
                     CPUEventType::RaiseIrq => {
                         self.cpu.interrupt_triggered = true;
                     }
-                    CPUEventType::DMA(dma_num) => {
-                        handle_dma_transfer(
-                            dma_num,
-                            &mut self.memory,
-                        );
+                    CPUEventType::DMA(dma_num, dma_controller) => {
+                        self.dma_controllers[dma_num] = dma_controller;
                     }
                     _ => panic!("{:#?}", command),
                 }
@@ -145,5 +149,32 @@ impl GBA {
             }
         }
     }
-}
 
+    pub(crate) fn try_dmas(&mut self) -> Option<usize> {
+        let dma_controllers = &mut self.dma_controllers;
+        let memory = &mut self.memory;
+        let ppu = &self.ppu;
+        for i in 0..4 {
+            if dma_controllers[i].immediately {
+                return Some(dma_controllers[i].handle_dma_transfer(i, memory));
+            } else {
+                let dmacnt = DmaCNTH(
+                    memory
+                        .ioram
+                        .io_load(DMA0CNT_H + IOBlock::dma_address_offset(i)),
+                );
+                if dbg!(dmacnt.start_timing()) == StartTiming::HBlank
+                    && dbg!(&ppu.current_mode) == &PPUModes::HBLANK
+                {
+                    return Some(dma_controllers[i].handle_dma_transfer(i, memory));
+                } else  
+                if dmacnt.start_timing() == StartTiming::VBlank
+                    && ppu.current_mode == PPUModes::VBLANK
+                {
+                    return Some(dma_controllers[i].handle_dma_transfer(i, memory));
+                }
+            }
+        }
+        return None;
+    }
+}

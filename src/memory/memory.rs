@@ -2,7 +2,7 @@ use crate::{
     debugger::breakpoints::{Breakpoint, TriggeredWatchpoints}, graphics::{
         display::Border,
         ppu::{HBLANK_FLAG, HDRAW, VDRAW},
-    }, memory::io_handlers::DISPSTAT, types::{BYTE, CYCLES, HWORD, WORD}
+    }, memory::{io_handlers::DISPSTAT, wrappers::dma::DMAControl}, types::{BYTE, CYCLES, HWORD, WORD}
 };
 use std::{
     cell::RefCell,
@@ -74,7 +74,8 @@ pub(crate) enum CPUEventType {
     Stop,
     RaiseIrq,
     Break(usize),
-    DMA(usize),
+    DMA(usize, DMAControl),
+    StartDMA(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -91,13 +92,20 @@ impl CPUEvent {
         }
     }
 
-    pub(crate) fn dma(dma_num: usize) -> Self {
+    pub(crate) fn reload_dma(dma_num: usize, dma_controller: DMAControl) -> Self {
         Self {
-            delay: 2,
-            event: CPUEventType::DMA(dma_num)
+            delay: 0,
+            event: CPUEventType::DMA(dma_num, dma_controller)
         }
     }
 
+    pub(crate) fn immediately_start_dma(dma_num: usize) -> Self {
+        // 2 cycle delay
+        Self {
+            delay: 2,
+            event: CPUEventType::StartDMA(dma_num)
+        }
+    }
     pub(crate) fn irq() -> Self {
         Self {
             delay: 0,
