@@ -1,6 +1,6 @@
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::memory::io_handlers::{DISPSTAT, VCOUNT};
-use crate::memory::memory::{IOEvent, GBAMemory};
+use crate::memory::memory::{CPUEvent, CPUEventType, GBAMemory};
 use crate::memory::oam::Oam;
 use std::fmt::Display;
 use std::sync::mpsc::Sender;
@@ -114,7 +114,7 @@ impl PPU {
         // get window pixels with priority
         // get obj pixels with priority
         // overlay on top of each other
-        memory.add_event(IOEvent::VCount(self.y));
+        memory.add_event(CPUEvent::new(0, CPUEventType::VCount(self.y)));
     }
 }
 

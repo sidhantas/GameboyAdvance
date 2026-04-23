@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     memory::{
         io_handlers::{IOBlock, DMA0CNT_H},
@@ -14,6 +16,16 @@ pub(crate) struct DMAControl {
     pub(crate) word_count: usize,
     pub(crate) start_destination: usize,
     pub(crate) start_word_count: usize,
+}
+
+impl Display for DMAControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Immediately: {:5}, Source: 0x{:08x}, Destination: 0x{:08x}, Word Count: {:08x}",
+            self.immediately, self.source, self.destination, self.word_count
+        )
+    }
 }
 
 pub(crate) struct DmaCNTH(pub(crate) u16);
@@ -104,142 +116,74 @@ impl DmaCNTH {
 }
 
 impl DMAControl {
-    pub(crate) fn handle_dma_transfer(&mut self, dma_num: usize, memory: &mut GBAMemory) -> usize {
+    pub(crate) fn handle_dma_transfer(&mut self, dma_num: usize, memory: &mut GBAMemory) -> u8 {
+        if self.word_count <= 0 {
+            return 0;
+        }
         let mut cycles = 0;
         let dma_io_address_start = 0xB0 + 0xC * dma_num;
 
-        let dma_cnt_h = DmaCNTH(memory.io_load(dma_io_address_start + 10));
+        let dmacnt = DmaCNTH(memory.io_load(dma_io_address_start + 10));
 
         cycles += update_cycles_from_region(self.source, self.destination);
-        let dmatransfer_type = dma_cnt_h.dma_transfer_type();
+        let dmatransfer_type = dmacnt.dma_transfer_type();
         let word_size = dmatransfer_type as usize;
 
+        self.word_count -= 1;
         match dmatransfer_type {
             DMATransferType::Bit16 => {
                 let read = memory.readu16(self.source);
-                cycles += memory.writeu16(self.destination, read.data) as usize;
-                self.word_count -= 1;
-                adjust_source_address(
-                    &mut self.source,
-                    word_size,
-                    dma_cnt_h.source_address_control(),
-                );
+                cycles += memory.writeu16(self.destination, read.data);
+                adjust_source_address(&mut self.source, word_size, dmacnt.source_address_control());
                 adjust_destination_address(
                     &mut self.destination,
                     word_size,
-                    dma_cnt_h.destination_address_control(),
+                    dmacnt.destination_address_control(),
                 );
-                cycles += read.cycles as usize;
+
+                dbg!(self.word_count);
+                cycles += read.cycles;
             }
             DMATransferType::Bit32 => {
                 let read = memory.readu32(self.source);
-                cycles += memory.writeu32(self.destination, read.data) as usize;
-                self.word_count -= 1;
-                adjust_source_address(
-                    &mut self.source,
-                    word_size,
-                    dma_cnt_h.source_address_control(),
-                );
+                cycles += memory.writeu32(self.destination, read.data);
+                adjust_source_address(&mut self.source, word_size, dmacnt.source_address_control());
                 adjust_destination_address(
                     &mut self.destination,
                     word_size,
-                    dma_cnt_h.destination_address_control(),
+                    dmacnt.destination_address_control(),
                 );
-                cycles += read.cycles as usize;
+                cycles += read.cycles;
             }
         }
 
-        if self.word_count == 0 {
+        if self.word_count <= 0 {
             self.immediately = false;
-            if dma_cnt_h.dma_repeat() {
+            println!("Completed transfer");
+            if dmacnt.dma_repeat() {
                 self.word_count = self.start_word_count;
                 if matches!(
-                    dma_cnt_h.destination_address_control(),
+                    dmacnt.destination_address_control(),
                     DestinationAddressControlMode::IncrementReload
                 ) {
                     self.destination = self.start_destination;
                 }
             } else {
-                let disabled_dmacnt = dma_cnt_h.0 & !0x8000;
+                let disabled_dmacnt = dmacnt.0 & !0x8000;
+                println!("DISABLING DMA {dma_num}: {:#x}", disabled_dmacnt);
                 memory.ioram.io_store(
                     DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
                     disabled_dmacnt,
                 );
             }
-        } 
+            if dmacnt.irq_at_end() {
+                memory.add_event(CPUEvent::irq());
+            }
+        }
 
         cycles
     }
 }
-
-//pub(crate) fn handle_dma_transfer(dma_num: usize, memory: &mut GBAMemory) -> usize {
-//    let mut cycles = 0;
-//    let dma_io_address_start = 0xB0 + 0xC * dma_num;
-//
-//    let dma_cnt_h = DmaCNTH(memory.io_load(dma_io_address_start + 10));
-//
-//    let mut dma_controller = memory.ioram.dma_controllers[dma_num];
-//    cycles += update_cycles_from_region(dma_controller.source, dma_controller.destination);
-//    let dmatransfer_type = dma_cnt_h.dma_transfer_type();
-//    let word_size = dmatransfer_type as usize;
-//
-//    match dmatransfer_type {
-//        DMATransferType::Bit16 => {
-//            let read = memory.readu16(dma_controller.source);
-//            cycles += memory.writeu16(dma_controller.destination, read.data) as usize;
-//            dma_controller.word_count -= 1;
-//            adjust_source_address(
-//                &mut dma_controller.source,
-//                word_size,
-//                dma_cnt_h.source_address_control(),
-//            );
-//            adjust_destination_address(
-//                &mut dma_controller.destination,
-//                word_size,
-//                dma_cnt_h.destination_address_control(),
-//            );
-//            cycles += read.cycles as usize;
-//        }
-//        DMATransferType::Bit32 => {
-//            let read = memory.readu32(dma_controller.source);
-//            cycles += memory.writeu32(dma_controller.destination, read.data) as usize;
-//            dma_controller.word_count -= 1;
-//            adjust_source_address(
-//                &mut dma_controller.source,
-//                word_size,
-//                dma_cnt_h.source_address_control(),
-//            );
-//            adjust_destination_address(
-//                &mut dma_controller.destination,
-//                word_size,
-//                dma_cnt_h.destination_address_control(),
-//            );
-//            cycles += read.cycles as usize;
-//        }
-//    }
-//
-//    if dma_controller.word_count == 0 {
-//        if dma_cnt_h.dma_repeat() {
-//            dma_controller.word_count = dma_controller.start_word_count;
-//            if matches!(
-//                dma_cnt_h.destination_address_control(),
-//                DestinationAddressControlMode::IncrementReload
-//            ) {
-//                dma_controller.destination = dma_controller.start_destination;
-//            }
-//        memory.ioram.cpu_events.push(CPUEvent::new(0, CPUEventType::DMA(dma_num)));
-//        } else {
-//            let disabled_dmacnt = dma_cnt_h.0 & !0x8000;
-//            memory.ioram.io_store(DMA0CNT_H + IOBlock::dma_address_offset(dma_num), disabled_dmacnt);
-//        }
-//    } else {
-//        memory.ioram.cpu_events.push(CPUEvent::new(0, CPUEventType::DMA(dma_num)));
-//    }
-//
-//    memory.ioram.dma_controllers[dma_num] = dma_controller;
-//
-//    cycles
-//}
 
 fn adjust_source_address(
     source_address: &mut usize,
@@ -267,7 +211,7 @@ fn adjust_destination_address(
     }
 }
 
-fn update_cycles_from_region(dma_start_address: usize, dma_destination_address: usize) -> usize {
+fn update_cycles_from_region(dma_start_address: usize, dma_destination_address: usize) -> u8 {
     let mut cycles = 0;
     let start_region = dma_start_address >> 24;
     if start_region > 0x8 && start_region != 0xE {

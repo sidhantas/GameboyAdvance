@@ -76,6 +76,10 @@ pub(crate) enum CPUEventType {
     Break(usize),
     DMA(usize, DMAControl),
     StartDMA(usize),
+    HDraw,
+    VBlank,
+    HBlank,
+    VCount(i32)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,18 +98,11 @@ impl CPUEvent {
 
     pub(crate) fn reload_dma(dma_num: usize, dma_controller: DMAControl) -> Self {
         Self {
-            delay: 0,
+            delay: 2,
             event: CPUEventType::DMA(dma_num, dma_controller)
         }
     }
 
-    pub(crate) fn immediately_start_dma(dma_num: usize) -> Self {
-        // 2 cycle delay
-        Self {
-            delay: 2,
-            event: CPUEventType::StartDMA(dma_num)
-        }
-    }
     pub(crate) fn irq() -> Self {
         Self {
             delay: 0,
@@ -113,13 +110,6 @@ impl CPUEvent {
         }
 
     }
-}
-
-pub(crate) enum IOEvent {
-    HDraw,
-    VBlank,
-    HBlank,
-    VCount(i32)
 }
 
 #[derive(Debug)]
@@ -160,7 +150,6 @@ pub(crate) struct GBAMemory {
     active_region: u32,
     wait_cycles_u16: [u8; 15],
     wait_cycles_u32: [u8; 15],
-    events: Vec<IOEvent>,
     pub(crate) breakpoint_checker: Option<Box<dyn Fn(&GBAMemory, usize) -> ()>>,
     pub(crate) triggered_breakpoints: Rc<RefCell<Vec<TriggeredWatchpoints>>>,
     pub(crate) breakpoints: Option<Vec<Breakpoint>>,
@@ -210,7 +199,6 @@ impl GBAMemory {
             rom: SimpleMemoryBlock::new(ROM_SIZE),
             sram: SimpleMemoryBlock::new(SRAM_SIZE),
             wait_cycles_u16,
-            events: Vec::new(),
             active_region: 0,
             wait_cycles_u32,
             breakpoint_checker: None,
@@ -441,20 +429,10 @@ impl GBAMemory {
         borders
     }
 
-    pub(crate) fn handle_io_events(&mut self) {
-        for event in self.events.drain(..) {
-            match event {
-                IOEvent::HDraw => self.ioram.handle_hdraw(),
-                IOEvent::VBlank => self.ioram.handle_vblank(),
-                IOEvent::HBlank => self.ioram.handle_hblank(),
-                IOEvent::VCount(value) => self.ioram.handle_vcount(value),
-            }
-        }
+    pub(crate) fn add_event(&mut self, event: CPUEvent) {
+        self.ioram.cpu_events.push(event)
     }
 
-    pub(crate) fn add_event(&mut self, event: IOEvent) {
-        self.events.push(event);
-    }
 
 }
 

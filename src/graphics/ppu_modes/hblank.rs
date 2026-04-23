@@ -3,7 +3,7 @@ use crate::graphics::layers::OBJPixel;
 use crate::graphics::pallete::OBJPalleteData;
 use crate::graphics::ppu::{PPUModes, HDRAW, PPU, VDRAW};
 use crate::graphics::wrappers::tile::Tile;
-use crate::memory::memory::{IOEvent, GBAMemory};
+use crate::memory::memory::{CPUEvent, CPUEventType, GBAMemory};
 use crate::memory::oam::{OBJMode, NUM_OAM_ENTRIES};
 
 impl PPU {
@@ -13,12 +13,12 @@ impl PPU {
         if self.y < VDRAW {
             self.obj_selection(memory);
             self.update_oam_objects(memory);
-            memory.add_event(IOEvent::HDraw);
+            memory.add_event(CPUEvent::new(0, CPUEventType::HDraw));
             self.current_mode = PPUModes::HDRAW;
             return;
         }
 
-        memory.add_event(IOEvent::VBlank);
+        memory.add_event(CPUEvent::new(0, CPUEventType::VBlank));
         self.current_mode = PPUModes::VBLANK;
         self.start_display_rendering(memory);
     }

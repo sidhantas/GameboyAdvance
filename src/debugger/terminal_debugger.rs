@@ -10,9 +10,7 @@ use std::{
 };
 
 use crate::{
-    debugger::terminal_commands::PPUToDisplayCommands,
-    gba::{GBA, KILL_SIGNAL},
-    graphics::display::DisplayBuffer,
+    arm7tdmi::cpu::PC_REGISTER, debugger::terminal_commands::PPUToDisplayCommands, gba::{GBA, KILL_SIGNAL}, graphics::display::DisplayBuffer
 };
 
 static COMMANDS_EXECUTED: AtomicUsize = AtomicUsize::new(0);
@@ -32,8 +30,8 @@ pub(crate) fn start_debugger(
 
     let mut command = String::new();
 
-    std::panic::set_hook(Box::new(|_| {
-        println!("GBA Paniced");
+    std::panic::set_hook(Box::new(|panic_info| {
+        println!("GBA Paniced: {panic_info}");
         println!(
             "Last Successful Instruction: {}",
             COMMANDS_EXECUTED.load(Ordering::Relaxed)
@@ -60,6 +58,11 @@ pub(crate) fn start_debugger(
                                 for _ in 0..steps {
                                     gba.step();
                                     COMMANDS_EXECUTED.fetch_add(1, Ordering::AcqRel);
+                                    let region = gba.cpu.get_register(PC_REGISTER as u32) >> 24;
+                                    if  region != 0x0 && region != 0x8 {
+                                        println!("PC went out of bounds after {}", COMMANDS_EXECUTED.load(Ordering::Acquire));
+                                        break;
+                                    }
                                 }
 
                                 gba.get_status();

@@ -5,13 +5,12 @@ use crate::{
         color_effects::color_effects_pipeline,
         display::DisplayBuffer,
         layers::{DisplayContext, Layers, OBJPixel},
-        pallete::{rgb555_to_rgb24, OBJPalleteData},
-        ppu::{PPUModes, HBLANK_FLAG, HDRAW, PPU},
-        wrappers::tile::Tile,
+        pallete::{OBJPalleteData, rgb555_to_rgb24},
+        ppu::{HBLANK_FLAG, HDRAW, PPU, PPUModes},
     },
     memory::{
         io_handlers::{DISPCNT, WINOUT},
-        memory::{IOEvent, GBAMemory},
+        memory::{ CPUEvent, CPUEventType, GBAMemory},
         oam::{OBJMode, Oam},
         wrappers::{dispcnt::Dispcnt, window::WinOut},
     },
@@ -100,7 +99,7 @@ impl PPU {
             display_buffer[(self.y * HDRAW + x) as usize] =
                 rgb555_to_rgb24(color_effects_pipeline(memory, enabled_layers));
         }
-        memory.add_event(IOEvent::HBlank);
+        memory.add_event(CPUEvent::new(0, CPUEventType::HBlank));
         self.current_mode = PPUModes::HBLANK;
     }
 

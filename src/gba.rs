@@ -1,11 +1,9 @@
+use std::collections::BinaryHeap;
 use std::convert::identity;
 use std::mem::swap;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
-use sdl2::cpuinfo::cpu_count;
-
-use crate::arm7tdmi::cpu;
 use crate::arm7tdmi::instruction_table::instruction_to_string;
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
 use crate::graphics::display::DisplayBuffer;
@@ -27,6 +25,7 @@ pub(crate) struct GBA {
     pub(crate) dma_controllers: [DMAControl; 4],
     display_buffer: Arc<DisplayBuffer>,
     cpu_events: Vec<CPUEvent>,
+    active_dma: Option<usize>,
 }
 
 impl GBA {
@@ -41,6 +40,7 @@ impl GBA {
             display_buffer: Arc::new(DisplayBuffer::new()),
             cpu_events: Vec::new(),
             dma_controllers: [DMAControl::default(); 4],
+            active_dma: None,
         }
     }
 
@@ -60,6 +60,7 @@ impl GBA {
             display_buffer,
             cpu_events: Vec::new(),
             dma_controllers: [DMAControl::default(); 4],
+            active_dma: None,
         };
         gba.cpu.flush_pipeline(&mut gba.memory);
         gba
@@ -86,7 +87,10 @@ impl GBA {
 
         println!("CPSR: {}", self.cpu.get_cpsr());
         println!("CYCLES: {}", self.cpu.cycles);
-
+        for i in 0..4 {
+            println!("DMA {i}: {}", self.dma_controllers[i]);
+        }
+        println!("Active DMA: {:#?}", self.active_dma);
         println!(
             "Last Instruction: {} {:#x}",
             instruction_to_string(
@@ -107,12 +111,17 @@ impl GBA {
     }
 
     pub(crate) fn step(&mut self) {
-        let cpu_cycles =
-            if let Some(cpu_cycles) = self.try_dmas() {
-                cpu_cycles as u8
-            } else {
-                self.cpu.execute_cpu_cycle(&mut self.memory)
-            };
+        let cpu_cycles = if let Some(dma) = self.active_dma {
+            let cycles = self.dma_controllers[dma].handle_dma_transfer(dma, &mut self.memory);
+            println!("Running DMA");
+            if self.dma_controllers[dma].word_count == 0 {
+                self.active_dma =
+                    Self::preempt_dma(None, &mut self.memory, StartTiming::Immediately)
+            }
+            cycles
+        } else {
+            self.cpu.execute_cpu_cycle(&mut self.memory)
+        };
         self.ppu
             .advance_ppu(cpu_cycles, &mut self.memory, &self.display_buffer);
         let triggered_irqs = self.memory.ioram.timers.tick(cpu_cycles.into());
@@ -125,56 +134,84 @@ impl GBA {
             }
             self.memory.privileged_io_write(IF, if_flag);
         }
-        self.memory.handle_io_events();
-
-        if self.memory.ioram.cpu_events.is_empty() {
-            return;
-        }
-        swap(&mut self.cpu_events, &mut self.memory.ioram.cpu_events);
-        for mut command in self.cpu_events.drain(..) {
-            command.delay -= cpu_cycles as i32;
-            if command.delay <= 0 {
-                match command.event {
-                    CPUEventType::Halt => self.cpu.halt(),
-                    CPUEventType::RaiseIrq => {
-                        self.cpu.interrupt_triggered = true;
+        while !self.memory.ioram.cpu_events.is_empty() {
+            swap(&mut self.cpu_events, &mut self.memory.ioram.cpu_events);
+            for mut command in self.cpu_events.drain(..) {
+                command.delay -= cpu_cycles as i32;
+                if command.delay <= 0 {
+                    match command.event {
+                        CPUEventType::Halt => self.cpu.halt(),
+                        CPUEventType::RaiseIrq => {
+                            self.cpu.interrupt_triggered = true;
+                        }
+                        CPUEventType::DMA(dma_num, dma_controller) => {
+                            self.dma_controllers[dma_num] = dma_controller;
+                            self.active_dma = Self::preempt_dma(
+                                self.active_dma,
+                                &mut self.memory,
+                                StartTiming::Immediately,
+                            );
+                        }
+                        CPUEventType::HDraw => {
+                            self.active_dma = Self::preempt_dma(
+                                self.active_dma,
+                                &mut self.memory,
+                                StartTiming::Immediately,
+                            );
+                            self.memory.ioram.handle_hdraw();
+                        }
+                        CPUEventType::VBlank => {
+                            self.active_dma = Self::preempt_dma(
+                                self.active_dma,
+                                &mut self.memory,
+                                StartTiming::VBlank,
+                            );
+                            self.memory.ioram.handle_vblank();
+                        }
+                        CPUEventType::HBlank => {
+                            self.active_dma = None;
+                            self.active_dma = Self::preempt_dma(
+                                self.active_dma,
+                                &mut self.memory,
+                                StartTiming::HBlank,
+                            );
+                            self.memory.ioram.handle_hblank()
+                        }
+                        CPUEventType::VCount(value) => self.memory.ioram.handle_vcount(value),
+                        _ => panic!("{:#?}", command),
                     }
-                    CPUEventType::DMA(dma_num, dma_controller) => {
-                        self.dma_controllers[dma_num] = dma_controller;
-                    }
-                    _ => panic!("{:#?}", command),
+                } else {
+                    self.memory.ioram.cpu_events.push(command);
                 }
-            } else {
-                self.memory.ioram.cpu_events.push(command);
             }
         }
     }
 
-    pub(crate) fn try_dmas(&mut self) -> Option<usize> {
-        let dma_controllers = &mut self.dma_controllers;
-        let memory = &mut self.memory;
-        let ppu = &self.ppu;
-        for i in 0..4 {
-            if dma_controllers[i].immediately {
-                return Some(dma_controllers[i].handle_dma_transfer(i, memory));
-            } else {
-                let dmacnt = DmaCNTH(
-                    memory
-                        .ioram
-                        .io_load(DMA0CNT_H + IOBlock::dma_address_offset(i)),
-                );
-                if dbg!(dmacnt.start_timing()) == StartTiming::HBlank
-                    && dbg!(&ppu.current_mode) == &PPUModes::HBLANK
-                {
-                    return Some(dma_controllers[i].handle_dma_transfer(i, memory));
-                } else  
-                if dmacnt.start_timing() == StartTiming::VBlank
-                    && ppu.current_mode == PPUModes::VBLANK
-                {
-                    return Some(dma_controllers[i].handle_dma_transfer(i, memory));
-                }
+    fn preempt_dma(
+        current_dma: Option<usize>,
+        memory: &mut GBAMemory,
+        condition: StartTiming,
+    ) -> Option<usize> {
+        let old_dma = match current_dma {
+            Some(0) => return current_dma, // 0 is highest priority and cannot be preempted
+            Some(i) => i,
+            None => 4,
+        };
+        for i in 0..old_dma {
+            let dmacnt = DmaCNTH(
+                memory
+                    .ioram
+                    .io_load(DMA0CNT_H + IOBlock::dma_address_offset(i)),
+            );
+
+            if dmacnt.dma_enabled()
+                && (dmacnt.start_timing() == condition
+                    || dmacnt.start_timing() == StartTiming::Immediately)
+            {
+                return Some(i);
             }
         }
-        return None;
+
+        current_dma
     }
 }

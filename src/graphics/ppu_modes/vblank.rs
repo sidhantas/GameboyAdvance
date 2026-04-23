@@ -1,4 +1,4 @@
-use crate::{graphics::ppu::{PPUModes, PPU, VBLANK, VBLANK_FLAG, VDRAW}, memory::memory::{IOEvent, GBAMemory}};
+use crate::{graphics::ppu::{PPU, PPUModes, VBLANK, VBLANK_FLAG, VDRAW}, memory::memory::{CPUEvent, CPUEventType, GBAMemory}};
 
 impl PPU {
     pub(crate) fn vblank(&mut self, memory: &mut GBAMemory) {
@@ -8,7 +8,7 @@ impl PPU {
             self.y = 0;
             self.x = 0;
             
-            memory.add_event(IOEvent::HDraw);
+            memory.add_event(CPUEvent::new(0, CPUEventType::HDraw));
             self.current_mode = PPUModes::HDRAW;
         }
     }

@@ -25,16 +25,14 @@ pub(crate) fn color_effects_pipeline(memory: &GBAMemory, layers: Layers) -> RGBC
                 return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
             };
 
-            let Some(target_pixel_b) = target_layers_b.get_target_pixel_b(target_pixel_a) else {
+            let Some(target_pixel_b) = target_layers_b.get_target_pixel_b(target_pixel_a).and_then(|pixel| pixel.pixel()) else {
                 return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
             };
 
             let Some(target_pixel_a) = target_pixel_a.pixel() else {
                 return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
             };
-            let Some(target_pixel_b) = target_pixel_b.pixel() else {
-                return layers.get_top_layer().pixel().unwrap_or(RGBComponents::backdrop());
-            };
+
 
             let bldalpha = BldAlpha(memory.io_load(BLDALPHA));
             let eva = bldalpha.eva();

@@ -579,7 +579,8 @@ impl IOBlock {
                     return self.timers.read_timer(timer) as u16;
                 }
                 TM0CNT_H | TM1CNT_H | TM2CNT_H | TM3CNT_H => {}
-                _ => panic!(),
+                DMA0CNT_H | DMA1CNT_H | DMA2CNT_H | DMA3CNT_H => {}
+                _ => panic!("No handling for address {:#x}", address),
             }
         }
         let data = self.io_load(address);
@@ -773,11 +774,11 @@ impl IOBlock {
         self.io_store(dma_cnt_addrees, value);
         if changes.dma_enabled() {
             // Reload controller registers
-            let mut dma_controller = DMAControl::default();
             let source_address = DMA0SAD + Self::dma_address_offset(DMANUM);
             let destination_address = DMA0DAD + Self::dma_address_offset(DMANUM);
             let wc_address = DMA0CNT_L + Self::dma_address_offset(DMANUM);
 
+            let mut dma_controller = DMAControl::default();
             dma_controller.source = self.io_loadu32(source_address) as usize;
             dma_controller.destination = self.io_loadu32(destination_address) as usize;
             dma_controller.word_count = self.io_load(wc_address) as usize;
@@ -786,8 +787,8 @@ impl IOBlock {
             if let StartTiming::Immediately = DmaCNTH(value).start_timing() {
                 dma_controller.immediately = true;
             }
-            self.cpu_events.push(CPUEvent::reload_dma(DMANUM, dma_controller));
-
+            self.cpu_events
+                .push(CPUEvent::reload_dma(DMANUM, dma_controller));
         }
     }
 }
@@ -851,9 +852,7 @@ mod io_block_tests {
 
     use rstest::rstest;
 
-    use crate::{
-        gba::GBA, graphics::ppu::PPUModes, memory::{io_handlers::*, memory::IOEvent}
-    };
+    use crate::{gba::GBA, graphics::ppu::PPUModes, memory::io_handlers::*};
 
     #[rstest]
     #[case(0)]
@@ -878,7 +877,6 @@ mod io_block_tests {
             word_count,
         );
 
-
         assert_eq!(gba.dma_controllers[dma_num].word_count, 0);
         assert_eq!(gba.dma_controllers[dma_num].source, 0);
         assert_eq!(gba.dma_controllers[dma_num].destination, 0);
@@ -889,18 +887,12 @@ mod io_block_tests {
         );
 
         gba.step();
-        assert_eq!(
-            gba.dma_controllers[dma_num].source,
-            source_address as usize
-        );
+        assert_eq!(gba.dma_controllers[dma_num].source, source_address as usize);
         assert_eq!(
             gba.dma_controllers[dma_num].destination,
             destination_address as usize
         );
-        assert_eq!(
-            gba.dma_controllers[dma_num].word_count,
-            word_count as usize
-        );
+        assert_eq!(gba.dma_controllers[dma_num].word_count, word_count as usize);
     }
 
     #[rstest]
@@ -930,7 +922,6 @@ mod io_block_tests {
         assert_eq!(gba.dma_controllers[dma_num].source, 0);
         assert_eq!(gba.dma_controllers[dma_num].destination, 0);
 
-
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0xB000,
@@ -938,18 +929,12 @@ mod io_block_tests {
 
         gba.step();
 
-        assert_eq!(
-            gba.dma_controllers[dma_num].source,
-            source_address as usize
-        );
+        assert_eq!(gba.dma_controllers[dma_num].source, source_address as usize);
         assert_eq!(
             gba.dma_controllers[dma_num].destination,
             destination_address as usize
         );
-        assert_eq!(
-            gba.dma_controllers[dma_num].word_count,
-            word_count as usize
-        );
+        assert_eq!(gba.dma_controllers[dma_num].word_count, word_count as usize);
     }
 
     #[rstest]
@@ -983,24 +968,14 @@ mod io_block_tests {
         assert_eq!(gba.dma_controllers[dma_num].source, 0);
         assert_eq!(gba.dma_controllers[dma_num].destination, 0);
 
-
         gba.memory.writeu16(
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0xB000,
         );
         gba.step();
-        assert_eq!(
-            gba.dma_controllers[dma_num].source,
-            source_limit
-        );
-        assert_eq!(
-            gba.dma_controllers[dma_num].destination,
-            destination_limit
-        );
-        assert_eq!(
-            gba.dma_controllers[dma_num].word_count,
-            word_count as usize
-        );
+        assert_eq!(gba.dma_controllers[dma_num].source, source_limit);
+        assert_eq!(gba.dma_controllers[dma_num].destination, destination_limit);
+        assert_eq!(gba.dma_controllers[dma_num].word_count, word_count as usize);
     }
 
     #[rstest]
@@ -1031,7 +1006,6 @@ mod io_block_tests {
             0x4000000 + DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
             0x8000,
         );
-
 
         gba.step();
         gba.step();
@@ -1076,7 +1050,7 @@ mod io_block_tests {
         gba.step();
         for i in 0..0x20 {
             gba.step();
-            assert_eq!(dbg!(gba.memory.readu16(0x2000000 + i * 2).data), 0xABAB);
+            assert_eq!(gba.memory.readu16(0x2000000 + i * 2).data, 0xABAB);
         }
     }
 
