@@ -31,7 +31,7 @@ impl PPU {
     }
 
     fn send_command(&mut self, command: PPUToDisplayCommands) {
-        self.ppu_to_display_sender.send(command).unwrap()
+        self.ppu_to_display_sender.send(command).map_err(|err| err.to_string()).unwrap()
     }
 
     fn obj_selection(&mut self, memory: &mut GBAMemory) {

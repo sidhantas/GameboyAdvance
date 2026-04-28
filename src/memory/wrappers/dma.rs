@@ -18,14 +18,13 @@ pub(crate) struct DMAControl {
     pub(crate) start_word_count: usize,
 }
 
-impl Display for DMAControl {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Immediately: {:5}, Source: 0x{:08x}, Destination: 0x{:08x}, Word Count: {:08x}",
-            self.immediately, self.source, self.destination, self.word_count
-        )
-    }
+pub(crate) fn print_dma(dma_num: usize, control: &DMAControl, memory: &GBAMemory) {
+    let dmacnt = DmaCNTH(memory.io_load(DMA0CNT_H + IOBlock::dma_address_offset(dma_num)));
+    print!("{} ", dmacnt.start_timing());
+    println!(
+        "0x{:08x} => 0x{:08x} Remaining: {:08x}",
+        control.source, control.destination, control.word_count
+    );
 }
 
 pub(crate) struct DmaCNTH(pub(crate) u16);
@@ -57,6 +56,21 @@ pub(crate) enum StartTiming {
     VBlank,
     HBlank,
     Special,
+}
+
+impl Display for StartTiming {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                StartTiming::Immediately => "Immediately",
+                StartTiming::VBlank => "VBlank",
+                StartTiming::HBlank => "HBlank",
+                StartTiming::Special => "Special",
+            }
+        )
+    }
 }
 
 impl DmaCNTH {
@@ -141,7 +155,6 @@ impl DMAControl {
                     dmacnt.destination_address_control(),
                 );
 
-                dbg!(self.word_count);
                 cycles += read.cycles;
             }
             DMATransferType::Bit32 => {
@@ -159,7 +172,9 @@ impl DMAControl {
 
         if self.word_count <= 0 {
             self.immediately = false;
-            println!("Completed transfer");
+            if dmacnt.irq_at_end() {
+                memory.add_event(CPUEvent::now(CPUEventType::DMAIrq(dma_num)));
+            }
             if dmacnt.dma_repeat() {
                 self.word_count = self.start_word_count;
                 if matches!(
@@ -170,7 +185,6 @@ impl DMAControl {
                 }
             } else {
                 let disabled_dmacnt = dmacnt.0 & !0x8000;
-                println!("DISABLING DMA {dma_num}: {:#x}", disabled_dmacnt);
                 memory.ioram.io_store(
                     DMA0CNT_H + IOBlock::dma_address_offset(dma_num),
                     disabled_dmacnt,

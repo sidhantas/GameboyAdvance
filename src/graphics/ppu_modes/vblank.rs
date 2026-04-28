@@ -8,7 +8,7 @@ impl PPU {
             self.y = 0;
             self.x = 0;
             
-            memory.add_event(CPUEvent::new(0, CPUEventType::HDraw));
+            memory.add_event(CPUEvent::new(0, CPUEventType::VBlank));
             self.current_mode = PPUModes::HDRAW;
         }
     }

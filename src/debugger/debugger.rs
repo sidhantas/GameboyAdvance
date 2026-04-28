@@ -26,10 +26,9 @@ use tui::{
 
 use crate::{
     arm7tdmi::{
-        cpu::{CPUMode, FlagsRegister, InstructionMode, CPU},
+        cpu::{CPU, CPUMode, FlagsRegister, InstructionMode},
         instruction_table::{
-            condition_code_as_str, instruction_to_string, DecodeARMInstructionToString,
-            DecodeThumbInstructionToString, Instruction,
+            DecodeARMInstructionToString, DecodeThumbInstructionToString, Instruction, condition_code_as_str, instruction_to_string
         },
         thumb::alu::ThumbFullAdder,
     },
@@ -37,7 +36,7 @@ use crate::{
     graphics::display::DisplayBuffer,
     memory::{
         io_handlers::{DISPCNT, VCOUNT},
-        memory::GBAMemory,
+        memory::GBAMemory, wrappers::dispcnt::Dispcnt,
     },
     utils::bits::Bits,
 };
@@ -262,25 +261,25 @@ fn draw_ppu(
     );
 
     f.render_widget(
-        Paragraph::new(format!("1D")).alignment(Alignment::Center),
+        Paragraph::new(format!("BG Mode")).alignment(Alignment::Center),
         ppu_regs[4],
     );
 
     f.render_widget(
-        Paragraph::new(format!("{}", cpu.memory.io_load(DISPCNT).bit_is_set(6)))
+        Paragraph::new(format!("{}", Dispcnt(cpu.memory.io_load(DISPCNT)).get_bg_mode()))
             .alignment(Alignment::Center),
         ppu_values[4],
     );
 
     f.render_widget(
         Paragraph::new(format!("PPU Mode")).alignment(Alignment::Center),
-        ppu_regs[4],
+        ppu_regs[5],
     );
 
     f.render_widget(
         Paragraph::new(format!("{}", cpu.ppu.current_mode))
             .alignment(Alignment::Center),
-        ppu_values[4],
+        ppu_values[5],
     );
 
     f.render_widget(block, ppu_chunk);

@@ -5,7 +5,8 @@ use num_traits::Signed;
 use crate::{
     arm7tdmi::{
         arm::data_transfer_instructions::{
-            BlockDTOpcodes, LoadOpcodes, RegisterList, SdtOpcode, SignedAndHwDtInstruction, SignedAndHwDtLoadOpcodes, SignedAndHwDtOpcodes, StoreOpcodes
+            BlockDTOpcodes, LoadOpcodes, RegisterList, SdtOpcode, SignedAndHwDtInstruction,
+            SignedAndHwDtLoadOpcodes, SignedAndHwDtOpcodes, StoreOpcodes,
         },
         cpu::{CPU, LINK_REGISTER, PC_REGISTER, STACK_POINTER},
         instruction_table::{DecodeThumbInstructionToString, Execute, Operand},
@@ -154,7 +155,13 @@ impl ThumbSdtImmOffset {
     }
 
     fn imm(&self) -> u32 {
-        (self.0 & 0x07C0) >> 6
+        ((self.0 & 0x07C0)
+            >> 6) * match self.opcode() {
+                SdtOpcode::Load(LoadOpcodes::LDR) => 4,
+                SdtOpcode::Load(LoadOpcodes::LDRB) => 1,
+                SdtOpcode::Store(StoreOpcodes::STR) => 4,
+                SdtOpcode::Store(StoreOpcodes::STRB) => 1,
+            }
     }
 
     fn rb(&self) -> REGISTER {
@@ -168,14 +175,7 @@ impl ThumbSdtImmOffset {
 
 impl Execute for ThumbSdtImmOffset {
     fn execute(self, cpu: &mut CPU, memory: &mut GBAMemory) -> CYCLES {
-        let access_address = cpu.get_register(self.rb())
-            + self.imm()
-                * match self.opcode() {
-                    SdtOpcode::Load(LoadOpcodes::LDR) => 4,
-                    SdtOpcode::Load(LoadOpcodes::LDRB) => 1,
-                    SdtOpcode::Store(StoreOpcodes::STR) => 4,
-                    SdtOpcode::Store(StoreOpcodes::STRB) => 1,
-                };
+        let access_address = cpu.get_register(self.rb()) + self.imm();
 
         self.opcode()
             .execute(cpu, memory, self.rd(), access_address as usize)
@@ -290,14 +290,14 @@ impl ThumbPushPop {
         match self.0.get_bit(11) {
             0b0 => PUSH,
             0b1 => POP,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     fn register_list(&self) -> impl Iterator<Item = REGISTER> {
         let mut rlist = RegisterList {
             list: self.0 & 0xFF,
-            i: 0
+            i: 0,
         };
 
         if self.0.bit_is_set(8) {
@@ -313,15 +313,19 @@ impl ThumbPushPop {
 
 enum ThumbPushPopOpcodes {
     PUSH,
-    POP
+    POP,
 }
 
 impl Display for ThumbPushPopOpcodes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            ThumbPushPopOpcodes::PUSH => "push",
-            ThumbPushPopOpcodes::POP => "pop",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                ThumbPushPopOpcodes::PUSH => "push",
+                ThumbPushPopOpcodes::POP => "pop",
+            }
+        )
     }
 }
 
@@ -330,7 +334,8 @@ impl Execute for ThumbPushPop {
         let mut cycles = 0;
         match self.opcode() {
             ThumbPushPopOpcodes::PUSH => {
-                let base_address = cpu.get_sp() as usize - self.register_list().count() * size_of::<WORD>();
+                let base_address =
+                    cpu.get_sp() as usize - self.register_list().count() * size_of::<WORD>();
                 let mut curr_address = base_address;
                 for register in self.register_list() {
                     let mut data = cpu.get_register(register);
@@ -341,7 +346,7 @@ impl Execute for ThumbPushPop {
                     curr_address += size_of::<WORD>();
                 }
                 cpu.set_register(STACK_POINTER, base_address as u32);
-            },
+            }
             ThumbPushPopOpcodes::POP => {
                 cycles += 1;
                 let mut curr_address = cpu.get_sp() as usize;
@@ -356,7 +361,7 @@ impl Execute for ThumbPushPop {
                     }
                 }
                 cpu.set_register(STACK_POINTER, curr_address as u32);
-            },
+            }
         };
 
         cycles
@@ -385,14 +390,14 @@ impl ThumbBlockDT {
         match self.0.get_bit(11) {
             0b0 => STM,
             0b1 => LDM,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     fn register_list(&self) -> impl Iterator<Item = REGISTER> {
         RegisterList {
             list: self.0 & 0xFF,
-            i: 0
+            i: 0,
         }
     }
 
@@ -413,7 +418,7 @@ impl Execute for ThumbBlockDT {
                     curr_address += size_of::<WORD>();
                 }
                 cpu.set_register(self.rb(), curr_address as u32);
-            },
+            }
             BlockDTOpcodes::LDM => {
                 cycles += 1;
                 let mut curr_address = cpu.get_register(self.rb()) as usize;
@@ -425,7 +430,7 @@ impl Execute for ThumbBlockDT {
                     curr_address += size_of::<WORD>();
                 }
                 cpu.set_register(self.rb(), curr_address as u32);
-            },
+            }
         }
         cycles
     }
@@ -441,10 +446,15 @@ impl DecodeThumbInstructionToString for ThumbBlockDT {
 
         let rlist = format!("{{{}}}", rlist.join(","));
 
-        format!("{}, {}!, {}", match self.opcode() {
-            BlockDTOpcodes::STM => "stmia",
-            BlockDTOpcodes::LDM => "ldmia",
-        }, print_register(&self.rb()), rlist)
+        format!(
+            "{}, {}!, {}",
+            match self.opcode() {
+                BlockDTOpcodes::STM => "stmia",
+                BlockDTOpcodes::LDM => "ldmia",
+            },
+            print_register(&self.rb()),
+            rlist
+        )
     }
 }
 

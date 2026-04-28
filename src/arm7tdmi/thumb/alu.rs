@@ -74,7 +74,7 @@ impl Execute for ThumbFullAdder {
 impl DecodeThumbInstructionToString for ThumbFullAdder {
     fn instruction_to_string(&self) -> String {
         let (operation, op2) = self.full_adder_operation();
-        format!("{}s {}, {}, {}", operation, self.rd(), self.rs(), op2)
+        format!("{}s {}, {}, {}", operation, print_register(&self.rd()), print_register(&self.rs()), op2)
     }
 }
 
@@ -172,8 +172,8 @@ impl Execute for ThumbALUOperation {
 
 impl DecodeThumbInstructionToString for ThumbALUOperation {
     fn instruction_to_string(&self) -> String {
-        let rd = self.rd();
-        let rs = self.rs();
+        let rd = print_register(&self.rd());
+        let rs = print_register(&self.rs());
 
         let opcode = match self.opcode() {
             ThumbALUInstruction::Logical(thumb_logical_instruction) => {

@@ -26,7 +26,7 @@ impl CPU {
         self.is_halted = false;
         let instruction_size = match self.get_instruction_mode() {
             super::cpu::InstructionMode::ARM => 4,
-            super::cpu::InstructionMode::THUMB => 0,
+            super::cpu::InstructionMode::THUMB => 2,
         };
 
         // Store CPSR in SPSR_new_mode

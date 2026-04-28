@@ -21,8 +21,7 @@ use crate::{
                 ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm,
             },
             jumps_and_calls::{
-                ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSetLinkRegister,
-                ThumbUnconditionalBranch,
+                ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSWI, ThumbSetLinkRegister, ThumbUnconditionalBranch
             },
         },
     },
@@ -92,6 +91,7 @@ pub(crate) enum Instruction {
     BranchAndExchange(BranchAndExchangeInstruction),
     Swap(SwapInstruction),
     SWI(SWI),
+    ThumbSWI(ThumbSWI),
     Multiply(MultiplyInstruction),
     LdrPcRelative(LdrPCRelative),
     ThumbSdtOffset(ThumbSdtRegisterOffset),
@@ -147,6 +147,7 @@ impl Execute for Instruction {
             Instruction::ThumbUnconditionalBranch(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbSetLinkRegister(instruction) => instruction.execute(cpu, memory),
             Instruction::ThumbLongBranchWithLink(instruction) => instruction.execute(cpu, memory),
+            Instruction::ThumbSWI(instruction) => instruction.execute(cpu, memory),
             Instruction::NotImplemented(instruction) => {
                 panic!("Not implemented: {:#x}", instruction)
             }
@@ -203,6 +204,7 @@ pub(crate) fn instruction_to_string(condition_code: u32, instruction: Instructio
         Instruction::ThumbUnconditionalBranch(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbSetLinkRegister(instruction) => instruction.instruction_to_string(),
         Instruction::ThumbLongBranchWithLink(instruction) => instruction.instruction_to_string(),
+        Instruction::ThumbSWI(instruction) => instruction.instruction_to_string(),
         Instruction::Nop => "nop".into(),
         Instruction::NotImplemented(_) => "not implemented".into(),
     };

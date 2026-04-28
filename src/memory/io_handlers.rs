@@ -106,7 +106,7 @@ struct IORegisterDefinition {
     pub(crate) callback: Option<fn(&mut IOBlock, u16, u16) -> ()>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum BitMask {
     // first is read mask, second is write mask
     EIGHT(u8, u8),
@@ -413,7 +413,7 @@ const IO_REGISTER_DEFINITIONS: [Option<IORegisterDefinition>; 0x412] = {
         false,
     ));
     definitions[IME] = Some(
-        IORegisterDefinition::new(BitMask::SIXTEEN(0x0001, 0x0001), false)
+        IORegisterDefinition::new(BitMask::THIRTYTWO(0x0001, 0x0001), false)
             .with_callback(IOBlock::check_interrupts),
     );
     definitions[IE] = Some(IORegisterDefinition::new(
@@ -609,7 +609,7 @@ impl IOBlock {
         *self.memory.get(address >> 1).unwrap_or(&0)
     }
 
-    fn io_loadu32(&self, address: usize) -> u32 {
+    pub(crate) fn io_loadu32(&self, address: usize) -> u32 {
         let word_aligned_offset = address & 0xFFC;
         let lower = self.io_load(word_aligned_offset) as u32;
         let upper = self.io_load(word_aligned_offset + 2) as u32;
@@ -699,7 +699,7 @@ impl IOBlock {
     }
 
     pub(super) fn check_interrupts(&mut self, _old_value: u16, _value: u16) {
-        if self.io_load(IME) == 0 {
+        if self.io_load(IME).get_bit(0) == 0 {
             return;
         }
         if self.io_load(IF) & self.io_load(IE) > 0 {
@@ -802,7 +802,7 @@ impl MemoryBlock for IOBlock {
     }
 
     fn writeu16(&mut self, address: usize, value: u16) {
-        self.masked_io_store(address & 0xFFE, value);
+        self.masked_io_store(address & 0xFFF, value);
     }
 
     fn writeu32(&mut self, address: usize, value: u32) {
@@ -811,18 +811,20 @@ impl MemoryBlock for IOBlock {
             return;
         };
 
+        dbg!(io_definition.mask);
+
         match io_definition.mask {
             BitMask::THIRTYTWO(_, mask) => {
                 if io_definition.requires_special_handling() {
                     todo!();
                 }
                 let store_value = mask & value;
-                self.io_store(offset + 2, (store_value >> 16) as u16);
                 self.io_store(offset, (store_value & 0xFFFF) as u16);
+                self.io_store(offset + 2, (store_value >> 16) as u16);
             }
             _ => {
-                self.writeu16(offset + 2, (value >> 16) as u16);
-                self.writeu16(offset, (value & 0xFFFF) as u16);
+                self.writeu16(offset, dbg!((value & 0xFFFF)) as u16);
+                self.writeu16(offset + 2, dbg!((value >> 16)) as u16);
 
                 return;
             }
@@ -1052,6 +1054,14 @@ mod io_block_tests {
             gba.step();
             assert_eq!(gba.memory.readu16(0x2000000 + i * 2).data, 0xABAB);
         }
+    }
+
+    #[rstest]
+    fn test_can_access_halfword_aligned() {
+        let mut gba = GBA::new_no_bios();
+        gba.memory.writeu32(0x40000d6, 0x84000200);
+
+        assert_eq!(gba.memory.readu32(0x40000d6).data, 0x84000200)
     }
 
     //    #[rstest]

@@ -19,8 +19,7 @@ use crate::{
                 ThumbBlockDT, ThumbPushPop, ThumbSdtHwImmOffset, ThumbSdtImmOffset, ThumbSdtSpImm,
             },
             jumps_and_calls::{
-                ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSetLinkRegister,
-                ThumbUnconditionalBranch,
+                ThumbConditionalBranch, ThumbLongBranchWithLink, ThumbSWI, ThumbSetLinkRegister, ThumbUnconditionalBranch
             },
         },
     },
@@ -147,7 +146,7 @@ impl CPU {
                 return Instruction::ThumbSdtOffset(ThumbSdtRegisterOffset(instruction))
             }
             _ if thumb_decoders::is_thumb_swi(instruction) => {
-                return Instruction::SWI(SWI(instruction))
+                return Instruction::ThumbSWI(ThumbSWI(instruction))
             }
             _ if thumb_decoders::is_sdt_imm_offset(instruction) => {
                 return Instruction::ThumbSdtImmOffset(ThumbSdtImmOffset(instruction))

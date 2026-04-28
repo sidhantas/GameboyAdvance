@@ -6,11 +6,13 @@ use std::sync::Arc;
 
 use crate::arm7tdmi::instruction_table::instruction_to_string;
 use crate::debugger::terminal_commands::PPUToDisplayCommands;
+use crate::debugger::terminal_debugger::breaker;
 use crate::graphics::display::DisplayBuffer;
 use crate::graphics::ppu::{PPUModes, PPU};
 use crate::memory::io_handlers::{IOBlock, DMA0CNT_H, IF};
 use crate::memory::memory::{CPUEvent, CPUEventType};
-use crate::memory::wrappers::dma::{DMAControl, DmaCNTH, StartTiming};
+use crate::memory::memory_block::MemoryBlock;
+use crate::memory::wrappers::dma::{print_dma, DMAControl, DmaCNTH, StartTiming};
 use crate::utils::bits::Bits;
 use crate::utils::instruction_to_string::print_register;
 use crate::utils::utils::KillSignal;
@@ -26,6 +28,7 @@ pub(crate) struct GBA {
     display_buffer: Arc<DisplayBuffer>,
     cpu_events: Vec<CPUEvent>,
     active_dma: Option<usize>,
+    breaker: Option<fn() -> ()>,
 }
 
 impl GBA {
@@ -41,6 +44,7 @@ impl GBA {
             cpu_events: Vec::new(),
             dma_controllers: [DMAControl::default(); 4],
             active_dma: None,
+            breaker: None,
         }
     }
 
@@ -61,11 +65,16 @@ impl GBA {
             cpu_events: Vec::new(),
             dma_controllers: [DMAControl::default(); 4],
             active_dma: None,
+            breaker: None,
         };
         gba.cpu.flush_pipeline(&mut gba.memory);
         gba
     }
 
+    pub(crate) fn with_breaker(mut self, breaker: fn() -> ()) -> Self {
+        self.breaker = Some(breaker);
+        self
+    }
     pub(crate) fn reset(&mut self) {
         self.memory.clear_ram();
         self.cpu.reset();
@@ -88,7 +97,8 @@ impl GBA {
         println!("CPSR: {}", self.cpu.get_cpsr());
         println!("CYCLES: {}", self.cpu.cycles);
         for i in 0..4 {
-            println!("DMA {i}: {}", self.dma_controllers[i]);
+            print!("DMA {i}: ");
+            print_dma(i, &self.dma_controllers[i], &self.memory);
         }
         println!("Active DMA: {:#?}", self.active_dma);
         println!(
@@ -113,7 +123,6 @@ impl GBA {
     pub(crate) fn step(&mut self) {
         let cpu_cycles = if let Some(dma) = self.active_dma {
             let cycles = self.dma_controllers[dma].handle_dma_transfer(dma, &mut self.memory);
-            println!("Running DMA");
             if self.dma_controllers[dma].word_count == 0 {
                 self.active_dma =
                     Self::preempt_dma(None, &mut self.memory, StartTiming::Immediately)
@@ -178,6 +187,11 @@ impl GBA {
                             self.memory.ioram.handle_hblank()
                         }
                         CPUEventType::VCount(value) => self.memory.ioram.handle_vcount(value),
+                        CPUEventType::DMAIrq(dma_num) => {
+                            let mut interrupt_enable = self.memory.io_load(IF);
+                            interrupt_enable.set_bit((dma_num + 8) as u8);
+                            self.memory.writeu16(0x4000000 + IF, interrupt_enable);
+                        }
                         _ => panic!("{:#?}", command),
                     }
                 } else {
@@ -192,26 +206,30 @@ impl GBA {
         memory: &mut GBAMemory,
         condition: StartTiming,
     ) -> Option<usize> {
-        let old_dma = match current_dma {
-            Some(0) => return current_dma, // 0 is highest priority and cannot be preempted
-            Some(i) => i,
-            None => 4,
-        };
-        for i in 0..old_dma {
-            let dmacnt = DmaCNTH(
-                memory
-                    .ioram
-                    .io_load(DMA0CNT_H + IOBlock::dma_address_offset(i)),
-            );
+        let dma = (|| {
+            let old_dma = match current_dma {
+                Some(0) => return current_dma, // 0 is highest priority and cannot be preempted
+                Some(i) => i,
+                None => 4,
+            };
+            for i in 0..old_dma {
+                let dmacnt = DmaCNTH(
+                    memory
+                        .ioram
+                        .io_load(DMA0CNT_H + IOBlock::dma_address_offset(i)),
+                );
 
-            if dmacnt.dma_enabled()
-                && (dmacnt.start_timing() == condition
-                    || dmacnt.start_timing() == StartTiming::Immediately)
-            {
-                return Some(i);
+                if dmacnt.dma_enabled()
+                    && (dmacnt.start_timing() == condition
+                        || dmacnt.start_timing() == StartTiming::Immediately)
+                {
+                    return Some(i);
+                }
             }
-        }
 
-        current_dma
+            current_dma
+        })();
+
+        dma.map(|dma| dma)
     }
 }

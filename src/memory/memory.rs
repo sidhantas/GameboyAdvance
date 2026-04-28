@@ -79,6 +79,7 @@ pub(crate) enum CPUEventType {
     HDraw,
     VBlank,
     HBlank,
+    DMAIrq(usize),
     VCount(i32)
 }
 
@@ -92,6 +93,13 @@ impl CPUEvent {
     pub(crate) fn new(delay: i32, event: CPUEventType) -> Self {
         Self {
             delay,
+            event
+        }
+    }
+
+    pub(crate) fn now(event: CPUEventType) -> Self {
+        Self {
+            delay: 0,
             event
         }
     }
@@ -332,6 +340,23 @@ impl GBAMemory {
     pub(crate) fn read_raw(&self, address: usize) -> u8 {
         let region = address >> 24;
         self.get_memory_block(region).readu8(address)
+    }
+
+    pub(crate) fn read_privilegedu32(&self, address: usize) -> u32 {
+        let region = address >> 24;
+        let read = match region {
+            BIOS_REGION => self.bios.readu32(address),
+            EXWRAM_REGION => self.exwram.readu32(address),
+            IWRAM_REGION => self.iwram.readu32(address),
+            IORAM_REGION => self.ioram.io_loadu32(address),
+            BGRAM_REGION => self.pallete_ram.readu32(address),
+            VRAM_REGION => self.vram.readu32(address),
+            OAM_REGION => self.oam.readu32(address),
+            ROM0A_REGION..=ROM2B_REGION => self.rom.readu32(address),
+            SRAM_REGION => self.sram.readu32(address),
+            _ => unreachable!("{:#x}", address), // Commented out because it's faster if we don't
+        };
+        read
     }
 
     pub(crate) fn readu16(&self, address: usize) -> MemoryFetch<u16> {

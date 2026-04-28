@@ -1,7 +1,7 @@
 use crate::{
     arm7tdmi::{
-        cpu::{FlagsRegister, CPU, LINK_REGISTER},
-        instruction_table::{condition_code_as_str, DecodeThumbInstructionToString, Execute},
+        cpu::{CPU, FlagsRegister, LINK_REGISTER},
+        instruction_table::{DecodeThumbInstructionToString, Execute, condition_code_as_str}, interrupts::Exceptions,
     },
     memory::memory::GBAMemory,
     types::CYCLES,
@@ -140,6 +140,25 @@ impl Execute for ThumbLongBranchWithLink {
 impl DecodeThumbInstructionToString for ThumbLongBranchWithLink {
     fn instruction_to_string(&self) -> String {
         format!("bl {:#x}", self.offset())
+    }
+}
+
+#[allow(unused)]
+pub(crate) struct ThumbSWI(pub(crate) u32);
+
+impl Execute for ThumbSWI {
+    fn execute(
+        self,
+        cpu: &mut crate::arm7tdmi::cpu::CPU,
+        memory: &mut crate::memory::memory::GBAMemory,
+    ) -> crate::types::CYCLES {
+        cpu.raise_exception(Exceptions::Software, memory) + 1
+    }
+}
+
+impl DecodeThumbInstructionToString for ThumbSWI {
+    fn instruction_to_string(&self) -> String {
+        format!("swi")
     }
 }
 
